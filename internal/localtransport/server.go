@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 	"github.com/caelis-labs/memory/internal/appliance"
@@ -17,7 +18,6 @@ import (
 
 const (
 	AdminPathBootstrap = "/admin/m1/bootstrap"
-	AdminPathIssue     = "/admin/m1/issue-capability"
 	AdminPathInspect   = "/admin/m1/inspect"
 	AdminPathRebuild   = "/admin/m1/rebuild-fts"
 	AdminPathRevoke    = "/admin/m1/revoke-grant"
@@ -25,8 +25,24 @@ const (
 	maxRequestBytes    = 128 << 10
 )
 
-// Handler returns the complete M1 local transport without adding request logs.
-func Handler(store *appliance.Store) http.Handler {
+// ServiceInfo is immutable build identity reported by the compatibility
+// handshake. The artifact digest remains owned by the pre-launch manifest.
+type ServiceInfo struct {
+	Version  string
+	Revision string
+}
+
+// Handler returns the complete local transport without adding request logs.
+func Handler(store *appliance.Store, serviceInfo ...ServiceInfo) http.Handler {
+	info := ServiceInfo{Version: "devel", Revision: "unknown"}
+	if len(serviceInfo) > 0 {
+		if serviceInfo[0].Version != "" {
+			info.Version = serviceInfo[0].Version
+		}
+		if serviceInfo[0].Revision != "" {
+			info.Revision = serviceInfo[0].Revision
+		}
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc(v1alpha1.LocalPathHealth, method(http.MethodGet, func(writer http.ResponseWriter, _ *http.Request) {
 		writeJSON(writer, http.StatusOK, map[string]string{"status": "ok", "protocol": v1alpha1.LocalTransportProtocol})
@@ -37,6 +53,66 @@ func Handler(store *appliance.Store) http.Handler {
 			return
 		}
 		writeJSON(writer, http.StatusOK, map[string]string{"status": "ready", "protocol": v1alpha1.LocalTransportProtocol})
+	}))
+	mux.HandleFunc(v1alpha1.LocalPathCompatibility, method(http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input v1alpha1.CompatibilityRequest
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		if input != v1alpha1.CurrentCompatibilityRequest() {
+			writeDataPlane(writer, nil, &v1alpha1.ServiceError{
+				Code: v1alpha1.ErrorCodeIncompatible, Message: "requested Memory compatibility profile is unavailable", RequestID: "local-compatibility",
+			})
+			return
+		}
+		writeJSON(writer, http.StatusOK, v1alpha1.CompatibilityResponse{
+			Protocol: v1alpha1.LocalTransportProtocol, APIVersion: v1alpha1.ProtocolVersion,
+			CoreProfile: v1alpha1.CoreProfile, ServiceVersion: info.Version,
+			BuildRevision: info.Revision, SchemaVersion: appliance.CurrentSchemaVersion,
+		})
+	}))
+	mux.HandleFunc(v1alpha1.LocalPathIssue, method(http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		credential := bearer(request.Header.Get("Authorization"))
+		if credential == "" {
+			writeDataPlane(writer, nil, &v1alpha1.ServiceError{
+				Code: v1alpha1.ErrorCodeUnauthorized, Message: "issuer authorization is required", RequestID: "local-issuer",
+			})
+			return
+		}
+		var input v1alpha1.CapabilityIssueRequest
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		if err := validateCapabilityIssue(input); err != nil {
+			writeDataPlane(writer, nil, &v1alpha1.ServiceError{
+				Code: v1alpha1.ErrorCodeInvalidArgument, Message: err.Error(), RequestID: "local-issuer",
+			})
+			return
+		}
+		capability, err := store.IssueCapability(request.Context(), appliance.IssueCapabilityRequest{
+			Authorization: appliance.IssuerAuthorization{PrincipalRef: input.PrincipalRef, Credential: credential},
+			GrantRef:      input.GrantRef, ActorRef: input.ActorRef, Audience: input.Audience,
+			Operations: input.Operations, TTLSeconds: input.TTLSeconds,
+		})
+		if err != nil {
+			if errors.Is(err, appliance.ErrCapabilityIssueInvalid) {
+				writeDataPlane(writer, nil, &v1alpha1.ServiceError{
+					Code: v1alpha1.ErrorCodeInvalidArgument, Message: "capability issue request is invalid", RequestID: "local-issuer",
+				})
+				return
+			}
+			if !errors.Is(err, appliance.ErrCapabilityIssueUnauthorized) {
+				writeDataPlane(writer, nil, &v1alpha1.ServiceError{
+					Code: v1alpha1.ErrorCodeUnavailable, Message: "capability issuer is unavailable", Retryable: true, RequestID: "local-issuer",
+				})
+				return
+			}
+			writeDataPlane(writer, nil, &v1alpha1.ServiceError{
+				Code: v1alpha1.ErrorCodeUnauthorized, Message: "issuer is not authorized for the requested Runtime capability", RequestID: "local-issuer",
+			})
+			return
+		}
+		writeJSON(writer, http.StatusOK, v1alpha1.RuntimeCapability{Token: capability.Token, ExpiresAt: capability.ExpiresAt})
 	}))
 	mux.HandleFunc(v1alpha1.LocalPathRemember, method(http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
 		var input v1alpha1.RememberRequest
@@ -68,14 +144,6 @@ func Handler(store *appliance.Store) http.Handler {
 			return
 		}
 		response, err := store.Bootstrap(request.Context(), input)
-		writeAdmin(writer, response, err)
-	}))
-	mux.HandleFunc(AdminPathIssue, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
-		var input appliance.IssueCapabilityRequest
-		if !decodeJSON(writer, request, &input) {
-			return
-		}
-		response, err := store.IssueCapability(request.Context(), input)
 		writeAdmin(writer, response, err)
 	}))
 	mux.HandleFunc(AdminPathInspect, admin(store, http.MethodGet, func(writer http.ResponseWriter, request *http.Request) {
@@ -146,6 +214,34 @@ func bearer(value string) string {
 	return strings.TrimSpace(strings.TrimPrefix(value, prefix))
 }
 
+func validateCapabilityIssue(input v1alpha1.CapabilityIssueRequest) error {
+	if input.PrincipalRef == "" || input.GrantRef == "" || input.ActorRef == "" {
+		return fmt.Errorf("principal, Grant, and actor references are required")
+	}
+	if input.Audience != v1alpha1.AudiencePrivate && input.Audience != v1alpha1.AudienceShared {
+		return fmt.Errorf("unsupported Runtime audience")
+	}
+	if input.TTLSeconds < 1 || input.TTLSeconds > int64((24*time.Hour)/time.Second) {
+		return fmt.Errorf("capability TTL must be between 1 second and 24 hours")
+	}
+	if len(input.Operations) == 0 {
+		return fmt.Errorf("at least one operation is required")
+	}
+	seen := make(map[v1alpha1.Operation]struct{}, len(input.Operations))
+	for _, operation := range input.Operations {
+		switch operation {
+		case v1alpha1.OperationRemember, v1alpha1.OperationRecall, v1alpha1.OperationReceiptStatus:
+		default:
+			return fmt.Errorf("unsupported capability operation")
+		}
+		if _, duplicate := seen[operation]; duplicate {
+			return fmt.Errorf("capability operations must be unique")
+		}
+		seen[operation] = struct{}{}
+	}
+	return nil
+}
+
 func decodeJSON(writer http.ResponseWriter, request *http.Request, output any) bool {
 	decoder := json.NewDecoder(io.LimitReader(request.Body, maxRequestBytes))
 	if err := decoder.Decode(output); err != nil {
@@ -203,6 +299,8 @@ func statusForCode(code v1alpha1.ErrorCode) int {
 		return http.StatusNotFound
 	case v1alpha1.ErrorCodeConflict:
 		return http.StatusConflict
+	case v1alpha1.ErrorCodeIncompatible:
+		return http.StatusUpgradeRequired
 	case v1alpha1.ErrorCodeDeadline:
 		return http.StatusGatewayTimeout
 	case v1alpha1.ErrorCodeUnavailable, v1alpha1.ErrorCodeUnknownOutcome:

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/caelis-labs/memory/internal/appliance"
 )
 
 func TestSecretOutputIsExclusiveAndOwnerOnly(t *testing.T) {
@@ -37,5 +39,41 @@ func TestSecretOutputIsExclusiveAndOwnerOnly(t *testing.T) {
 	}
 	if _, err := reserveSecretOutput(path); err == nil {
 		t.Fatal("secret output reservation overwrote an existing file")
+	}
+}
+
+func TestReadIssuerCredentialFormats(t *testing.T) {
+	directory := t.TempDir()
+	write := func(name string, value any) string {
+		t.Helper()
+		path := filepath.Join(directory, name)
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, encoded, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	bootstrap := write("bootstrap.json", appliance.BootstrapResponse{
+		IssuerCredentials: map[string]string{"principal:a": "secret-a"},
+	})
+	if got, err := readIssuerCredential(bootstrap, "principal:a"); err != nil || got != "secret-a" {
+		t.Fatalf("bootstrap credential = %q, %v", got, err)
+	}
+	if _, err := readIssuerCredential(bootstrap, "principal:b"); err == nil {
+		t.Fatal("readIssuerCredential() accepted a missing principal")
+	}
+	rotated := write("rotated.json", appliance.IssuerAuthorization{PrincipalRef: "principal:a", Credential: "secret-b"})
+	if got, err := readIssuerCredential(rotated, "principal:a"); err != nil || got != "secret-b" {
+		t.Fatalf("rotated credential = %q, %v", got, err)
+	}
+	raw := filepath.Join(directory, "raw.token")
+	if err := os.WriteFile(raw, []byte("secret-c\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := readIssuerCredential(raw, "principal:a"); err != nil || got != "secret-c" {
+		t.Fatalf("raw credential = %q, %v", got, err)
 	}
 }

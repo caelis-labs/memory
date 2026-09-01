@@ -268,18 +268,18 @@ func readSpaceScope(ctx context.Context, db databaseExecutor, spaceID v1alpha1.S
 // state. A Grant reference without principal authentication is insufficient.
 func (s *Store) IssueCapability(ctx context.Context, request IssueCapabilityRequest) (RuntimeCapability, error) {
 	if request.Authorization.PrincipalRef == "" || request.Authorization.Credential == "" {
-		return RuntimeCapability{}, fmt.Errorf("issuer authorization is required")
+		return RuntimeCapability{}, fmt.Errorf("%w: issuer authorization is required", ErrCapabilityIssueInvalid)
 	}
 	const maxCapabilityTTL = 24 * time.Hour
 	ttl := request.TTL
 	if ttl == 0 && request.TTLSeconds > 0 {
 		if request.TTLSeconds > int64(maxCapabilityTTL/time.Second) {
-			return RuntimeCapability{}, fmt.Errorf("capability TTL exceeds 24 hours")
+			return RuntimeCapability{}, fmt.Errorf("%w: capability TTL exceeds 24 hours", ErrCapabilityIssueInvalid)
 		}
 		ttl = time.Duration(request.TTLSeconds) * time.Second
 	}
 	if ttl <= 0 || ttl > maxCapabilityTTL {
-		return RuntimeCapability{}, fmt.Errorf("capability TTL must be between 1 nanosecond and 24 hours")
+		return RuntimeCapability{}, fmt.Errorf("%w: capability TTL must be between 1 nanosecond and 24 hours", ErrCapabilityIssueInvalid)
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -292,9 +292,14 @@ func (s *Store) IssueCapability(ctx context.Context, request IssueCapabilityRequ
 	var storedCredential []byte
 	if err := tx.QueryRowContext(ctx,
 		`SELECT credential_digest FROM issuer_credentials WHERE principal_ref = ?`,
-		request.Authorization.PrincipalRef).Scan(&storedCredential); err != nil ||
-		subtle.ConstantTimeCompare(storedCredential, digestBytes(request.Authorization.Credential)) != 1 {
-		return rollback(fmt.Errorf("issuer principal is not authorized for Grant"))
+		request.Authorization.PrincipalRef).Scan(&storedCredential); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return rollback(ErrCapabilityIssueUnauthorized)
+		}
+		return rollback(fmt.Errorf("read issuer credential: %w", err))
+	}
+	if subtle.ConstantTimeCompare(storedCredential, digestBytes(request.Authorization.Credential)) != 1 {
+		return rollback(ErrCapabilityIssueUnauthorized)
 	}
 	var principal, actor string
 	var viewID v1alpha1.ViewID
@@ -303,24 +308,27 @@ func (s *Store) IssueCapability(ctx context.Context, request IssueCapabilityRequ
 	if err := tx.QueryRowContext(ctx,
 		`SELECT principal_ref, actor_ref, view_id, expires_at, revoked FROM grants WHERE id = ?`,
 		request.GrantRef).Scan(&principal, &actor, &viewID, &grantExpiresRaw, &revoked); err != nil {
-		return rollback(fmt.Errorf("Grant is absent, revoked, or expired"))
+		if errors.Is(err, sql.ErrNoRows) {
+			return rollback(ErrCapabilityIssueUnauthorized)
+		}
+		return rollback(fmt.Errorf("read Grant: %w", err))
 	}
 	grantExpires, err := parseTime(grantExpiresRaw)
 	if err != nil || revoked || !grantExpires.After(s.now()) || principal != request.Authorization.PrincipalRef {
-		return rollback(fmt.Errorf("Grant is absent, revoked, or expired"))
+		return rollback(ErrCapabilityIssueUnauthorized)
 	}
 	if request.ActorRef != actor {
-		return rollback(fmt.Errorf("actor does not match Grant"))
+		return rollback(ErrCapabilityIssueUnauthorized)
 	}
 	audienceGranted, err := rowExists(ctx, tx, `SELECT EXISTS(SELECT 1 FROM grant_audiences WHERE grant_id = ? AND audience = ?)`, request.GrantRef, request.Audience)
 	if err != nil {
 		return rollback(fmt.Errorf("read Grant audience: %w", err))
 	}
 	if !audienceGranted {
-		return rollback(fmt.Errorf("audience is not granted"))
+		return rollback(ErrCapabilityIssueUnauthorized)
 	}
 	if len(request.Operations) == 0 {
-		return rollback(fmt.Errorf("at least one operation is required"))
+		return rollback(fmt.Errorf("%w: at least one operation is required", ErrCapabilityIssueInvalid))
 	}
 	for _, operation := range request.Operations {
 		operationGranted, err := rowExists(ctx, tx,
@@ -329,12 +337,15 @@ func (s *Store) IssueCapability(ctx context.Context, request IssueCapabilityRequ
 			return rollback(fmt.Errorf("read Grant operation: %w", err))
 		}
 		if !validOperation(operation) || !operationGranted {
-			return rollback(fmt.Errorf("operation %q is not granted", operation))
+			return rollback(ErrCapabilityIssueUnauthorized)
 		}
 	}
 	var viewVersion uint64
 	if err := tx.QueryRowContext(ctx, `SELECT version FROM views WHERE id = ?`, viewID).Scan(&viewVersion); err != nil {
-		return rollback(fmt.Errorf("View %q does not exist", viewID))
+		if errors.Is(err, sql.ErrNoRows) {
+			return rollback(ErrCapabilityIssueUnauthorized)
+		}
+		return rollback(fmt.Errorf("read View: %w", err))
 	}
 	expiresAt := s.now().Add(ttl)
 	if grantExpires.Before(expiresAt) {

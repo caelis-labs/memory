@@ -24,13 +24,53 @@ type Client struct {
 
 // NewClient binds a client to one memoryd Unix socket.
 func NewClient(socketPath string) *Client {
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			var dialer net.Dialer
-			return dialer.DialContext(ctx, "unix", socketPath)
-		},
+	return &Client{http: newHTTPClient(socketPath)}
+}
+
+// CompatibilityExpectation pins the exact service artifact identity expected
+// by a host after it has verified the sidecar manifest.
+type CompatibilityExpectation struct {
+	ServiceVersion string
+	BuildRevision  string
+}
+
+// Compatibility performs the exact transport, API, and Core Profile handshake
+// and reports the running build identity for diagnostics.
+func (c *Client) Compatibility(ctx context.Context) (v1alpha1.CompatibilityResponse, error) {
+	var response v1alpha1.CompatibilityResponse
+	if err := c.do(ctx, v1alpha1.LocalPathCompatibility, v1alpha1.CallAuthorization{}, v1alpha1.CurrentCompatibilityRequest(), &response); err != nil {
+		return v1alpha1.CompatibilityResponse{}, transportServiceError(err)
 	}
-	return &Client{http: &http.Client{Transport: transport}}
+	compatible := response.Protocol == v1alpha1.LocalTransportProtocol &&
+		response.APIVersion == v1alpha1.ProtocolVersion &&
+		response.CoreProfile == v1alpha1.CoreProfile
+	if !compatible {
+		return v1alpha1.CompatibilityResponse{}, &v1alpha1.ServiceError{
+			Code: v1alpha1.ErrorCodeIncompatible, Message: "memoryd compatibility identity does not match the pinned sidecar", RequestID: "local-compatibility",
+		}
+	}
+	return response, nil
+}
+
+// CheckCompatibility requires the handshake build identity to match a
+// pre-launch verified sidecar manifest. Both expectations are mandatory so a
+// managed host cannot accidentally weaken artifact pinning.
+func (c *Client) CheckCompatibility(ctx context.Context, expected CompatibilityExpectation) (v1alpha1.CompatibilityResponse, error) {
+	if expected.ServiceVersion == "" || expected.BuildRevision == "" {
+		return v1alpha1.CompatibilityResponse{}, &v1alpha1.ServiceError{
+			Code: v1alpha1.ErrorCodeInvalidArgument, Message: "pinned service version and build revision are required", RequestID: "local-compatibility",
+		}
+	}
+	response, err := c.Compatibility(ctx)
+	if err != nil {
+		return v1alpha1.CompatibilityResponse{}, err
+	}
+	if response.ServiceVersion != expected.ServiceVersion || response.BuildRevision != expected.BuildRevision {
+		return v1alpha1.CompatibilityResponse{}, &v1alpha1.ServiceError{
+			Code: v1alpha1.ErrorCodeIncompatible, Message: "memoryd compatibility identity does not match the pinned sidecar", RequestID: "local-compatibility",
+		}
+	}
+	return response, nil
 }
 
 // Remember implements the data-plane Remember operation.
@@ -165,4 +205,14 @@ func transportServiceError(err error) error {
 		Retryable: true,
 		RequestID: "local-transport-" + time.Now().UTC().Format("150405.000000000"),
 	}
+}
+
+func newHTTPClient(socketPath string) *http.Client {
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			var dialer net.Dialer
+			return dialer.DialContext(ctx, "unix", socketPath)
+		},
+	}
+	return &http.Client{Transport: transport}
 }

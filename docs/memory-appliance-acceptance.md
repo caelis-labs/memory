@@ -89,6 +89,21 @@ cross-process suite durable Core conformance.
 `go test ./...` runs the semantic suite and the real-storage separate-process
 harness. `make durable` reruns the cross-process proof without cached results.
 
+## M2 End-to-End Alpha matrix
+
+| ID | Behavior |
+| --- | --- |
+| `I-001` | The host rejects a transport, API, Core Profile, service version, or build revision mismatch before adding Memory tools |
+| `I-002` | A native sidecar executable is verified against a pinned platform and SHA-256 manifest before launch |
+| `I-003` | Issuer credentials remain outside request bodies, management, Runtime authority, Session history, and ordinary diagnostics |
+| `I-004` | One immutable Runtime binding renews a fresh bounded capability without changing Remember effect identity |
+| `I-005` | Model schemas expose exactly `remember(text)` and `recall(query)` while all authority and request controls remain hidden |
+| `I-006` | Restarted Caelis and `memoryd` preserve the hidden consistency cursor and read-your-writes |
+| `I-007` | Offline Session Replay reproduces exact model-visible bytes and records zero Memory API calls |
+| `I-008` | Feature disable or kill switch removes both tools without deleting or rewriting appliance data |
+| `I-009` | Private/shared audience admission fails before a result reaches an incompatible model or output sink |
+| `I-010` | Sidecar start failure, service loss, version mismatch, and unknown Remember outcome remain distinguishable |
+
 ## Failure injection by milestone
 
 M1 adds process kill after commit, database lock, disk-full simulation,

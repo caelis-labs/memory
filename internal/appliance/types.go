@@ -38,6 +38,13 @@ type Faults struct {
 // ErrOwnerLocked means another memoryd owns the data directory.
 var ErrOwnerLocked = errors.New("memory data directory is already owned")
 
+// ErrCapabilityIssueInvalid classifies a malformed issuer-plane request.
+var ErrCapabilityIssueInvalid = errors.New("capability issue request is invalid")
+
+// ErrCapabilityIssueUnauthorized classifies a principal, Grant, actor,
+// audience, operation, or View authorization mismatch without identifying it.
+var ErrCapabilityIssueUnauthorized = errors.New("capability issuer is unauthorized")
+
 // Realm is one appliance administrative root.
 type Realm struct {
 	ID v1alpha1.RealmID `json:"id"`

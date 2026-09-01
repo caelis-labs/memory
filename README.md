@@ -10,13 +10,13 @@ recall(query)
 
 The appliance, rather than an Agent host, owns identity continuity, Spaces,
 Views, durable receipts, retrieval, classification, consolidation, lifecycle,
-and forgetting. The repository currently ships the M1 standalone durable Core:
-a model-free SQLite `memoryd`, versioned local transport, Go client, and minimum
-`memoryctl` operations.
+and forgetting. The repository ships the standalone durable Core plus the M2
+host-integration boundary: exact compatibility handshake, issuer-plane client,
+and digest-verifiable native sidecar manifest.
 
 ## Current milestone
 
-M0 froze the contract. M1 now provides:
+M0 froze the contract and M1 provides:
 
 - immutable durable receipts with separate processing state;
 - Realm, Identity, private/shared Space, View, Grant, issuer, capability, and
@@ -28,14 +28,24 @@ M0 froze the contract. M1 now provides:
 - semantic conformance plus a separate-process crash/restart harness proving
   acknowledged durability and restart idempotency.
 
-M1 remains deliberately model-free and has no Caelis integration, Steward,
+The Memory-owned M2 boundary additionally provides:
+
+- exact local transport, API, and Core Profile handshake;
+- immutable service version and source revision in packaged `memoryd` binaries;
+- a public issuer plane that keeps issuer credentials outside request bodies;
+- a Go SDK for handshake, Runtime capability issuance/renewal, and native
+  sidecar manifest verification;
+- `make sidecar`, which accepts only a clean exact HEAD and emits a native
+  executable plus SHA-256 manifest.
+
+The appliance remains deliberately model-free and has no completed Caelis integration, Steward,
 semantic records, vector/graph retrieval, governance deletion, backup, or rich
 management Surface. Those boundaries remain assigned to later milestones.
 
 Read [the specification](docs/memory-appliance-spec.md),
 [roadmap](docs/memory-appliance-roadmap.md), and
 [acceptance plan](docs/memory-appliance-acceptance.md) before extending the API.
-Use the [M1 operations guide](docs/memoryd-operations.md) to run the standalone
+Use the [memoryd operations guide](docs/memoryd-operations.md) to run the standalone
 Golden Path.
 
 Run the current gates with:

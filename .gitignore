@@ -3,5 +3,5 @@
 .cache/
 .tmp/
 bin/
+dist/
 coverage.out
-

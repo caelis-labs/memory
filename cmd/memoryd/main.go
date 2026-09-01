@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/caelis-labs/memory/internal/appliance"
+	"github.com/caelis-labs/memory/internal/buildinfo"
 	"github.com/caelis-labs/memory/internal/localtransport"
 )
 
@@ -27,8 +28,14 @@ func main() {
 
 func run() error {
 	var dataDir string
+	var showVersion bool
 	flag.StringVar(&dataDir, "data-dir", "", "owner-only memoryd data directory (required)")
+	flag.BoolVar(&showVersion, "version", false, "print service version and build revision")
 	flag.Parse()
+	if showVersion {
+		fmt.Printf("memoryd %s (%s)\n", buildinfo.ServiceVersion, buildinfo.BuildRevision)
+		return nil
+	}
 	if dataDir == "" {
 		return fmt.Errorf("-data-dir is required")
 	}
@@ -45,7 +52,9 @@ func run() error {
 		return err
 	}
 	server := &http.Server{
-		Handler:           localtransport.Handler(store),
+		Handler: localtransport.Handler(store, localtransport.ServiceInfo{
+			Version: buildinfo.ServiceVersion, Revision: buildinfo.BuildRevision,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	serveErr := make(chan error, 1)

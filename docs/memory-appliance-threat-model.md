@@ -38,7 +38,9 @@ does not grant access.
 | Private context flows to shared output | Caelis binds one audience and rejects incompatible sinks |
 | Stolen or stale capability is reused | Short lifetime, server-side state, explicit revoke, fail closed |
 | Grant reference is treated as credential | Authenticate the delegating principal separately before issuance |
+| Replaced sidecar impersonates the pinned service | Verify native platform and executable SHA-256 before launch, then match handshake build identity |
 | Capability enters durable history or logs | Keep it outside request body and redact authentication material |
+| Issuer credential enters a request body | Carry it only as an issuer-plane bearer and reject management or Runtime bearers |
 | SourceContext forges actor or Workspace authority | Treat every field as bounded untrusted audit metadata |
 | Retry duplicates a receipt | Stable Space/key identity and request digest |
 | Consistency token is used as authority | Reauthorize its Space on every Recall |
@@ -65,9 +67,10 @@ sandbox access, or handoff authority.
 M0 had no durable process or network transport; it proved semantics only. M1
 adds owner-only local credentials and Unix Socket, a `0700` data boundary,
 single-owner locking, digest-backed opaque capabilities, transactional receipt
-acceptance, and storage failure injection. M2 must add sidecar
-artifact integrity, capability handling inside Caelis, exact replay metadata,
-and output-sink enforcement. M3 must add backup confidentiality, hardened
+acceptance, and storage failure injection. The Memory-owned M2 boundary adds
+sidecar artifact integrity, exact compatibility identity, and a distinct public
+issuer plane. Caelis integration must still add in-process capability handling,
+exact replay metadata, and output-sink enforcement. M3 must add backup confidentiality, hardened
 management authorization, deletion verification, and incident diagnostics. M4
 must add provider data-egress policy, prompt-injection resistance, cost bounds,
 and job poisoning controls.

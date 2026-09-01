@@ -31,28 +31,85 @@ func main() {
 
 func run(arguments []string) error {
 	global := flag.NewFlagSet("memoryctl", flag.ContinueOnError)
-	var socketPath, credentialPath string
+	var socketPath, credentialPath, issuerCredentialPath string
 	global.StringVar(&socketPath, "socket", "", "memoryd Unix socket (required)")
 	global.StringVar(&credentialPath, "management-credential", "", "management credential file")
+	global.StringVar(&issuerCredentialPath, "issuer-credential", "", "issuer credential file")
 	if err := global.Parse(arguments); err != nil {
 		return err
 	}
 	if socketPath == "" || global.NArg() == 0 {
-		return fmt.Errorf("usage: memoryctl -socket PATH [-management-credential FILE] COMMAND")
+		return fmt.Errorf("usage: memoryctl -socket PATH [-management-credential FILE] [-issuer-credential FILE] COMMAND")
 	}
 	command := global.Arg(0)
 	commandArgs := global.Args()[1:]
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if command == "health" || command == "ready" {
+	if command == "health" || command == "ready" || command == "compatibility" {
 		client := localclient.NewClient(socketPath)
 		if command == "health" {
 			return client.Health(ctx)
 		}
-		return client.Ready(ctx)
+		if command == "ready" {
+			return client.Ready(ctx)
+		}
+		flags := flag.NewFlagSet(command, flag.ContinueOnError)
+		var serviceVersion, buildRevision string
+		flags.StringVar(&serviceVersion, "service-version", "", "expected packaged service version")
+		flags.StringVar(&buildRevision, "build-revision", "", "expected packaged source revision")
+		if err := flags.Parse(commandArgs); err != nil {
+			return err
+		}
+		if (serviceVersion == "") != (buildRevision == "") {
+			return fmt.Errorf("compatibility requires both -service-version and -build-revision when either is set")
+		}
+		var response v1alpha1.CompatibilityResponse
+		var err error
+		if serviceVersion == "" {
+			response, err = client.Compatibility(ctx)
+		} else {
+			response, err = client.CheckCompatibility(ctx, localclient.CompatibilityExpectation{
+				ServiceVersion: serviceVersion, BuildRevision: buildRevision,
+			})
+		}
+		return writeResult(response, err)
 	}
 	if command == "remember" || command == "recall" {
 		return runDataPlane(ctx, socketPath, command, commandArgs)
+	}
+	if command == "issue" {
+		var request v1alpha1.CapabilityIssueRequest
+		outputPath, err := readSecretOutputFlags(command, commandArgs, "authorization-output", &request)
+		if err != nil {
+			return err
+		}
+		if issuerCredentialPath == "" {
+			return fmt.Errorf("-issuer-credential is required for issue")
+		}
+		issuerCredential, err := readIssuerCredential(issuerCredentialPath, request.PrincipalRef)
+		if err != nil {
+			return err
+		}
+		output, err := reserveSecretOutput(outputPath)
+		if err != nil {
+			return err
+		}
+		response, err := localclient.NewIssuerClient(socketPath, issuerCredential).IssueCapability(ctx, request)
+		if err != nil {
+			_ = output.Close()
+			_ = os.Remove(outputPath)
+			return err
+		}
+		authorization := authorizationFile{
+			Capability: response.Token,
+			ActorRef:   request.ActorRef,
+			Audience:   request.Audience,
+			ExpiresAt:  response.ExpiresAt,
+		}
+		if err := writeSecretJSON(output, authorization); err != nil {
+			return fmt.Errorf("capability issued but authorization output failed: %w", err)
+		}
+		return writeResult(map[string]any{"issued": true, "authorization_file": outputPath, "expires_at": response.ExpiresAt}, nil)
 	}
 	if credentialPath == "" {
 		return fmt.Errorf("-management-credential is required for management command %q", command)
@@ -83,32 +140,6 @@ func run(arguments []string) error {
 			return fmt.Errorf("bootstrap committed but issuer credential output failed: %w", err)
 		}
 		return writeResult(map[string]any{"bootstrapped": true, "issuer_credentials_file": outputPath}, nil)
-	case "issue":
-		var request appliance.IssueCapabilityRequest
-		outputPath, err := readSecretOutputFlags(command, commandArgs, "authorization-output", &request)
-		if err != nil {
-			return err
-		}
-		output, err := reserveSecretOutput(outputPath)
-		if err != nil {
-			return err
-		}
-		response, err := admin.IssueCapability(ctx, request)
-		if err != nil {
-			_ = output.Close()
-			_ = os.Remove(outputPath)
-			return err
-		}
-		authorization := authorizationFile{
-			Capability: response.Token,
-			ActorRef:   request.ActorRef,
-			Audience:   request.Audience,
-			ExpiresAt:  response.ExpiresAt,
-		}
-		if err := writeSecretJSON(output, authorization); err != nil {
-			return fmt.Errorf("capability issued but authorization output failed: %w", err)
-		}
-		return writeResult(map[string]any{"issued": true, "authorization_file": outputPath, "expires_at": response.ExpiresAt}, nil)
 	case "inspect":
 		response, err := admin.Inspect(ctx)
 		return writeResult(response, err)
@@ -232,7 +263,30 @@ func readCredential(path string) (string, error) {
 	}
 	credential := strings.TrimSpace(string(value))
 	if credential == "" {
-		return "", fmt.Errorf("management credential is empty")
+		return "", fmt.Errorf("credential is empty")
+	}
+	return credential, nil
+}
+
+func readIssuerCredential(path, principalRef string) (string, error) {
+	value, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	var bootstrap appliance.BootstrapResponse
+	if json.Unmarshal(value, &bootstrap) == nil && bootstrap.IssuerCredentials[principalRef] != "" {
+		return bootstrap.IssuerCredentials[principalRef], nil
+	}
+	var rotated appliance.IssuerAuthorization
+	if json.Unmarshal(value, &rotated) == nil && rotated.PrincipalRef == principalRef && rotated.Credential != "" {
+		return rotated.Credential, nil
+	}
+	credential := strings.TrimSpace(string(value))
+	if strings.HasPrefix(credential, "{") {
+		return "", fmt.Errorf("issuer credential file does not contain principal %q", principalRef)
+	}
+	if credential == "" {
+		return "", fmt.Errorf("issuer credential is empty")
 	}
 	return credential, nil
 }

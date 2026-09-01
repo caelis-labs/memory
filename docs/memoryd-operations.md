@@ -1,11 +1,14 @@
-# memoryd M1 Operations
+# memoryd Operations
 
-Status: current operator guide for the standalone durable Core.
+Status: current operator guide for the standalone durable Core and packaged
+local sidecar.
 
-M1 runs without Caelis and without a model. It exposes `memory.v1alpha1` over an
+`memoryd` runs without Caelis and without a model. It exposes
+`memory.v1alpha1` over an
 owner-only Unix Socket and keeps all authority under one owner-only data
-directory. The local management protocol is deliberately internal in M1; the
-data-plane API and SDK are the compatibility boundary.
+directory. The local management protocol remains internal; the data plane,
+compatibility handshake, issuer plane, SDK, and sidecar manifest are the
+host-integration boundary.
 
 ## Build and start
 
@@ -14,6 +17,20 @@ GOWORK=off go build -o ./memoryd ./cmd/memoryd
 GOWORK=off go build -o ./memoryctl ./cmd/memoryctl
 ./memoryd -data-dir /tmp/caelis-memory
 ```
+
+For a host-managed native sidecar, build only from a clean exact revision:
+
+```sh
+make sidecar
+```
+
+The target emits `dist/memoryd-$GOOS-$GOARCH` and a neighboring JSON manifest.
+The manifest binds service version, source revision, protocol, API, Core
+Profile, platform, executable name, and SHA-256. A host verifies the manifest
+against its pinned identity and verifies the executable bytes before launch;
+after readiness it performs the compatibility handshake and compares the
+reported service version and revision with that manifest. Packaging refuses a
+dirty worktree or a `REVISION` different from checked-out `HEAD`.
 
 `-data-dir` is required. On macOS, keep this path short enough for the platform
 Unix Socket path limit. `memoryd` refuses a second owner, refuses to replace a
@@ -41,6 +58,18 @@ Check liveness and durable readiness independently:
 ./memoryctl -socket /tmp/caelis-memory/memoryd.sock health
 ./memoryctl -socket /tmp/caelis-memory/memoryd.sock ready
 ```
+
+Inspect or require an exact packaged identity through the same handshake used
+by a host:
+
+```sh
+./memoryctl -socket /tmp/caelis-memory/memoryd.sock compatibility \
+  -service-version 0.2.0-alpha.1 \
+  -build-revision FULL_GIT_OBJECT_ID
+```
+
+A mismatch returns the stable `incompatible` error and does not fall back to a
+different protocol or profile.
 
 ## Bootstrap
 
@@ -111,14 +140,12 @@ Grant remain governed by their own expiration and revocation state.
 
 ## Issue Runtime authority
 
-Create an owner-only `issue.json` using the issuer credential returned above:
+Create an owner-only `issue.json` containing only binding references and
+requested bounds:
 
 ```json
 {
-  "authorization": {
-    "principal_ref": "principal:bot-a",
-    "credential": "COPY_FROM_ISSUER_JSON"
-  },
+  "principal_ref": "principal:bot-a",
   "grant_ref": "grant-bot-a",
   "actor_ref": "actor-bot-a",
   "audience": "private",
@@ -131,12 +158,18 @@ Create an owner-only `issue.json` using the issuer credential returned above:
 chmod 600 issue.json
 ./memoryctl \
   -socket /tmp/caelis-memory/memoryd.sock \
-  -management-credential /tmp/caelis-memory/management.token \
+  -issuer-credential issuer.json \
   issue -file issue.json -authorization-output bot-a.authorization.json
 ```
 
-The authorization output contains the opaque capability, actor, audience, and
-expiration. It is Runtime authority, not a model or Session artifact.
+`memoryctl` accepts the Bootstrap credential map, a rotated issuer response, or
+a raw credential file. The issuer secret travels only as a transport bearer;
+it is absent from the request body and management authorization is neither
+required nor accepted by the issuer plane. Repeating the same issue request
+before capability expiry produces a fresh bearer, which is the renewal path for
+an active Runtime. The authorization output contains the opaque capability,
+actor, audience, and expiration. It is Runtime authority, not a model or
+Session artifact.
 
 ## Remember and Recall
 

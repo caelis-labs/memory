@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -18,6 +19,7 @@ import (
 	"github.com/caelis-labs/memory/internal/appliance"
 	"github.com/caelis-labs/memory/internal/localtransport"
 	localclient "github.com/caelis-labs/memory/sdk/go/memory/local"
+	"github.com/caelis-labs/memory/sdk/go/memory/sidecar"
 )
 
 func TestDurableConformanceSeparateProcess(t *testing.T) {
@@ -72,9 +74,9 @@ func TestGoldenPathPrivateAndSharedSurvivesProcessRestart(t *testing.T) {
 	}
 	issue := func(principal string, grantID v1alpha1.GrantID, actor string, audience v1alpha1.Audience) v1alpha1.CallAuthorization {
 		t.Helper()
-		capability, err := admin.IssueCapability(t.Context(), appliance.IssueCapabilityRequest{
-			Authorization: appliance.IssuerAuthorization{PrincipalRef: principal, Credential: bootstrap.IssuerCredentials[principal]},
-			GrantRef:      grantID, ActorRef: actor, Audience: audience, Operations: operations, TTLSeconds: 1800,
+		capability, err := localclient.NewIssuerClient(process.socket, bootstrap.IssuerCredentials[principal]).IssueCapability(t.Context(), v1alpha1.CapabilityIssueRequest{
+			PrincipalRef: principal, GrantRef: grantID, ActorRef: actor, Audience: audience,
+			Operations: operations, TTLSeconds: 1800,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -152,20 +154,15 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 		"-management-credential", managementPath,
 		"bootstrap", "-file", bootstrapPath, "-issuer-output", issuerPath,
 	)
-	var issuer appliance.BootstrapResponse
-	readJSONFile(t, issuerPath, &issuer)
 	issuePath := filepath.Join(root, "issue.json")
-	writeJSONFile(t, issuePath, appliance.IssueCapabilityRequest{
-		Authorization: appliance.IssuerAuthorization{
-			PrincipalRef: "principal:cli", Credential: issuer.IssuerCredentials["principal:cli"],
-		},
-		GrantRef: "grant-cli", ActorRef: "actor-cli", Audience: v1alpha1.AudiencePrivate,
+	writeJSONFile(t, issuePath, v1alpha1.CapabilityIssueRequest{
+		PrincipalRef: "principal:cli", GrantRef: "grant-cli", ActorRef: "actor-cli", Audience: v1alpha1.AudiencePrivate,
 		Operations: []v1alpha1.Operation{v1alpha1.OperationRemember, v1alpha1.OperationRecall}, TTLSeconds: 600,
 	})
 	authorizationPath := filepath.Join(root, "authorization.json")
 	runCommand(t, memoryctl,
 		"-socket", process.socket,
-		"-management-credential", managementPath,
+		"-issuer-credential", issuerPath,
 		"issue", "-file", issuePath, "-authorization-output", authorizationPath,
 	)
 	rememberOutput := runCommand(t, memoryctl,
@@ -189,6 +186,111 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 	)
 	if !bytes.Contains(inspectOutput, []byte(`"receipts": 1`)) {
 		t.Fatalf("memoryctl Inspect output = %s", inspectOutput)
+	}
+}
+
+func TestPackagedSidecarIdentityHandshakeAndIssuerPlane(t *testing.T) {
+	root := shortTempDir(t)
+	const serviceVersion = "0.2.0-alpha.1-test"
+	const buildRevision = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	binary := filepath.Join(root, "memoryd-"+runtime.GOOS+"-"+runtime.GOARCH)
+	build := exec.Command("go", "build", "-trimpath",
+		"-ldflags", "-X github.com/caelis-labs/memory/internal/buildinfo.ServiceVersion="+serviceVersion+
+			" -X github.com/caelis-labs/memory/internal/buildinfo.BuildRevision="+buildRevision,
+		"-o", binary, "../../cmd/memoryd")
+	build.Env = append(os.Environ(), "GOWORK=off")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build packaged memoryd: %v\n%s", err, output)
+	}
+	manifest, err := sidecar.CreateManifest(binary, serviceVersion, buildRevision, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verified, err := manifest.VerifyNative(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verified != binary {
+		t.Fatalf("verified executable = %q, want %q", verified, binary)
+	}
+
+	dataDir := filepath.Join(root, "data")
+	process := startMemoryd(t, verified, dataDir)
+	t.Cleanup(func() { process.stop(t) })
+	client := localclient.NewClient(process.socket)
+	compatibility, err := client.CheckCompatibility(t.Context(), localclient.CompatibilityExpectation{
+		ServiceVersion: serviceVersion, BuildRevision: buildRevision,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compatibility.ServiceVersion != manifest.ServiceVersion || compatibility.BuildRevision != manifest.BuildRevision {
+		t.Fatalf("handshake identity = %+v, manifest = %+v", compatibility, manifest)
+	}
+	if _, err := client.CheckCompatibility(t.Context(), localclient.CompatibilityExpectation{
+		ServiceVersion: serviceVersion, BuildRevision: "wrong-revision",
+	}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeIncompatible) {
+		t.Fatalf("wrong pinned revision error = %v, want incompatible", err)
+	}
+
+	credentialBytes, err := os.ReadFile(filepath.Join(dataDir, appliance.ManagementCredentialFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := localtransport.NewAdminClient(process.socket, strings.TrimSpace(string(credentialBytes)))
+	bootstrap, err := admin.Bootstrap(t.Context(), appliance.BootstrapRequest{
+		Realms:     []appliance.Realm{{ID: "realm-m2"}},
+		Identities: []appliance.Identity{{ID: "identity-m2", RealmID: "realm-m2"}},
+		Spaces: []appliance.Space{{
+			ID: "space-m2", RealmID: "realm-m2", IdentityID: "identity-m2", Class: v1alpha1.SpaceClassPrivate,
+		}},
+		Views: []appliance.ViewDefinition{{
+			ID: "view-m2", RealmID: "realm-m2", ReadSpaceIDs: []v1alpha1.SpaceID{"space-m2"},
+			WriteSpaceID: "space-m2", MaxDisclosureClass: v1alpha1.SpaceClassPrivate, Version: 1,
+		}},
+		Grants: []appliance.Grant{{
+			ID: "grant-m2", PrincipalRef: "principal:m2", ActorRef: "actor-m2", ViewRef: "view-m2",
+			AllowedOperations: []v1alpha1.Operation{v1alpha1.OperationRemember, v1alpha1.OperationRecall},
+			AllowedAudiences:  []v1alpha1.Audience{v1alpha1.AudiencePrivate}, ExpiresAt: time.Now().Add(time.Hour), Version: 1,
+		}},
+		IssuerPrincipals: []string{"principal:m2"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer := localclient.NewIssuerClient(process.socket, bootstrap.IssuerCredentials["principal:m2"])
+	issueRequest := v1alpha1.CapabilityIssueRequest{
+		PrincipalRef: "principal:m2", GrantRef: "grant-m2", ActorRef: "actor-m2",
+		Audience:   v1alpha1.AudiencePrivate,
+		Operations: []v1alpha1.Operation{v1alpha1.OperationRemember, v1alpha1.OperationRecall}, TTLSeconds: 600,
+	}
+	capability, err := issuer.IssueCapability(t.Context(), issueRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := v1alpha1.CallAuthorization{Capability: capability.Token, ActorRef: "actor-m2", Audience: v1alpha1.AudiencePrivate}
+	remembered, err := client.Remember(t.Context(), auth, v1alpha1.RememberRequest{
+		Text: "M2 uses a pinned sidecar", IdempotencyKey: "m2-pinned-sidecar",
+	})
+	if err != nil || !remembered.Accepted {
+		t.Fatalf("Remember() = %+v, %v", remembered, err)
+	}
+	renewed, err := issuer.IssueCapability(t.Context(), issueRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renewed.Token == capability.Token {
+		t.Fatal("capability renewal reused the prior bearer")
+	}
+	retryAuth := v1alpha1.CallAuthorization{Capability: renewed.Token, ActorRef: "actor-m2", Audience: v1alpha1.AudiencePrivate}
+	retried, err := client.Remember(t.Context(), retryAuth, v1alpha1.RememberRequest{
+		Text: "M2 uses a pinned sidecar", IdempotencyKey: "m2-pinned-sidecar",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !retried.DeduplicatedRetry || retried.ReceiptID != remembered.ReceiptID {
+		t.Fatalf("renewed capability changed effect identity: first=%+v retry=%+v", remembered, retried)
 	}
 }
 
@@ -225,11 +327,8 @@ func newDurableProcessFixture(t *testing.T) conformance.DurableFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	capability, err := admin.IssueCapability(t.Context(), appliance.IssueCapabilityRequest{
-		Authorization: appliance.IssuerAuthorization{
-			PrincipalRef: "principal:system", Credential: bootstrap.IssuerCredentials["principal:system"],
-		},
-		GrantRef: "grant-system", ActorRef: "actor-system", Audience: v1alpha1.AudiencePrivate,
+	capability, err := localclient.NewIssuerClient(process.socket, bootstrap.IssuerCredentials["principal:system"]).IssueCapability(t.Context(), v1alpha1.CapabilityIssueRequest{
+		PrincipalRef: "principal:system", GrantRef: "grant-system", ActorRef: "actor-system", Audience: v1alpha1.AudiencePrivate,
 		Operations: []v1alpha1.Operation{v1alpha1.OperationRemember, v1alpha1.OperationRecall, v1alpha1.OperationReceiptStatus},
 		TTLSeconds: 1800,
 	})

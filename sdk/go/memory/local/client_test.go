@@ -10,6 +10,12 @@ import (
 
 func TestTransportFailureClassification(t *testing.T) {
 	client := NewClient(filepath.Join(t.TempDir(), "absent.sock"))
+	if _, err := client.CheckCompatibility(context.Background(), CompatibilityExpectation{}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeInvalidArgument) {
+		t.Fatalf("CheckCompatibility(empty pin) error = %v, want invalid_argument", err)
+	}
+	if _, err := client.Compatibility(context.Background()); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
+		t.Fatalf("Compatibility() error = %v, want unavailable", err)
+	}
 	auth := v1alpha1.CallAuthorization{
 		Capability: "opaque", ActorRef: "actor", Audience: v1alpha1.AudiencePrivate,
 	}

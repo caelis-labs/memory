@@ -35,12 +35,6 @@ func (c *AdminClient) Bootstrap(ctx context.Context, request appliance.Bootstrap
 	return response, err
 }
 
-func (c *AdminClient) IssueCapability(ctx context.Context, request appliance.IssueCapabilityRequest) (appliance.RuntimeCapability, error) {
-	var response appliance.RuntimeCapability
-	err := c.do(ctx, http.MethodPost, AdminPathIssue, request, &response)
-	return response, err
-}
-
 func (c *AdminClient) Inspect(ctx context.Context) (appliance.Inspection, error) {
 	var response appliance.Inspection
 	err := c.do(ctx, http.MethodGet, AdminPathInspect, nil, &response)

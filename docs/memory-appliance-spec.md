@@ -377,6 +377,22 @@ redaction workflow; Memory hard delete must never claim to erase those copies.
 
 ## Evolution
 
+The M2 local host profile performs an exact compatibility handshake before a
+Runtime receives Memory tools. The request names `memory.local.v1alpha1`,
+`memory.v1alpha1`, and `memory.core.v1alpha1`; the service rejects any mismatch
+with `incompatible` rather than negotiating a weaker profile. A successful
+response reports the packaged service version, exact source revision, and
+diagnostic storage schema version. The host separately verifies the native
+binary SHA-256 from a pinned sidecar manifest before launch and compares the
+handshake build identity with that manifest after readiness.
+
+Runtime capability issuance is a separate issuer-plane operation. Its request
+contains principal, Grant, actor, audience, operation, and TTL references while
+the principal credential remains an out-of-band bearer. Management and Runtime
+bearers cannot act as issuer credentials. Renewal issues a fresh temporary
+capability for the same immutable binding; it never changes Remember effect
+identity.
+
 Additive v1alpha1 fields must be optional and ignored safely by compatible
 readers. Effect-bearing changes require a new request digest rule and protocol
 version. Public memory, mixed audiences, new Space classes, semantic records,
