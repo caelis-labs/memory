@@ -290,9 +290,49 @@ func run(arguments []string) error {
 			return err
 		}
 		return writeResult(map[string]any{"rotated": true, "management_credential_file": credentialPath}, nil)
+	case "put-steward-profile":
+		var request managementv1alpha1.PutStewardProfileRequest
+		if err := readRequestFile(command, commandArgs, &request); err != nil {
+			return err
+		}
+		response, err := admin.PutStewardProfile(ctx, request)
+		return writeResult(response, err)
+	case "bind-steward-profile":
+		var request managementv1alpha1.BindStewardProfileRequest
+		if err := readRequestFile(command, commandArgs, &request); err != nil {
+			return err
+		}
+		response, err := admin.BindStewardProfile(ctx, request)
+		return writeResult(response, err)
+	case "disable-steward":
+		var request managementv1alpha1.DisableStewardRequest
+		if err := readRequestFile(command, commandArgs, &request); err != nil {
+			return err
+		}
+		response, err := admin.DisableSteward(ctx, request)
+		return writeResult(response, err)
+	case "steward-configuration":
+		if len(commandArgs) != 0 {
+			return fmt.Errorf("steward-configuration accepts no command arguments")
+		}
+		response, err := admin.StewardConfiguration(ctx)
+		return writeResult(response, err)
 	default:
 		return fmt.Errorf("unknown command %q", command)
 	}
+}
+
+func readRequestFile(command string, arguments []string, output any) error {
+	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+	var path string
+	flags.StringVar(&path, "file", "", "request JSON file")
+	if err := flags.Parse(arguments); err != nil {
+		return err
+	}
+	if path == "" || flags.NArg() != 0 {
+		return fmt.Errorf("%s requires -file", command)
+	}
+	return readJSONFile(path, output)
 }
 
 func runBackup(ctx context.Context, admin *managementclient.Client, command string, arguments []string) error {

@@ -78,6 +78,31 @@ and Evidence, updates the projection, completes the Job, and marks receipt
 processing organized together. Changed retries and stale Revisions mutate
 nothing.
 
+Profile policy is durable and versioned, while provider transport and
+credentials are immutable process configuration. Remember and correction read
+the current Space binding and append a deterministic Job in the same
+transaction as the new receipt. A later binding change cannot rewrite that Job
+snapshot. Disabling a Space removes its binding and moves pending or leased
+Jobs plus receipt processing to a stable failed state; existing Records and
+baseline receipt indexes are untouched.
+
+The shared Worker pool atomically claims the oldest available Job, changes its
+receipt status to processing, and receives an opaque lease token. Only a digest
+is durable. An expired lease returns to pending and any prior worker loses
+application authority. Provider input is assembled from the receipt and active
+same-Space heads, then oldest context heads are removed until the exact JSON
+fits the profile budget. Job, Space, lease, access policy, SourceContext, and
+provider credential never enter that JSON.
+
+The initial process adapter uses a fixed HTTPS endpoint or explicit loopback
+HTTP endpoint. Configuration and credential files are owner-only, redirects
+are disabled, response bytes and schema are bounded, and response bodies are
+never placed in durable failure state or ordinary logs. Provider absence,
+timeout, panic, poisoned output, conflict, and application failure use bounded
+durable retry before a terminal non-sensitive code. Starting without provider
+configuration starts no Workers and leaves accepted receipts on the baseline
+path.
+
 Later operations such as RELATE, PROMOTE, DEMOTE, ARCHIVE, and model-enhanced
 Recall require independent evidence and acceptance cases.
 

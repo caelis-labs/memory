@@ -53,18 +53,26 @@ M3 Governance and Production Safety additionally provides:
 - lossless offline upgrade preparation and supported native sidecar packaging
   for macOS on Apple silicon (`darwin/arm64`).
 
-The appliance remains deliberately model-free. Other buildable platforms are
-preview-only until they receive native lifecycle evidence. Steward, semantic
-records, and semantic retrieval remain M4 work. Caelis integration is
-independently owned and pins an exact published Memory revision and sidecar
-digest.
+The baseline appliance remains useful with every model and Worker disabled.
+Other buildable platforms are preview-only until they receive native lifecycle
+evidence. Caelis integration is independently owned and pins an exact published
+Memory revision and sidecar digest.
 
-The first M4 construction slice defines the versioned Steward proposal
-vocabulary and migrated Record/Revision/Evidence/Job authority. Its
-deterministic application transaction enforces same-Space evidence, optimistic
-Revisions, immutable history, idempotent unknown-outcome recovery, and
-governance invalidation. Provider execution and Recall enhancement are the
-remaining M4 slices.
+The M4 Semantic Steward foundation additionally provides:
+
+- a versioned Steward protocol and typed `ADD`, `MERGE`, `SUPERSEDE`, and
+  `IGNORE` proposal vocabulary;
+- migrated Record, immutable Revision/Evidence, profile, and durable Job state;
+- deterministic same-Space validation, optimistic Revisions, governance
+  invalidation, and idempotent unknown-outcome recovery;
+- immutable model/prompt profile versions and future-Job Space bindings through
+  the owner management plane;
+- an optional bounded shared Worker pool with HTTPS or loopback HTTP providers,
+  owner-only out-of-band credentials, durable leases, retries, and terminal
+  poisoning controls.
+
+Semantic Recall merge and observable receipt-only fallback are the remaining
+M4 slice.
 
 Read [the specification](docs/memory-appliance-spec.md),
 [roadmap](docs/memory-appliance-roadmap.md), and

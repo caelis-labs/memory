@@ -371,6 +371,31 @@ shared worker pool. It is not a permanent conversation, one Agent per Identity,
 or a second receipt authority. Profile identity and version are captured when a
 job is created; replacing a model or prompt affects only later jobs.
 
+Profiles contain a provider reference, model reference, prompt policy, context
+record limit, and exact input/output byte budgets. A version is immutable.
+Provider endpoint and credential configuration is process-owned and out of
+band: it is not stored in a profile, database row, Job, Session, or provider
+request. Binding a profile to a Space creates Jobs only for receipts accepted
+after that binding commits. Removing the binding cancels pending or leased work
+without deleting receipts or semantic history.
+
+One provider request contains the captured profile, one immutable receipt, and
+a bounded list of active same-Space Record heads with their Evidence. It
+deliberately omits Space, Job, lease, capability, View, Grant, actor, audience,
+and SourceContext. Receipt and Evidence IDs support proposal provenance but are
+not authority. The shared Worker pool reclaims expired durable leases, bounds
+attempts and exponential delay, contains provider panics, and classifies only
+stable non-sensitive failure codes. An unknown application response is retried
+with the identical lease and proposal.
+
+The built-in HTTP adapter permits HTTPS or explicit loopback HTTP, refuses
+redirects, limits request and response bytes, requires the versioned response
+envelope, rejects unknown fields, and validates proposal shape before canonical
+application validates it again. Provider configuration and optional credential
+files must be owner-only regular files. Sending private receipt text to an
+external provider is an operator-selected egress decision, never an automatic
+cross-Space publication.
+
 Provider output is an untrusted proposal with exactly four operations:
 
 ```text
@@ -407,6 +432,8 @@ carried outside request bodies and is independent from issuer credentials and
 Runtime capabilities. The owner-management client can bootstrap topology,
 inspect the appliance, search and trace receipts, correct or delete receipt
 content, rebuild projections, revoke Grants, and rotate issuer credentials.
+It can also create immutable Steward profile versions, bind them for future
+Jobs, inspect profile bindings, and disable work per Space.
 None of these operations is model-accessible.
 
 Inspection returns only bounded topology and operational aggregates: storage

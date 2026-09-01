@@ -231,6 +231,9 @@ func (s *Store) CorrectReceipt(
 	if _, err := tx.ExecContext(ctx, `INSERT INTO receipt_processing(receipt_id, state) VALUES (?, ?)`, replacementID, v1alpha1.ProcessingStateAccepted); err != nil {
 		return rollback(s.databaseError("store replacement processing state", err))
 	}
+	if err := s.enqueueStewardJob(ctx, tx, replacementID, spaceID, now); err != nil {
+		return rollback(s.databaseError("enqueue correction Steward job", err))
+	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO consistency_cursors(token, generation, space_id, commit_sequence) VALUES (?, ?, ?, ?)`,
 		consistencyToken, s.generation, spaceID, commitSequence); err != nil {

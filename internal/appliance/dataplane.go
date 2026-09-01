@@ -132,6 +132,10 @@ func (s *Store) Remember(
 		_ = tx.Rollback()
 		return v1alpha1.RememberResponse{}, s.databaseError("store receipt processing state", err)
 	}
+	if err := s.enqueueStewardJob(ctx, tx, receiptID, view.writeSpaceID, receivedAt); err != nil {
+		_ = tx.Rollback()
+		return v1alpha1.RememberResponse{}, s.databaseError("enqueue Steward job", err)
+	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO consistency_cursors(token, generation, space_id, commit_sequence) VALUES (?, ?, ?, ?)`,
 		consistencyToken, s.generation, view.writeSpaceID, commitSequence); err != nil {

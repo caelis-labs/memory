@@ -3,7 +3,8 @@
 Status: current operator guide for the standalone durable Core, versioned owner
 management plane, and packaged local sidecar.
 
-`memoryd` runs without Caelis and without a model. It exposes
+`memoryd` runs without Caelis and remains fully useful without a model. An
+optional Steward Worker pool can be configured independently. It exposes
 `memory.v1alpha1` over an
 owner-only Unix Socket and keeps all authority under one owner-only data
 directory. The versioned owner-management plane is independent from the data
@@ -17,6 +18,9 @@ GOWORK=off go build -o ./memoryd ./cmd/memoryd
 GOWORK=off go build -o ./memoryctl ./cmd/memoryctl
 ./memoryd -data-dir /tmp/caelis-memory
 ```
+
+Omit `-steward-providers` to run the durable receipt/FTS appliance with no model
+egress or semantic background work.
 
 For a host-managed native sidecar on a supported platform, build only from a
 clean exact revision:
@@ -195,6 +199,113 @@ processing state, consistency cursor, and Space FTS projection commit in one
 SQLite transaction. If the transport fails around that boundary, the Go local
 client returns `unknown_outcome`; retry the exact request with the same
 idempotency key.
+
+## Optional Steward profiles and Workers
+
+Steward is an appliance-internal enhancement. The Agent surface remains only
+Remember and Recall. Enabling it requires two separate owner decisions:
+
+1. process configuration chooses trusted provider endpoints and credentials;
+2. the management plane binds an immutable model/prompt profile to selected
+   Spaces for future receipts.
+
+Create an owner-only `providers.json`:
+
+```json
+{
+  "workers": 2,
+  "lease_seconds": 60,
+  "poll_ms": 100,
+  "retry_base_ms": 1000,
+  "max_attempts": 5,
+  "providers": [
+    {
+      "ref": "local-steward",
+      "endpoint": "http://127.0.0.1:8090/memory/steward",
+      "credential_file": "/secure/provider.token",
+      "timeout_ms": 30000
+    }
+  ]
+}
+```
+
+```sh
+chmod 600 providers.json /secure/provider.token
+./memoryd -data-dir /tmp/caelis-memory \
+  -steward-providers /secure/providers.json
+```
+
+External endpoints require HTTPS; plain HTTP is accepted only for `localhost`
+or a loopback IP. Redirects are refused. The provider receives bounded receipt
+text, receipt/Evidence identifiers, active same-Space Record heads, model
+reference, and prompt policy. It does not receive Space, Job, lease,
+SourceContext, actor, audience, capability, management bearer, or provider
+credential in the JSON body. Selecting an external endpoint is therefore an
+explicit data-egress and provider-retention decision.
+
+Create an immutable profile request as `profile.json`:
+
+```json
+{
+  "profile": {
+    "profile_id": "default-steward",
+    "version": 1,
+    "provider_ref": "local-steward",
+    "model": "configured-model",
+    "system_prompt": "Organize the receipt using only supplied evidence.",
+    "max_context_records": 16,
+    "max_input_bytes": 262144,
+    "max_output_bytes": 32768
+  }
+}
+```
+
+Bind it to future receipts in explicitly listed Spaces with `binding.json`:
+
+```json
+{
+  "profile_id": "default-steward",
+  "version": 1,
+  "space_ids": ["space-bot-a"]
+}
+```
+
+```sh
+./memoryctl -socket /tmp/caelis-memory/memoryd.sock \
+  -management-credential /tmp/caelis-memory/management.token \
+  put-steward-profile -file profile.json
+
+./memoryctl -socket /tmp/caelis-memory/memoryd.sock \
+  -management-credential /tmp/caelis-memory/management.token \
+  bind-steward-profile -file binding.json
+
+./memoryctl -socket /tmp/caelis-memory/memoryd.sock \
+  -management-credential /tmp/caelis-memory/management.token \
+  steward-configuration
+```
+
+Profile versions cannot be edited. Put a new version and move the binding;
+already-created Jobs keep their captured version. Receipts accepted before the
+first binding have no retroactive Job. Receipt status reports accepted,
+processing, organized, or a bounded terminal code independently from baseline
+Recall.
+
+To stop semantic work without deleting any receipt, Record, Revision,
+Evidence, or baseline projection, create `disable.json`:
+
+```json
+{"space_ids":["space-bot-a"]}
+```
+
+```sh
+./memoryctl -socket /tmp/caelis-memory/memoryd.sock \
+  -management-credential /tmp/caelis-memory/management.token \
+  disable-steward -file disable.json
+```
+
+This removes future-Job bindings and terminally cancels pending or leased Jobs.
+Stopping `memoryd` during a provider call is also safe: its lease expires and a
+later configured Worker may reclaim it.
 
 ## Inspect, search, correct, delete, rebuild, revoke, and stop
 

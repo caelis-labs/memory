@@ -108,6 +108,34 @@ func (c *Client) RotateManagementCredential(ctx context.Context) error {
 	return c.do(ctx, http.MethodPost, managementv1alpha1.LocalPathRotateManagement, struct{}{}, &response)
 }
 
+// PutStewardProfile creates or resolves one immutable profile version.
+func (c *Client) PutStewardProfile(ctx context.Context, request managementv1alpha1.PutStewardProfileRequest) (managementv1alpha1.PutStewardProfileResponse, error) {
+	var response managementv1alpha1.PutStewardProfileResponse
+	err := c.do(ctx, http.MethodPost, managementv1alpha1.LocalPathPutStewardProfile, request, &response)
+	return response, err
+}
+
+// BindStewardProfile selects a profile for future Jobs in the listed Spaces.
+func (c *Client) BindStewardProfile(ctx context.Context, request managementv1alpha1.BindStewardProfileRequest) (managementv1alpha1.BindStewardProfileResponse, error) {
+	var response managementv1alpha1.BindStewardProfileResponse
+	err := c.do(ctx, http.MethodPost, managementv1alpha1.LocalPathBindStewardProfile, request, &response)
+	return response, err
+}
+
+// DisableSteward stops future work and cancels outstanding Jobs for Spaces.
+func (c *Client) DisableSteward(ctx context.Context, request managementv1alpha1.DisableStewardRequest) (managementv1alpha1.DisableStewardResponse, error) {
+	var response managementv1alpha1.DisableStewardResponse
+	err := c.do(ctx, http.MethodPost, managementv1alpha1.LocalPathDisableSteward, request, &response)
+	return response, err
+}
+
+// StewardConfiguration returns owner-visible profiles and Space bindings.
+func (c *Client) StewardConfiguration(ctx context.Context) (managementv1alpha1.StewardConfiguration, error) {
+	var response managementv1alpha1.StewardConfiguration
+	err := c.do(ctx, http.MethodGet, managementv1alpha1.LocalPathStewardConfiguration, nil, &response)
+	return response, err
+}
+
 func (c *Client) CloseIdleConnections() {
 	c.http.CloseIdleConnections()
 }

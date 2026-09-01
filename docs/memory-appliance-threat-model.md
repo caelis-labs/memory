@@ -46,6 +46,11 @@ does not grant access.
 | Consistency token is used as authority | Reauthorize its Space on every Recall |
 | Steward invents or widens facts | Same-Space evidence and deterministic proposal validation |
 | Model deletes evidence | No model-accessible physical deletion operation |
+| Provider receives appliance authority | Omit Space, Job, lease, capability, View, Grant, actor, audience, and SourceContext from structured input |
+| Provider bearer leaks through body or redirect | Keep credentials in owner-only process files, use headers only, and refuse redirects |
+| Cleartext provider egress exposes private receipts | Permit plain HTTP only to explicit loopback; external endpoints require HTTPS and operator selection |
+| Prompt injection grants mutation authority | Treat receipt and Record text as untrusted data; accept only the closed proposal vocabulary and revalidate canonical state |
+| Provider outage or poisoned output blocks memory | Baseline receipt Recall is independent; durable attempts, byte limits, panic containment, and terminal codes bound work |
 | Global index reveals private existence | Per-Space search or proven authorization pre-filter |
 | Error or metric exposes content | IDs, sizes, digests, and typed codes only |
 | Memory delete is mistaken for global erasure | Explicitly disclose separate Caelis Session copy boundary |
@@ -85,5 +90,9 @@ also adds secret-free incident diagnostics, crash-recoverable management-token
 rotation, stopped-generation upgrade preparation, and an explicit
 `darwin/arm64` native support boundary. The local owner account and its data
 directory remain one trust domain; remote organization tenancy and hardware
-key custody are not provided. M4 must add provider data-egress policy,
-prompt-injection resistance, cost bounds, and job poisoning controls.
+key custody are not provided. M4 adds explicit provider egress policy,
+structured prompt/data separation, profile byte and context budgets, durable
+bounded attempts, panic containment, closed proposal validation, and job
+poisoning controls. The configured provider still receives receipt content;
+endpoint trust, provider retention, billing, and jurisdiction remain operator
+responsibilities.

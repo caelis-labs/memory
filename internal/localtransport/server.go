@@ -241,6 +241,34 @@ func Handler(store *appliance.Store, serviceInfo ...ServiceInfo) http.Handler {
 		err := store.RotateManagementCredential(request.Context())
 		writeManagement(writer, managementv1alpha1.RotateManagementCredentialResponse{Rotated: err == nil}, err)
 	}))
+	mux.HandleFunc(managementv1alpha1.LocalPathPutStewardProfile, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input managementv1alpha1.PutStewardProfileRequest
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		response, err := store.PutStewardProfile(request.Context(), input)
+		writeManagement(writer, response, err)
+	}))
+	mux.HandleFunc(managementv1alpha1.LocalPathBindStewardProfile, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input managementv1alpha1.BindStewardProfileRequest
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		response, err := store.BindStewardProfile(request.Context(), input)
+		writeManagement(writer, response, err)
+	}))
+	mux.HandleFunc(managementv1alpha1.LocalPathDisableSteward, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input managementv1alpha1.DisableStewardRequest
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		response, err := store.DisableSteward(request.Context(), input)
+		writeManagement(writer, response, err)
+	}))
+	mux.HandleFunc(managementv1alpha1.LocalPathStewardConfiguration, admin(store, http.MethodGet, func(writer http.ResponseWriter, request *http.Request) {
+		response, err := store.GetStewardConfiguration(request.Context())
+		writeManagement(writer, response, err)
+	}))
 	return mux
 }
 

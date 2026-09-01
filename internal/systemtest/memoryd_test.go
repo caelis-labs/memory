@@ -5,6 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +18,7 @@ import (
 	"time"
 
 	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
+	stewardv1alpha1 "github.com/caelis-labs/memory/api/memory/steward/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 	"github.com/caelis-labs/memory/conformance"
 	"github.com/caelis-labs/memory/internal/appliance"
@@ -314,6 +318,151 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 	)
 	if !bytes.Contains(afterUpgradeRollback, []byte("latest stopped upgrade snapshot fact")) {
 		t.Fatalf("upgrade rollback lost the latest acknowledged fact: %s", afterUpgradeRollback)
+	}
+}
+
+func TestMemorydStewardWorkerAndMemoryctlConfiguration(t *testing.T) {
+	root := shortTempDir(t)
+	memoryd := buildCommand(t, root, "memoryd")
+	memoryctl := buildCommand(t, root, "memoryctl")
+	providerCredentialPath := filepath.Join(root, "provider.token")
+	if err := os.WriteFile(providerCredentialPath, []byte("provider-system-secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	providerRequests := make(chan []byte, 1)
+	provider := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer provider-system-secret" {
+			t.Errorf("provider Authorization = %q", request.Header.Get("Authorization"))
+		}
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Error(err)
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		providerRequests <- body
+		var work stewardv1alpha1.WorkRequest
+		if err := json.Unmarshal(body, &work); err != nil {
+			t.Error(err)
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(writer).Encode(stewardv1alpha1.ProviderResponse{
+			Protocol: stewardv1alpha1.ProtocolVersion,
+			Proposal: stewardv1alpha1.Proposal{
+				Operation: stewardv1alpha1.OperationAdd, Kind: "claim", Text: "The project uses Go.",
+				EvidenceRefs: []v1alpha1.ReceiptID{work.Receipt.ReceiptID},
+			},
+		})
+	}))
+	defer provider.Close()
+	providerConfigPath := filepath.Join(root, "providers.json")
+	writeJSONFile(t, providerConfigPath, map[string]any{
+		"workers": 2, "lease_seconds": 30, "poll_ms": 20, "retry_base_ms": 50, "max_attempts": 3,
+		"providers": []map[string]any{{
+			"ref": "provider-system", "endpoint": provider.URL,
+			"credential_file": providerCredentialPath, "timeout_ms": 2000,
+		}},
+	})
+	dataDir := filepath.Join(root, "data")
+	process := startMemorydWithProviders(t, memoryd, dataDir, providerConfigPath)
+	t.Cleanup(func() { process.stop(t) })
+	managementPath := filepath.Join(dataDir, appliance.ManagementCredentialFile)
+	credentialBytes, err := os.ReadFile(managementPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := managementclient.NewClient(process.socket, strings.TrimSpace(string(credentialBytes)))
+	bootstrap, err := admin.Bootstrap(t.Context(), appliance.BootstrapRequest{
+		Realms:     []appliance.Realm{{ID: "realm-steward"}},
+		Identities: []appliance.Identity{{ID: "identity-steward", RealmID: "realm-steward"}},
+		Spaces: []appliance.Space{{
+			ID: "space-steward", RealmID: "realm-steward", IdentityID: "identity-steward", Class: v1alpha1.SpaceClassPrivate,
+		}},
+		Views: []appliance.ViewDefinition{{
+			ID: "view-steward", RealmID: "realm-steward", ReadSpaceIDs: []v1alpha1.SpaceID{"space-steward"},
+			WriteSpaceID: "space-steward", MaxDisclosureClass: v1alpha1.SpaceClassPrivate, Version: 1,
+		}},
+		Grants: []appliance.Grant{{
+			ID: "grant-steward", PrincipalRef: "principal:steward", ActorRef: "actor-steward", ViewRef: "view-steward",
+			AllowedOperations: []v1alpha1.Operation{v1alpha1.OperationRemember, v1alpha1.OperationRecall, v1alpha1.OperationReceiptStatus},
+			AllowedAudiences:  []v1alpha1.Audience{v1alpha1.AudiencePrivate}, ExpiresAt: time.Now().Add(time.Hour), Version: 1,
+		}},
+		IssuerPrincipals: []string{"principal:steward"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profilePath := filepath.Join(root, "profile.json")
+	writeJSONFile(t, profilePath, managementv1alpha1.PutStewardProfileRequest{Profile: stewardv1alpha1.ProfileSpec{
+		ProfileID: "profile-system", Version: 1, ProviderRef: "provider-system", Model: "model-system",
+		SystemPrompt: "organize same-Space evidence", MaxContextRecords: 8,
+		MaxInputBytes: 128 << 10, MaxOutputBytes: 16 << 10,
+	}})
+	profileOutput := runCommand(t, memoryctl,
+		"-socket", process.socket, "-management-credential", managementPath,
+		"put-steward-profile", "-file", profilePath,
+	)
+	if !bytes.Contains(profileOutput, []byte(`"created": true`)) {
+		t.Fatalf("put-steward-profile output = %s", profileOutput)
+	}
+	bindingPath := filepath.Join(root, "binding.json")
+	writeJSONFile(t, bindingPath, managementv1alpha1.BindStewardProfileRequest{
+		ProfileID: "profile-system", Version: 1, SpaceIDs: []v1alpha1.SpaceID{"space-steward"},
+	})
+	runCommand(t, memoryctl,
+		"-socket", process.socket, "-management-credential", managementPath,
+		"bind-steward-profile", "-file", bindingPath,
+	)
+	configuration := runCommand(t, memoryctl,
+		"-socket", process.socket, "-management-credential", managementPath, "steward-configuration",
+	)
+	if !bytes.Contains(configuration, []byte(`"profile_id": "profile-system"`)) ||
+		!bytes.Contains(configuration, []byte(`"space_id": "space-steward"`)) {
+		t.Fatalf("steward-configuration output = %s", configuration)
+	}
+	capability, err := localclient.NewIssuerClient(process.socket, bootstrap.IssuerCredentials["principal:steward"]).IssueCapability(t.Context(), v1alpha1.CapabilityIssueRequest{
+		PrincipalRef: "principal:steward", GrantRef: "grant-steward", ActorRef: "actor-steward", Audience: v1alpha1.AudiencePrivate,
+		Operations: []v1alpha1.Operation{v1alpha1.OperationRemember, v1alpha1.OperationRecall, v1alpha1.OperationReceiptStatus}, TTLSeconds: 1800,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := v1alpha1.CallAuthorization{Capability: capability.Token, ActorRef: "actor-steward", Audience: v1alpha1.AudiencePrivate}
+	client := localclient.NewClient(process.socket)
+	remembered, err := client.Remember(t.Context(), auth, v1alpha1.RememberRequest{
+		Text: "the project uses Go", SourceContext: v1alpha1.SourceContext{ActorRef: "actor-steward"},
+		IdempotencyKey: "steward-system-job",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		status, err := client.GetReceiptStatus(t.Context(), auth, v1alpha1.GetReceiptStatusRequest{ReceiptID: remembered.ReceiptID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status.State == v1alpha1.ProcessingStateOrganized {
+			if status.SemanticGeneration != "profile-system@1" {
+				t.Fatalf("organized ReceiptStatus = %+v", status)
+			}
+			break
+		}
+		if status.State == v1alpha1.ProcessingStateFailed || time.Now().After(deadline) {
+			t.Fatalf("Steward did not organize receipt: %+v", status)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	select {
+	case body := <-providerRequests:
+		for _, forbidden := range []string{"provider-system-secret", "space-steward", "actor-steward", "job-", "lease"} {
+			if bytes.Contains(body, []byte(forbidden)) {
+				t.Fatalf("provider body contains hidden value %q: %s", forbidden, body)
+			}
+		}
+	case <-time.After(time.Second):
+		t.Fatal("provider request was not captured")
 	}
 }
 
@@ -681,9 +830,19 @@ func startMemorydPendingRestore(t *testing.T, binary, dataDir string) *memorydPr
 	return startMemorydWithState(t, binary, dataDir, false)
 }
 
+func startMemorydWithProviders(t *testing.T, binary, dataDir, providerConfigPath string) *memorydProcess {
+	return startMemorydCommand(t, binary, dataDir, true, "-steward-providers", providerConfigPath)
+}
+
 func startMemorydWithState(t *testing.T, binary, dataDir string, requireReady bool) *memorydProcess {
+	return startMemorydCommand(t, binary, dataDir, requireReady)
+}
+
+func startMemorydCommand(t *testing.T, binary, dataDir string, requireReady bool, extraArguments ...string) *memorydProcess {
 	t.Helper()
-	command := exec.Command(binary, "-data-dir", dataDir)
+	arguments := []string{"-data-dir", dataDir}
+	arguments = append(arguments, extraArguments...)
+	command := exec.Command(binary, arguments...)
 	process := &memorydProcess{command: command, socket: filepath.Join(dataDir, appliance.SocketFilename)}
 	command.Stderr = &process.stderr
 	if err := command.Start(); err != nil {
