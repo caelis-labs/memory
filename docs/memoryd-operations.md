@@ -251,6 +251,76 @@ remaining immutable receipts. Durable correction relations continue to hide
 superseded originals, and deleted receipts have no payload to rebuild. Grant
 revocation invalidates all derived capabilities on their next call.
 
+## Export, backup, restore, and rollback
+
+Plaintext export is intended for deliberate inspection or migration. It always
+uses a new owner-only output file:
+
+```sh
+./memoryctl \
+  -socket /tmp/caelis-memory/memoryd.sock \
+  -management-credential /tmp/caelis-memory/management.token \
+  export -output /secure/memory-export.ndjson \
+  -include-corrected -include-deleted
+```
+
+Create an encrypted consistent backup while `memoryd` is running:
+
+```sh
+./memoryctl \
+  -socket /tmp/caelis-memory/memoryd.sock \
+  -management-credential /tmp/caelis-memory/management.token \
+  backup -output /secure/memory.backup \
+  -key-output /separate-location/memory.backup.key
+```
+
+Both paths are reserved with `O_EXCL` and mode `0600`. Store the key separately
+from the ciphertext. The appliance database does not retain it, and a lost key
+cannot be recovered.
+
+Restore is offline. Stop `memoryd`, retain the current management token (or
+provide a different owner token when restoring into a new empty directory),
+then run:
+
+```sh
+./memoryctl \
+  -management-credential /tmp/caelis-memory/management.token \
+  restore -data-dir /tmp/caelis-memory \
+  -backup /secure/memory.backup \
+  -key /separate-location/memory.backup.key
+```
+
+The command authenticates every encrypted chunk, verifies and migrates the
+snapshot, rotates storage generation, and installs it only after all checks
+pass. When an old database existed, `memory.db.rollback` retains its consistent
+pre-restore state. A corrupted or truncated backup leaves the current database
+untouched.
+
+Start `memoryd` after restore. It reports health and permits authenticated
+`inspect`, `search`, and `trace-receipt`, but readiness and all Runtime data
+calls remain unavailable while `restore_pending` is true. Validate the expected
+generation and evidence without allowing any new receipt. Then either commit
+online:
+
+```sh
+./memoryctl \
+  -socket /tmp/caelis-memory/memoryd.sock \
+  -management-credential /tmp/caelis-memory/management.token \
+  restore-commit
+```
+
+or stop `memoryd` and roll back offline:
+
+```sh
+./memoryctl \
+  -management-credential /tmp/caelis-memory/management.token \
+  restore-rollback -data-dir /tmp/caelis-memory
+```
+
+Commit deletes the rollback image and then enables readiness and the data
+plane. Rollback reinstalls the pre-restore image and rotates generation again.
+All consistency tokens from before either transition fail explicitly as stale.
+
 Send `SIGTERM` or interrupt `memoryd` for a bounded graceful drain. A crash may
 leave the Socket node behind, but the process owner lock is released by the OS
 and the next owner safely replaces that stale Socket. A non-Socket file is

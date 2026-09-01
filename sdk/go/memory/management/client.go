@@ -68,6 +68,23 @@ func (c *Client) DeleteReceipt(ctx context.Context, request managementv1alpha1.D
 	return response, err
 }
 
+// Export writes the sensitive plaintext NDJSON export to output. The caller is
+// responsible for an owner-only destination and removal of partial output.
+func (c *Client) Export(ctx context.Context, request managementv1alpha1.ExportRequest, output io.Writer) error {
+	return c.doStream(ctx, managementv1alpha1.LocalPathExport, request, output)
+}
+
+// Backup writes a consistent plaintext SQLite snapshot received over the
+// owner-only Socket. Callers must encrypt it before durable storage.
+func (c *Client) Backup(ctx context.Context, output io.Writer) error {
+	return c.doStream(ctx, managementv1alpha1.LocalPathBackup, managementv1alpha1.BackupRequest{}, output)
+}
+
+func (c *Client) CommitRestore(ctx context.Context) error {
+	var response managementv1alpha1.CommitRestoreResponse
+	return c.do(ctx, http.MethodPost, managementv1alpha1.LocalPathCommitRestore, struct{}{}, &response)
+}
+
 func (c *Client) RebuildFTS(ctx context.Context) error {
 	var response managementv1alpha1.RebuildFTSResponse
 	return c.do(ctx, http.MethodPost, managementv1alpha1.LocalPathRebuild, struct{}{}, &response)
@@ -123,6 +140,38 @@ func (c *Client) do(ctx context.Context, method, path string, input, output any)
 			return nil
 		}
 		return fmt.Errorf("decode Memory management response: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) doStream(ctx context.Context, path string, input any, output io.Writer) error {
+	if output == nil {
+		return fmt.Errorf("Memory management stream output is required")
+	}
+	encoded, err := json.Marshal(input)
+	if err != nil {
+		return fmt.Errorf("encode Memory management request: %w", err)
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://memoryd"+path, bytes.NewReader(encoded))
+	if err != nil {
+		return fmt.Errorf("create Memory management request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+c.credential)
+	response, err := c.http.Do(request)
+	if err != nil {
+		return fmt.Errorf("call Memory management: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		var serviceErr memoryv1alpha1.ServiceError
+		if err := json.NewDecoder(io.LimitReader(response.Body, maxResponseBytes)).Decode(&serviceErr); err == nil && serviceErr.Code != "" {
+			return &serviceErr
+		}
+		return fmt.Errorf("Memory management returned HTTP %d", response.StatusCode)
+	}
+	if _, err := io.Copy(output, response.Body); err != nil {
+		return fmt.Errorf("copy Memory management response: %w", err)
 	}
 	return nil
 }

@@ -110,3 +110,15 @@ receipt delete trigger permits physical removal. Tombstones retain the original
 Space-scoped idempotency identity and request digest so a delayed Runtime retry
 cannot resurrect erased content. Management mutation results have a separate
 idempotency ledger and never reuse Runtime capabilities.
+
+Online backup uses SQLite `VACUUM INTO` to create a consistent short-lived
+owner-only snapshot, verifies it, streams it over the local management Socket,
+and removes the plaintext temporary file. `memoryctl` applies a chunked AES-GCM
+container so large backups do not require a plaintext durable intermediate.
+
+Offline restore decrypts directly into an owner-only staged database while
+holding the appliance owner lock. It verifies and migrates the stage, rotates
+generation, creates a consistent rollback snapshot of the current database,
+and atomically renames the stage over `memory.db`. A durable
+`restore_pending` metadata bit gates readiness and all data-plane operations;
+management verification remains available until commit or offline rollback.

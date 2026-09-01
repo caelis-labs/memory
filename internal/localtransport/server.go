@@ -176,6 +176,43 @@ func Handler(store *appliance.Store, serviceInfo ...ServiceInfo) http.Handler {
 		response, err := store.DeleteReceipt(request.Context(), input)
 		writeManagement(writer, response, err)
 	}))
+	mux.HandleFunc(managementv1alpha1.LocalPathExport, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input managementv1alpha1.ExportRequest
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		tracked := &trackingResponseWriter{ResponseWriter: writer}
+		tracked.Header().Set("Content-Type", "application/x-ndjson")
+		tracked.Header().Set("Content-Disposition", `attachment; filename="memory-export.ndjson"`)
+		if err := store.Export(request.Context(), input, tracked); err != nil && !tracked.wrote {
+			writeManagement(writer, nil, err)
+		}
+	}))
+	mux.HandleFunc(managementv1alpha1.LocalPathBackup, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input managementv1alpha1.BackupRequest
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		snapshot, err := store.CreateBackupSnapshot(request.Context())
+		if err != nil {
+			writeManagement(writer, nil, err)
+			return
+		}
+		defer snapshot.Close()
+		writer.Header().Set("Content-Type", "application/vnd.caelis.memory.sqlite3")
+		writer.Header().Set("Content-Disposition", `attachment; filename="memory.db"`)
+		writer.Header().Set("Content-Length", fmt.Sprintf("%d", snapshot.Size()))
+		writer.WriteHeader(http.StatusOK)
+		_, _ = io.Copy(writer, snapshot)
+	}))
+	mux.HandleFunc(managementv1alpha1.LocalPathCommitRestore, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input struct{}
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		err := store.CommitRestore(request.Context())
+		writeManagement(writer, managementv1alpha1.CommitRestoreResponse{Committed: err == nil}, err)
+	}))
 	mux.HandleFunc(managementv1alpha1.LocalPathRebuild, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
 		err := store.RebuildFTS(request.Context())
 		writeManagement(writer, managementv1alpha1.RebuildFTSResponse{Rebuilt: err == nil}, err)
@@ -319,6 +356,16 @@ func writeJSON(writer http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(writer).Encode(value)
 }
 
+type trackingResponseWriter struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (w *trackingResponseWriter) Write(value []byte) (int, error) {
+	w.wrote = true
+	return w.ResponseWriter.Write(value)
+}
+
 func statusForCode(code v1alpha1.ErrorCode) int {
 	switch code {
 	case v1alpha1.ErrorCodeInvalidArgument:
@@ -328,6 +375,8 @@ func statusForCode(code v1alpha1.ErrorCode) int {
 	case v1alpha1.ErrorCodeNotFound:
 		return http.StatusNotFound
 	case v1alpha1.ErrorCodeConflict:
+		return http.StatusConflict
+	case v1alpha1.ErrorCodeStaleConsistencyToken:
 		return http.StatusConflict
 	case v1alpha1.ErrorCodeIncompatible:
 		return http.StatusUpgradeRequired

@@ -47,6 +47,9 @@ func (s *Store) Remember(
 	if s.closing.Load() {
 		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeUnavailable, "memoryd is shutting down", true)
 	}
+	if s.restorePending.Load() {
+		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeUnavailable, "restored generation awaits operator commit", false)
+	}
 	if err := request.Validate(); err != nil {
 		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeInvalidArgument, err.Error(), false)
 	}
@@ -227,6 +230,9 @@ func (s *Store) Recall(
 	if s.closing.Load() {
 		return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeUnavailable, "memoryd is shutting down", true)
 	}
+	if s.restorePending.Load() {
+		return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeUnavailable, "restored generation awaits operator commit", false)
+	}
 	if err := request.Validate(); err != nil {
 		return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeInvalidArgument, err.Error(), false)
 	}
@@ -378,6 +384,9 @@ func (s *Store) GetReceiptStatus(
 	}
 	if s.closing.Load() {
 		return v1alpha1.ReceiptStatus{}, s.serviceError(v1alpha1.ErrorCodeUnavailable, "memoryd is shutting down", true)
+	}
+	if s.restorePending.Load() {
+		return v1alpha1.ReceiptStatus{}, s.serviceError(v1alpha1.ErrorCodeUnavailable, "restored generation awaits operator commit", false)
 	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {

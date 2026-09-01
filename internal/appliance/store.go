@@ -24,17 +24,18 @@ import (
 
 // Store is the single durable authority behind memoryd.
 type Store struct {
-	db            *sql.DB
-	lock          *ownerLock
-	dataDir       string
-	now           func() time.Time
-	random        io.Reader
-	faults        Faults
-	candidateRead func(v1alpha1.SpaceID)
-	requestID     atomic.Uint64
-	closing       atomic.Bool
-	generation    string
-	managementSum [sha256.Size]byte
+	db             *sql.DB
+	lock           *ownerLock
+	dataDir        string
+	now            func() time.Time
+	random         io.Reader
+	faults         Faults
+	candidateRead  func(v1alpha1.SpaceID)
+	requestID      atomic.Uint64
+	closing        atomic.Bool
+	restorePending atomic.Bool
+	generation     string
+	managementSum  [sha256.Size]byte
 }
 
 // Open acquires the data-directory owner lock, migrates SQLite, and initializes
@@ -121,6 +122,14 @@ func (s *Store) initialize(ctx context.Context) error {
 		return fmt.Errorf("initialize storage generation: %w", err)
 	}
 	s.generation = generation
+	restorePending, err := s.metadata(ctx, "restore_pending")
+	if errors.Is(err, sql.ErrNoRows) {
+		restorePending, err = "0", nil
+	}
+	if err != nil {
+		return fmt.Errorf("read restore state: %w", err)
+	}
+	s.restorePending.Store(restorePending == "1")
 	return s.initializeManagementCredential(ctx)
 }
 
@@ -226,6 +235,9 @@ func (s *Store) ManagementCredentialPath() string {
 func (s *Store) Ready(ctx context.Context) error {
 	if s.closing.Load() {
 		return fmt.Errorf("appliance is shutting down")
+	}
+	if s.restorePending.Load() {
+		return fmt.Errorf("restored generation awaits operator commit")
 	}
 	return s.db.PingContext(ctx)
 }

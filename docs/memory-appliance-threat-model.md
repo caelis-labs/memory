@@ -50,6 +50,9 @@ does not grant access.
 | Error or metric exposes content | IDs, sizes, digests, and typed codes only |
 | Memory delete is mistaken for global erasure | Explicitly disclose separate Caelis Session copy boundary |
 | Restore reuses an invalid causal cursor | Change storage generation and return stale-token error |
+| Backup file discloses raw receipts | Chunked authenticated encryption with a separate random owner-only key |
+| Corrupt or partial backup replaces live data | Authenticate, integrity-check, migrate, and stage completely before atomic replacement |
+| Rollback loses writes accepted after restore | Keep restored generation management-only until explicit commit removes rollback |
 
 ## Core Profile information flow
 
@@ -73,6 +76,8 @@ issuer plane. Caelis integration must still add in-process capability handling,
 exact replay metadata, and output-sink enforcement. The M3 governance plane adds
 versioned root management authorization, same-Space append-only correction,
 idempotent deletion tombstones, and restart/reindex deletion verification.
-Backup confidentiality, restore validation, credential recovery, and incident
-diagnostics remain required before M3 exits. M4 must add provider data-egress
-policy, prompt-injection resistance, cost bounds, and job poisoning controls.
+The recoverability slice adds encrypted streaming backup, staged restore,
+generation rotation, and a no-write pending state for lossless rollback.
+Expanded credential recovery and incident diagnostics remain required before
+M3 exits. M4 must add provider data-egress policy, prompt-injection resistance,
+cost bounds, and job poisoning controls.

@@ -260,6 +260,197 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 	}
 }
 
+func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {
+	root := shortTempDir(t)
+	memoryd := buildCommand(t, root, "memoryd")
+	memoryctl := buildCommand(t, root, "memoryctl")
+	dataDir := filepath.Join(root, "data")
+	process := startMemoryd(t, memoryd, dataDir)
+	t.Cleanup(func() { process.stop(t) })
+	managementPath := filepath.Join(dataDir, appliance.ManagementCredentialFile)
+	credentialBytes, err := os.ReadFile(managementPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := managementclient.NewClient(process.socket, strings.TrimSpace(string(credentialBytes)))
+	bootstrap, err := admin.Bootstrap(t.Context(), appliance.BootstrapRequest{
+		Realms:     []appliance.Realm{{ID: "realm-backup"}},
+		Identities: []appliance.Identity{{ID: "identity-backup", RealmID: "realm-backup"}},
+		Spaces: []appliance.Space{{
+			ID: "space-backup", RealmID: "realm-backup", IdentityID: "identity-backup", Class: v1alpha1.SpaceClassPrivate,
+		}},
+		Views: []appliance.ViewDefinition{{
+			ID: "view-backup", RealmID: "realm-backup", ReadSpaceIDs: []v1alpha1.SpaceID{"space-backup"},
+			WriteSpaceID: "space-backup", MaxDisclosureClass: v1alpha1.SpaceClassPrivate, Version: 1,
+		}},
+		Grants: []appliance.Grant{{
+			ID: "grant-backup", PrincipalRef: "principal:backup", ActorRef: "actor-backup", ViewRef: "view-backup",
+			AllowedOperations: []v1alpha1.Operation{v1alpha1.OperationRemember, v1alpha1.OperationRecall},
+			AllowedAudiences:  []v1alpha1.Audience{v1alpha1.AudiencePrivate}, ExpiresAt: time.Now().Add(time.Hour), Version: 1,
+		}},
+		IssuerPrincipals: []string{"principal:backup"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	capability, err := localclient.NewIssuerClient(process.socket, bootstrap.IssuerCredentials["principal:backup"]).IssueCapability(t.Context(), v1alpha1.CapabilityIssueRequest{
+		PrincipalRef: "principal:backup", GrantRef: "grant-backup", ActorRef: "actor-backup", Audience: v1alpha1.AudiencePrivate,
+		Operations: []v1alpha1.Operation{v1alpha1.OperationRemember, v1alpha1.OperationRecall}, TTLSeconds: 1800,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := v1alpha1.CallAuthorization{Capability: capability.Token, ActorRef: "actor-backup", Audience: v1alpha1.AudiencePrivate}
+	client := localclient.NewClient(process.socket)
+	before, err := client.Remember(t.Context(), auth, v1alpha1.RememberRequest{
+		Text: "encrypted backup private sentinel", IdempotencyKey: "backup-before",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exportPath := filepath.Join(root, "memory.ndjson")
+	runCommand(t, memoryctl,
+		"-socket", process.socket, "-management-credential", managementPath,
+		"export", "-output", exportPath, "-include-deleted",
+	)
+	exported, err := os.ReadFile(exportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(exported, []byte(managementv1alpha1.ExportFormat)) || !bytes.Contains(exported, []byte("encrypted backup private sentinel")) {
+		t.Fatalf("management export = %s", exported)
+	}
+	backupPath := filepath.Join(root, "memory.backup")
+	keyPath := filepath.Join(root, "memory.backup.key")
+	runCommand(t, memoryctl,
+		"-socket", process.socket, "-management-credential", managementPath,
+		"backup", "-output", backupPath, "-key-output", keyPath,
+	)
+	for _, path := range []string{exportPath, backupPath, keyPath} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("%s mode = %o, want 600", path, info.Mode().Perm())
+		}
+	}
+	encrypted, err := os.ReadFile(backupPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encrypted, []byte("encrypted backup private sentinel")) {
+		t.Fatal("encrypted backup exposed receipt text")
+	}
+	after, err := client.Remember(t.Context(), auth, v1alpha1.RememberRequest{
+		Text: "acknowledged after encrypted backup", IdempotencyKey: "backup-after",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	process.stop(t)
+	restoreOutput := runCommand(t, memoryctl,
+		"-management-credential", managementPath,
+		"restore", "-data-dir", dataDir, "-backup", backupPath, "-key", keyPath,
+	)
+	if !bytes.Contains(restoreOutput, []byte(`"rollback_available": true`)) {
+		t.Fatalf("restore output = %s", restoreOutput)
+	}
+	process = startMemorydPendingRestore(t, memoryd, dataDir)
+	admin = managementclient.NewClient(process.socket, strings.TrimSpace(string(credentialBytes)))
+	search, err := admin.SearchReceipts(t.Context(), managementv1alpha1.SearchReceiptsRequest{Query: "private sentinel", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(search.Receipts) != 1 || search.Receipts[0].Text != "encrypted backup private sentinel" {
+		t.Fatalf("pending restore search = %+v", search.Receipts)
+	}
+	search, err = admin.SearchReceipts(t.Context(), managementv1alpha1.SearchReceiptsRequest{Query: "acknowledged", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(search.Receipts) != 0 {
+		t.Fatalf("post-backup receipt appeared in pending restore: %+v", search.Receipts)
+	}
+	client = localclient.NewClient(process.socket)
+	if _, err := client.Recall(t.Context(), auth, v1alpha1.RecallRequest{
+		Query: "private", Budget: v1alpha1.RecallBudget{MaxFragments: 8, MaxBytes: 4096, DeadlineMS: 5000},
+	}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
+		t.Fatalf("pending restored Recall error = %v, want unavailable", err)
+	}
+	process.stop(t)
+	runCommand(t, memoryctl,
+		"-management-credential", managementPath,
+		"restore-rollback", "-data-dir", dataDir,
+	)
+	process = startMemoryd(t, memoryd, dataDir)
+	client = localclient.NewClient(process.socket)
+	response, err := client.Recall(t.Context(), auth, v1alpha1.RecallRequest{
+		Query: "acknowledged", Budget: v1alpha1.RecallBudget{MaxFragments: 8, MaxBytes: 4096, DeadlineMS: 5000},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFragment(t, response, "acknowledged after encrypted backup")
+	if _, err := client.Recall(t.Context(), auth, v1alpha1.RecallRequest{
+		Query: "acknowledged", MinConsistencyToken: after.ConsistencyToken,
+		Budget: v1alpha1.RecallBudget{MaxFragments: 8, MaxBytes: 4096, DeadlineMS: 5000},
+	}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeStaleConsistencyToken) {
+		t.Fatalf("rollback cursor error = %v, want stale_consistency_token", err)
+	}
+
+	process.stop(t)
+	runCommand(t, memoryctl,
+		"-management-credential", managementPath,
+		"restore", "-data-dir", dataDir, "-backup", backupPath, "-key", keyPath,
+	)
+	process = startMemorydPendingRestore(t, memoryd, dataDir)
+	runCommand(t, memoryctl,
+		"-socket", process.socket, "-management-credential", managementPath,
+		"restore-commit",
+	)
+	client = localclient.NewClient(process.socket)
+	if err := client.Ready(t.Context()); err != nil {
+		t.Fatalf("committed restored generation is not ready: %v", err)
+	}
+	response, err = client.Recall(t.Context(), auth, v1alpha1.RecallRequest{
+		Query: "private sentinel", Budget: v1alpha1.RecallBudget{MaxFragments: 8, MaxBytes: 4096, DeadlineMS: 5000},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFragment(t, response, "encrypted backup private sentinel")
+	if _, err := client.Recall(t.Context(), auth, v1alpha1.RecallRequest{
+		Query: "private", MinConsistencyToken: before.ConsistencyToken,
+		Budget: v1alpha1.RecallBudget{MaxFragments: 8, MaxBytes: 4096, DeadlineMS: 5000},
+	}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeStaleConsistencyToken) {
+		t.Fatalf("committed restored cursor error = %v, want stale_consistency_token", err)
+	}
+	process.stop(t)
+	corruptedPath := filepath.Join(root, "memory-corrupted.backup")
+	corrupted := append([]byte(nil), encrypted...)
+	corrupted[len(corrupted)/2] ^= 0x40
+	if err := os.WriteFile(corruptedPath, corrupted, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.CommandContext(t.Context(), memoryctl,
+		"-management-credential", managementPath,
+		"restore", "-data-dir", dataDir, "-backup", corruptedPath, "-key", keyPath,
+	)
+	if output, err := command.CombinedOutput(); err == nil || !bytes.Contains(output, []byte("authenticate backup chunk")) {
+		t.Fatalf("corrupt restore = %v, output %s", err, output)
+	}
+	process = startMemoryd(t, memoryd, dataDir)
+	client = localclient.NewClient(process.socket)
+	response, err = client.Recall(t.Context(), auth, v1alpha1.RecallRequest{
+		Query: "private sentinel", Budget: v1alpha1.RecallBudget{MaxFragments: 8, MaxBytes: 4096, DeadlineMS: 5000},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFragment(t, response, "encrypted backup private sentinel")
+}
+
 func TestPackagedSidecarIdentityHandshakeAndIssuerPlane(t *testing.T) {
 	root := shortTempDir(t)
 	const serviceVersion = "0.2.0-alpha.1-test"
@@ -426,6 +617,14 @@ type memorydProcess struct {
 }
 
 func startMemoryd(t *testing.T, binary, dataDir string) *memorydProcess {
+	return startMemorydWithState(t, binary, dataDir, true)
+}
+
+func startMemorydPendingRestore(t *testing.T, binary, dataDir string) *memorydProcess {
+	return startMemorydWithState(t, binary, dataDir, false)
+}
+
+func startMemorydWithState(t *testing.T, binary, dataDir string, requireReady bool) *memorydProcess {
 	t.Helper()
 	command := exec.Command(binary, "-data-dir", dataDir)
 	process := &memorydProcess{command: command, socket: filepath.Join(dataDir, appliance.SocketFilename)}
@@ -440,7 +639,7 @@ func startMemoryd(t *testing.T, binary, dataDir string) *memorydProcess {
 		healthErr := client.Health(ctx)
 		readyErr := client.Ready(ctx)
 		cancel()
-		if healthErr == nil && readyErr == nil {
+		if healthErr == nil && (readyErr == nil) == requireReady {
 			return process
 		}
 		time.Sleep(20 * time.Millisecond)

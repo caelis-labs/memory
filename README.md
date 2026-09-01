@@ -46,9 +46,14 @@ The M3 management foundation additionally provides:
   prevention;
 - `memoryctl` search, trace, correction, and deletion commands.
 
-The appliance remains deliberately model-free. Backup/restore, expanded
-diagnostics and platform rollout complete M3; Steward, semantic records, and
-vector/graph retrieval remain M4 work. Caelis integration is independently
+The recoverability slice adds sensitive NDJSON export, streaming encrypted
+backup with a separate owner-only key, offline verified restore, storage
+generation rotation, and a management-only verification state with explicit
+commit or rollback.
+
+The appliance remains deliberately model-free. Expanded diagnostics and
+platform rollout complete M3; Steward, semantic records, and vector/graph
+retrieval remain M4 work. Caelis integration is independently
 owned and pins an exact published Memory revision and sidecar digest.
 
 Read [the specification](docs/memory-appliance-spec.md),

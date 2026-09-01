@@ -1,7 +1,11 @@
 package appliance
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
+	"errors"
+	"io"
 	"path/filepath"
 	"testing"
 	"time"
@@ -238,6 +242,38 @@ func TestReceiptDeletionCannotReappearOrResurrect(t *testing.T) {
 	}
 	if len(search.Receipts) != 0 {
 		t.Fatalf("management search returned deleted text: %+v", search.Receipts)
+	}
+	var exported bytes.Buffer
+	if err := store.Export(t.Context(), managementv1alpha1.ExportRequest{IncludeCorrected: true, IncludeDeleted: true}, &exported); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(exported.Bytes(), []byte(rememberRequest.Text)) {
+		t.Fatal("management export exposed deleted receipt text")
+	}
+	decoder := json.NewDecoder(&exported)
+	var header managementv1alpha1.ExportRecord
+	if err := decoder.Decode(&header); err != nil {
+		t.Fatal(err)
+	}
+	if header.Kind != managementv1alpha1.ExportRecordHeader || header.Format != managementv1alpha1.ExportFormat {
+		t.Fatalf("export header = %+v", header)
+	}
+	foundTombstone := false
+	for {
+		var record managementv1alpha1.ExportRecord
+		err := decoder.Decode(&record)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if record.Tombstone != nil && record.Tombstone.ReceiptID == remembered.ReceiptID {
+			foundTombstone = true
+		}
+	}
+	if !foundTombstone {
+		t.Fatalf("export omitted deletion tombstone: %s", exported.Bytes())
 	}
 	if err := store.RebuildFTS(t.Context()); err != nil {
 		t.Fatal(err)

@@ -3,7 +3,10 @@ package appliance
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
@@ -17,6 +20,16 @@ func (s *Store) Inspect(ctx context.Context) (Inspection, error) {
 		SchemaVersion:   CurrentSchemaVersion,
 		Generation:      s.generation,
 		Counts:          make(map[string]int64),
+		RestorePending:  s.restorePending.Load(),
+	}
+	rollbackPath := filepath.Join(s.dataDir, RollbackDatabaseFilename)
+	if err := requireRegularOrAbsent(rollbackPath); err != nil {
+		return Inspection{}, fmt.Errorf("inspect rollback database: %w", err)
+	}
+	if _, err := os.Lstat(rollbackPath); err == nil {
+		result.RollbackAvailable = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return Inspection{}, fmt.Errorf("inspect rollback database: %w", err)
 	}
 	for _, table := range []string{
 		"realms", "identities", "spaces", "views", "grants", "capabilities",

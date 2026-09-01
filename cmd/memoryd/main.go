@@ -62,7 +62,11 @@ func run() error {
 		serveErr <- server.Serve(listener)
 	}()
 	log.SetFlags(0)
-	log.Printf("memoryd ready: socket=%s management_credential=%s", socketPath, store.ManagementCredentialPath())
+	readiness := "ready"
+	if err := store.Ready(context.Background()); err != nil {
+		readiness = "management_only"
+	}
+	log.Printf("memoryd listening: socket=%s management_credential=%s readiness=%s", socketPath, store.ManagementCredentialPath(), readiness)
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

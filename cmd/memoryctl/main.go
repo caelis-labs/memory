@@ -2,15 +2,20 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
 
 	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
+	"github.com/caelis-labs/memory/internal/appliance"
+	"github.com/caelis-labs/memory/internal/backupfile"
 	localclient "github.com/caelis-labs/memory/sdk/go/memory/local"
 	managementclient "github.com/caelis-labs/memory/sdk/go/memory/management"
 )
@@ -38,12 +43,22 @@ func run(arguments []string) error {
 	if err := global.Parse(arguments); err != nil {
 		return err
 	}
-	if socketPath == "" || global.NArg() == 0 {
+	if global.NArg() == 0 {
 		return fmt.Errorf("usage: memoryctl -socket PATH [-management-credential FILE] [-issuer-credential FILE] COMMAND")
 	}
 	command := global.Arg(0)
 	commandArgs := global.Args()[1:]
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if command == "restore" || command == "restore-rollback" {
+		return runOfflineRestore(command, commandArgs, credentialPath)
+	}
+	if socketPath == "" {
+		return fmt.Errorf("-socket is required for command %q", command)
+	}
+	timeout := 30 * time.Second
+	if command == "backup" || command == "export" {
+		timeout = 30 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	if command == "health" || command == "ready" || command == "compatibility" {
 		client := localclient.NewClient(socketPath)
@@ -182,6 +197,47 @@ func run(arguments []string) error {
 		}
 		response, err := admin.DeleteReceipt(ctx, request)
 		return writeResult(response, err)
+	case "export":
+		flags := flag.NewFlagSet(command, flag.ContinueOnError)
+		var outputPath, spaceID string
+		var includeCorrected, includeDeleted bool
+		flags.StringVar(&outputPath, "output", "", "new owner-only NDJSON export file")
+		flags.StringVar(&spaceID, "space", "", "optional Space ID")
+		flags.BoolVar(&includeCorrected, "include-corrected", false, "include shadowed original receipts")
+		flags.BoolVar(&includeDeleted, "include-deleted", false, "include content-free tombstones")
+		if err := flags.Parse(commandArgs); err != nil {
+			return err
+		}
+		if outputPath == "" {
+			return fmt.Errorf("export requires -output")
+		}
+		output, err := reserveSecretOutput(outputPath)
+		if err != nil {
+			return err
+		}
+		err = admin.Export(ctx, managementv1alpha1.ExportRequest{
+			SpaceID: v1alpha1.SpaceID(spaceID), IncludeCorrected: includeCorrected, IncludeDeleted: includeDeleted,
+		}, output)
+		if err != nil {
+			_ = output.Close()
+			_ = os.Remove(outputPath)
+			return err
+		}
+		if err := finishSecretOutput(output); err != nil {
+			_ = os.Remove(outputPath)
+			return err
+		}
+		return writeResult(map[string]any{"exported": true, "format": managementv1alpha1.ExportFormat, "output_file": outputPath}, nil)
+	case "backup":
+		return runBackup(ctx, admin, command, commandArgs)
+	case "restore-commit":
+		if len(commandArgs) != 0 {
+			return fmt.Errorf("restore-commit accepts no command arguments")
+		}
+		if err := admin.CommitRestore(ctx); err != nil {
+			return err
+		}
+		return writeResult(map[string]bool{"restore_committed": true}, nil)
 	case "rebuild-fts":
 		if err := admin.RebuildFTS(ctx); err != nil {
 			return err
@@ -229,6 +285,137 @@ func run(arguments []string) error {
 	default:
 		return fmt.Errorf("unknown command %q", command)
 	}
+}
+
+func runBackup(ctx context.Context, admin *managementclient.Client, command string, arguments []string) error {
+	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+	var outputPath, keyOutputPath string
+	flags.StringVar(&outputPath, "output", "", "new encrypted backup file")
+	flags.StringVar(&keyOutputPath, "key-output", "", "new owner-only backup key file")
+	if err := flags.Parse(arguments); err != nil {
+		return err
+	}
+	if outputPath == "" || keyOutputPath == "" || outputPath == keyOutputPath {
+		return fmt.Errorf("backup requires distinct -output and -key-output paths")
+	}
+	output, err := reserveSecretOutput(outputPath)
+	if err != nil {
+		return err
+	}
+	keyOutput, err := reserveSecretOutput(keyOutputPath)
+	if err != nil {
+		_ = output.Close()
+		_ = os.Remove(outputPath)
+		return err
+	}
+	cleanup := func() {
+		_ = output.Close()
+		_ = keyOutput.Close()
+		_ = os.Remove(outputPath)
+		_ = os.Remove(keyOutputPath)
+	}
+	key, err := backupfile.GenerateKey(rand.Reader)
+	if err != nil {
+		cleanup()
+		return err
+	}
+	reader, writer := io.Pipe()
+	backupDone := make(chan error, 1)
+	go func() {
+		err := admin.Backup(ctx, writer)
+		_ = writer.CloseWithError(err)
+		backupDone <- err
+	}()
+	encryptErr := backupfile.Encrypt(reader, output, key, rand.Reader)
+	if encryptErr != nil {
+		_ = reader.CloseWithError(encryptErr)
+	}
+	backupErr := <-backupDone
+	if encryptErr != nil || backupErr != nil {
+		cleanup()
+		return errors.Join(encryptErr, backupErr)
+	}
+	if err := backupfile.WriteKey(keyOutput, key); err != nil {
+		cleanup()
+		return err
+	}
+	if err := finishSecretOutput(output); err != nil {
+		cleanup()
+		return err
+	}
+	if err := finishSecretOutput(keyOutput); err != nil {
+		cleanup()
+		return err
+	}
+	return writeResult(map[string]any{
+		"backed_up": true, "backup_file": outputPath, "key_file": keyOutputPath,
+	}, nil)
+}
+
+func runOfflineRestore(command string, arguments []string, credentialPath string) error {
+	if credentialPath == "" {
+		return fmt.Errorf("-management-credential is required for %s", command)
+	}
+	credential, err := readCredential(credentialPath)
+	if err != nil {
+		return err
+	}
+	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+	var dataDir, backupPath, keyPath string
+	flags.StringVar(&dataDir, "data-dir", "", "offline memoryd data directory")
+	if command == "restore" {
+		flags.StringVar(&backupPath, "backup", "", "encrypted backup file")
+		flags.StringVar(&keyPath, "key", "", "backup key file")
+	}
+	if err := flags.Parse(arguments); err != nil {
+		return err
+	}
+	if dataDir == "" {
+		return fmt.Errorf("%s requires -data-dir", command)
+	}
+	switch command {
+	case "restore-rollback":
+		result, err := appliance.RollbackRestore(context.Background(), dataDir, credential, rand.Reader)
+		return writeResult(result, err)
+	}
+	if backupPath == "" || keyPath == "" {
+		return fmt.Errorf("restore requires -backup and -key")
+	}
+	backup, err := os.Open(backupPath)
+	if err != nil {
+		return err
+	}
+	defer backup.Close()
+	keyFile, err := os.Open(keyPath)
+	if err != nil {
+		return err
+	}
+	key, err := backupfile.ReadKey(keyFile)
+	closeErr := keyFile.Close()
+	if err != nil || closeErr != nil {
+		return errors.Join(err, closeErr)
+	}
+	reader, writer := io.Pipe()
+	decryptDone := make(chan error, 1)
+	go func() {
+		err := backupfile.Decrypt(backup, writer, key)
+		_ = writer.CloseWithError(err)
+		decryptDone <- err
+	}()
+	result, restoreErr := appliance.Restore(context.Background(), appliance.RestoreOptions{
+		DataDir: dataDir, Snapshot: reader, ManagementCredential: credential,
+	})
+	if restoreErr != nil {
+		_ = reader.CloseWithError(restoreErr)
+	}
+	decryptErr := <-decryptDone
+	if restoreErr != nil {
+		return restoreErr
+	}
+	if decryptErr != nil {
+		return decryptErr
+	}
+	return writeResult(result, nil)
 }
 
 func runDataPlane(ctx context.Context, socketPath, command string, arguments []string) error {
@@ -382,6 +569,14 @@ func writeSecretJSON(file *os.File, value any) error {
 		return syncErr
 	}
 	return closeErr
+}
+
+func finishSecretOutput(file *os.File) error {
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
 }
 
 func writeResult(value any, err error) error {

@@ -399,6 +399,39 @@ Management authorization is root authority for this local profile. A rich
 product Surface must call this plane rather than mirror appliance state or
 policy in Caelis Control.
 
+### Export, backup, restore, and generation
+
+`memory.management.v1alpha1` exports evidence as `memory.export.v1` NDJSON. The
+first record binds the format, storage generation, and creation time; following
+records contain management-visible receipts or content-free tombstones. Export
+is plaintext and therefore always written by `memoryctl` to a new owner-only
+file. Space filtering, corrected-original inclusion, and tombstone inclusion
+are explicit request choices.
+
+Backup is a consistent SQLite snapshot streamed only over the owner-only local
+Socket. `memoryctl` encrypts the stream before durable output using a random
+256-bit key and independently authenticated chunks. The key is written to a
+distinct new owner-only file and is never stored in the appliance database or
+backup container. A backup without its key is unrecoverable; co-locating the
+two files defeats the confidentiality boundary.
+
+Restore is offline and must acquire the same owner lock as `memoryd`. It fully
+authenticates the encrypted stream, verifies SQLite integrity and foreign keys,
+applies supported forward migrations, binds the operator-provided management
+credential, and rotates `storage_generation` before atomically replacing the
+database. Any failure before replacement leaves the current database usable.
+An existing database is first copied to a consistent owner-only rollback image.
+
+A restored generation starts in `restore_pending`: health and management
+inspection/search are available, but readiness, Remember, Recall, and receipt
+status fail as unavailable. The operator either stops the process and restores
+the rollback image, or calls the authenticated online `restore-commit`
+operation. Commit removes the rollback image before enabling readiness and the
+data plane. Consequently no receipt can be acknowledged in a generation that
+is still eligible for rollback. Restore and rollback each rotate generation;
+all prior consistency tokens fail with `stale_consistency_token` rather than
+being interpreted against different state.
+
 ## Replay and deletion boundary
 
 The host persists the exact model-visible Memory ToolResult plus bounded hidden
