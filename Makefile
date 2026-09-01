@@ -17,7 +17,7 @@ fmt-check:
 	if [ -n "$$unformatted" ]; then printf '%s\n' "$$unformatted"; exit 1; fi
 
 whitespace-check:
-	@if rg -n '[[:blank:]]+$$' --glob '!.git/**' .; then exit 1; fi
+	@if git grep --untracked -n -E '[[:blank:]]+$$' -- .; then exit 1; fi
 
 test:
 	GOWORK=off go test ./...

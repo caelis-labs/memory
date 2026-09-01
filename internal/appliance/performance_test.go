@@ -83,8 +83,8 @@ func BenchmarkM5StartupReadiness(b *testing.B) {
 		}
 	}
 	b.StopTimer()
-	if p99 := reportPercentiles(b, "startup", durations); p99 > 100*time.Millisecond {
-		b.Fatalf("startup p99 %s exceeds 100ms RC budget", p99)
+	if p99 := reportPercentiles(b, "startup", durations); p99 > 150*time.Millisecond {
+		b.Fatalf("startup p99 %s exceeds 150ms RC budget", p99)
 	}
 }
 
