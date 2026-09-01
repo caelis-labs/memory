@@ -42,5 +42,6 @@ jobs:
           path: |
             dist/memoryd-darwin-arm64
             dist/memoryd-darwin-arm64.manifest.json
+            dist/memoryd-darwin-arm64.sha256
           if-no-files-found: error
           retention-days: 14

@@ -35,7 +35,7 @@ The Memory-owned M2 boundary additionally provides:
 - a Go SDK for handshake, Runtime capability issuance/renewal, and native
   sidecar manifest verification;
 - `make sidecar`, which accepts only a clean exact HEAD and emits a native
-  executable plus SHA-256 manifest.
+  executable, SHA-256 manifest, and detached checksum.
 
 M3 Governance and Production Safety additionally provides:
 

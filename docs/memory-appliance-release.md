@@ -29,7 +29,8 @@ vet, command builds, the separate-process durable suite, the full race suite,
 the fixed 200-case RC retrieval corpus, M5 performance measurements, and
 supported native packaging. Packaging refuses a dirty tree or a revision other
 than exact `HEAD`. The resulting manifest binds service version, source
-revision, platform, protocols, executable name, and SHA-256.
+revision, platform, protocols, executable name, and SHA-256; a detached
+checksum is generated and verified before the bundle is accepted.
 
 GitHub quality runs the portable Core on Ubuntu and the complete candidate gate
 on an ARM64 `macos-15` runner. Workflow actions are pinned to exact source

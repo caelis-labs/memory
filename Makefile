@@ -5,6 +5,7 @@ GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 ARTIFACT_DIR ?= dist
 SIDECAR_NAME := memoryd-$(GOOS)-$(GOARCH)
+CHECKSUM_NAME := $(SIDECAR_NAME).sha256
 MANIFEST_SUPPORT_FLAG ?=
 
 .PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported check m5-benchmark release-candidate
@@ -46,6 +47,8 @@ sidecar:
 		-output "$(ARTIFACT_DIR)/$(SIDECAR_NAME).manifest.json" \
 		-service-version "$(SERVICE_VERSION)" -revision "$(REVISION)" \
 		-goos "$(GOOS)" -goarch "$(GOARCH)" $(MANIFEST_SUPPORT_FLAG)
+	@cd "$(ARTIFACT_DIR)" && shasum -a 256 "$(SIDECAR_NAME)" > "$(CHECKSUM_NAME)"
+	@cd "$(ARTIFACT_DIR)" && shasum -a 256 -c "$(CHECKSUM_NAME)"
 
 sidecar-supported:
 	$(MAKE) sidecar MANIFEST_SUPPORT_FLAG=-require-supported

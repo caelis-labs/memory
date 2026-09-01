@@ -148,7 +148,7 @@ harness. `make durable` reruns the cross-process proof without cached results.
 | `V-003` | The frozen 200-case receipt/semantic corpus has Recall@1 and precision 1.0 with complete provenance and no unsupported fragment |
 | `V-004` | Remember, Recall, startup, reindex, backup, restore, and backlog measurements remain within the frozen same-hardware RC budgets |
 | `V-005` | The minimum supported schema-2 generation migrates transactionally with acknowledged receipt preservation and rollback remains lossless |
-| `V-006` | The packaged executable and manifest bind exact service version, commit, platform, protocols, filename, and SHA-256 |
+| `V-006` | The packaged executable, manifest, and verified detached checksum bind exact service version, commit, platform, protocols, filename, and SHA-256 |
 | `V-007` | API module, SDK, service artifact, Caelis integration, and package consumers pin the same reviewed compatibility identity |
 | `V-008` | Storage, corruption, backup, provider, capability, Session-copy, upgrade, and release incidents have an accountable owner and safe first response |
 | `V-009` | Publication occurs only after explicit release authority and required exact-SHA CI succeeds |

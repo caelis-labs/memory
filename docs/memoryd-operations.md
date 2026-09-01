@@ -34,13 +34,14 @@ The first M5 release-candidate support matrix contains macOS on Apple silicon
 artifacts for development, but preview buildability is not native lifecycle or
 release support evidence.
 
-The target emits `dist/memoryd-$GOOS-$GOARCH` and a neighboring JSON manifest.
-The manifest binds service version, source revision, protocol, API, Core
-Profile, platform, executable name, and SHA-256. A host verifies the manifest
-against its pinned identity and verifies the executable bytes before launch;
-after readiness it performs the compatibility handshake and compares the
-reported service version and revision with that manifest. Packaging refuses a
-dirty worktree or a `REVISION` different from checked-out `HEAD`.
+The target emits `dist/memoryd-$GOOS-$GOARCH`, a neighboring JSON manifest, and
+a detached `.sha256` checksum that packaging immediately verifies. The manifest
+binds service version, source revision, protocol, API, Core Profile, platform,
+executable name, and the same SHA-256. A host verifies the detached checksum and
+manifest against its pinned identity before launch; after readiness it performs
+the compatibility handshake and compares the reported service version and
+revision with that manifest. Packaging refuses a dirty worktree or a `REVISION`
+different from checked-out `HEAD`.
 
 `-data-dir` is required. On macOS, keep this path short enough for the platform
 Unix Socket path limit. `memoryd` refuses a second owner, refuses to replace a
