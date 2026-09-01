@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -69,6 +70,40 @@ func TestPoolClassifiesMissingAndTerminalProviderFailures(t *testing.T) {
 	}
 }
 
+func TestPoolSerializesLocalJobTransitionsAcrossWorkers(t *testing.T) {
+	store := &blockingJobStore{entered: make(chan struct{}, 2), release: make(chan struct{})}
+	pool := testPool(t, store, map[string]Provider{
+		"provider-test": providerFunc(func(context.Context, stewardv1alpha1.WorkRequest) (stewardv1alpha1.Proposal, error) {
+			return stewardv1alpha1.Proposal{Operation: stewardv1alpha1.OperationIgnore}, nil
+		}),
+	}, 1)
+	var workers sync.WaitGroup
+	workers.Add(2)
+	go func() {
+		defer workers.Done()
+		_, _, _ = pool.claim(t.Context())
+	}()
+	<-store.entered
+	started := make(chan struct{})
+	go func() {
+		defer workers.Done()
+		close(started)
+		_, _ = pool.apply(t.Context(), testWork(1).Lease, stewardv1alpha1.Proposal{Operation: stewardv1alpha1.OperationIgnore})
+	}()
+	<-started
+	overlapped := false
+	select {
+	case <-store.entered:
+		overlapped = true
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(store.release)
+	workers.Wait()
+	if overlapped {
+		t.Fatal("local Job transitions overlapped")
+	}
+}
+
 type providerFunc func(context.Context, stewardv1alpha1.WorkRequest) (stewardv1alpha1.Proposal, error)
 
 func (f providerFunc) Propose(ctx context.Context, request stewardv1alpha1.WorkRequest) (stewardv1alpha1.Proposal, error) {
@@ -83,6 +118,34 @@ type fakeJobStore struct {
 	firstProposal  stewardv1alpha1.Proposal
 	secondProposal stewardv1alpha1.Proposal
 	failures       []appliance.StewardFailure
+}
+
+type blockingJobStore struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (s *blockingJobStore) wait() {
+	s.entered <- struct{}{}
+	<-s.release
+}
+
+func (s *blockingJobStore) ClaimStewardJob(context.Context, time.Duration) (appliance.StewardWork, bool, error) {
+	s.wait()
+	return appliance.StewardWork{}, false, nil
+}
+
+func (s *blockingJobStore) ApplyStewardProposal(
+	context.Context,
+	appliance.StewardLease,
+	stewardv1alpha1.Proposal,
+) (stewardv1alpha1.ApplyResult, error) {
+	s.wait()
+	return stewardv1alpha1.ApplyResult{}, nil
+}
+
+func (*blockingJobStore) FailStewardJob(context.Context, appliance.StewardLease, appliance.StewardFailure) error {
+	return nil
 }
 
 func (*fakeJobStore) ClaimStewardJob(context.Context, time.Duration) (appliance.StewardWork, bool, error) {

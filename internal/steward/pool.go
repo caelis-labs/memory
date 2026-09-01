@@ -76,6 +76,7 @@ type Pool struct {
 	store     jobStore
 	providers map[string]Provider
 	options   Options
+	storeMu   sync.Mutex
 }
 
 // NewPool validates and freezes provider routing and worker policy.
@@ -117,7 +118,7 @@ func (p *Pool) Run(ctx context.Context) {
 
 func (p *Pool) runWorker(ctx context.Context) {
 	for {
-		work, found, err := p.store.ClaimStewardJob(ctx, p.options.LeaseDuration)
+		work, found, err := p.claim(ctx)
 		if err != nil || !found {
 			if !waitContext(ctx, p.options.PollInterval) {
 				return
@@ -154,9 +155,9 @@ func (p *Pool) execute(ctx context.Context, work appliance.StewardWork) {
 		p.fail(ctx, work, "provider_failure", work.Attempt >= p.options.MaxAttempts)
 		return
 	}
-	_, err = p.store.ApplyStewardProposal(ctx, work.Lease, proposal)
+	_, err = p.apply(ctx, work.Lease, proposal)
 	if errors.Is(err, appliance.ErrStewardUnknownOutcome) {
-		_, err = p.store.ApplyStewardProposal(ctx, work.Lease, proposal)
+		_, err = p.apply(ctx, work.Lease, proposal)
 	}
 	switch {
 	case err == nil, errors.Is(err, appliance.ErrStewardLeaseLost):
@@ -175,7 +176,28 @@ func (p *Pool) fail(ctx context.Context, work appliance.StewardWork, code string
 	if !terminal {
 		failure.RetryAfter = retryDelay(p.options.RetryBase, work.Attempt)
 	}
+	p.storeMu.Lock()
+	defer p.storeMu.Unlock()
 	_ = p.store.FailStewardJob(ctx, work.Lease, failure)
+}
+
+// The provider exchange remains parallel, but local Job transitions are
+// serialized so multiple workers cannot make SQLite deferred transactions
+// contend while upgrading from reads to writes.
+func (p *Pool) claim(ctx context.Context) (appliance.StewardWork, bool, error) {
+	p.storeMu.Lock()
+	defer p.storeMu.Unlock()
+	return p.store.ClaimStewardJob(ctx, p.options.LeaseDuration)
+}
+
+func (p *Pool) apply(
+	ctx context.Context,
+	lease appliance.StewardLease,
+	proposal stewardv1alpha1.Proposal,
+) (stewardv1alpha1.ApplyResult, error) {
+	p.storeMu.Lock()
+	defer p.storeMu.Unlock()
+	return p.store.ApplyStewardProposal(ctx, lease, proposal)
 }
 
 func callProvider(
