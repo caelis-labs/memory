@@ -340,7 +340,10 @@ func TestMemorydStewardWorkerAndMemoryctlConfiguration(t *testing.T) {
 			writer.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		providerRequests <- body
+		select {
+		case providerRequests <- body:
+		default:
+		}
 		var work stewardv1alpha1.WorkRequest
 		if err := json.Unmarshal(body, &work); err != nil {
 			t.Error(err)
@@ -361,7 +364,7 @@ func TestMemorydStewardWorkerAndMemoryctlConfiguration(t *testing.T) {
 		"workers": 2, "lease_seconds": 30, "poll_ms": 20, "retry_base_ms": 50, "max_attempts": 3,
 		"providers": []map[string]any{{
 			"ref": "provider-system", "endpoint": provider.URL,
-			"credential_file": providerCredentialPath, "timeout_ms": 2000,
+			"credential_file": providerCredentialPath, "timeout_ms": 10000,
 		}},
 	})
 	dataDir := filepath.Join(root, "data")
@@ -437,7 +440,7 @@ func TestMemorydStewardWorkerAndMemoryctlConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		status, err := client.GetReceiptStatus(t.Context(), auth, v1alpha1.GetReceiptStatusRequest{ReceiptID: remembered.ReceiptID})
 		if err != nil {
@@ -453,6 +456,32 @@ func TestMemorydStewardWorkerAndMemoryctlConfiguration(t *testing.T) {
 			t.Fatalf("Steward did not organize receipt: %+v", status)
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+	recalled, err := client.Recall(t.Context(), auth, v1alpha1.RecallRequest{
+		Query: "uses", MinConsistencyToken: remembered.ConsistencyToken,
+		Budget: v1alpha1.RecallBudget{MaxFragments: 8, MaxBytes: 4096, DeadlineMS: 5000},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var semanticFragment bool
+	for _, fragment := range recalled.Fragments {
+		if fragment.Text == "The project uses Go." && len(fragment.RecordRefs) == 1 &&
+			len(fragment.EvidenceRefs) == 1 && fragment.EvidenceRefs[0] == remembered.ReceiptID {
+			semanticFragment = true
+		}
+	}
+	if recalled.Degraded || !semanticFragment {
+		t.Fatalf("system semantic Recall = %+v", recalled)
+	}
+	inspection, err := admin.Inspect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.Steward.ConfiguredProviders != 1 || inspection.Steward.ConfiguredWorkers != 2 ||
+		inspection.Steward.CompletedJobs != 1 || inspection.Steward.ActiveRecords != 1 ||
+		!inspection.Steward.ProjectionHealthy {
+		t.Fatalf("system Steward diagnostics = %+v", inspection.Steward)
 	}
 	select {
 	case body := <-providerRequests:

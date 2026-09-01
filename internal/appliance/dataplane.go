@@ -29,9 +29,16 @@ type storedReceipt struct {
 }
 
 type recallCandidate struct {
-	receipt storedReceipt
-	class   v1alpha1.SpaceClass
-	rank    float64
+	fragmentID     string
+	text           string
+	evidenceRefs   []v1alpha1.ReceiptID
+	recordRefs     []string
+	recordRevision uint64
+	class          v1alpha1.SpaceClass
+	rank           float64
+	commitSequence int64
+	observedAt     time.Time
+	semantic       bool
 }
 
 // Remember commits immutable evidence and its lexical projection before
@@ -268,6 +275,7 @@ func (s *Store) Recall(
 	}
 	ftsQuery := lexicalFTSQuery(request.Query)
 	candidates := make([]recallCandidate, 0)
+	degraded := false
 	if ftsQuery == "" {
 		if err := tx.Commit(); err != nil {
 			return v1alpha1.RecallResponse{}, s.databaseError("complete Recall snapshot", err)
@@ -293,11 +301,9 @@ func (s *Store) Recall(
 			return v1alpha1.RecallResponse{}, s.databaseError("read Space class", err)
 		}
 		rows, err := tx.QueryContext(ctx,
-			`SELECT r.receipt_id, r.text, r.received_at, r.request_digest, r.commit_sequence,
-			 r.consistency_token, p.state, bm25(`+tableName+`)
+			`SELECT r.receipt_id, r.text, r.received_at, r.commit_sequence, bm25(`+tableName+`)
 			 FROM `+tableName+` f
 			 JOIN receipts r ON r.receipt_id = f.receipt_id AND r.space_id = ?
-			 JOIN receipt_processing p ON p.receipt_id = r.receipt_id
 			 WHERE `+tableName+` MATCH ?
 			 AND NOT EXISTS (
 				 SELECT 1 FROM receipt_corrections c WHERE c.original_receipt_id = r.receipt_id
@@ -310,20 +316,20 @@ func (s *Store) Recall(
 		for rows.Next() {
 			var candidate recallCandidate
 			var receivedAt string
-			candidate.receipt.spaceID = spaceID
 			candidate.class = class
+			var receiptID v1alpha1.ReceiptID
 			if err := rows.Scan(
-				&candidate.receipt.id, &candidate.receipt.text, &receivedAt, &candidate.receipt.requestDigest,
-				&candidate.receipt.commitSequence, &candidate.receipt.consistencyToken,
-				&candidate.receipt.processingState, &candidate.rank); err != nil {
+				&receiptID, &candidate.text, &receivedAt, &candidate.commitSequence, &candidate.rank); err != nil {
 				_ = rows.Close()
 				return v1alpha1.RecallResponse{}, s.databaseError("read Space candidate", err)
 			}
-			candidate.receipt.receivedAt, err = parseTime(receivedAt)
+			candidate.observedAt, err = parseTime(receivedAt)
 			if err != nil {
 				_ = rows.Close()
 				return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "stored receipt time is invalid", false)
 			}
+			candidate.fragmentID = "fragment:" + string(receiptID)
+			candidate.evidenceRefs = []v1alpha1.ReceiptID{receiptID}
 			candidates = append(candidates, candidate)
 		}
 		if err := rows.Close(); err != nil {
@@ -332,6 +338,12 @@ func (s *Store) Recall(
 		if err := rows.Err(); err != nil {
 			return v1alpha1.RecallResponse{}, s.databaseError("query Space candidates", err)
 		}
+		semanticCandidates, semanticDegraded, err := s.semanticRecallCandidates(ctx, tx, spaceID, class, ftsQuery)
+		if err != nil {
+			return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeDeadline, "request deadline exceeded", true)
+		}
+		degraded = degraded || semanticDegraded
+		candidates = append(candidates, semanticCandidates...)
 	}
 	if err := tx.Commit(); err != nil {
 		return v1alpha1.RecallResponse{}, s.databaseError("complete Recall snapshot", err)
@@ -340,14 +352,22 @@ func (s *Store) Recall(
 		if candidates[i].rank != candidates[j].rank {
 			return candidates[i].rank < candidates[j].rank
 		}
-		if candidates[i].receipt.commitSequence != candidates[j].receipt.commitSequence {
-			return candidates[i].receipt.commitSequence > candidates[j].receipt.commitSequence
+		if candidates[i].commitSequence != candidates[j].commitSequence {
+			return candidates[i].commitSequence > candidates[j].commitSequence
 		}
-		return candidates[i].receipt.id < candidates[j].receipt.id
+		if !candidates[i].observedAt.Equal(candidates[j].observedAt) {
+			return candidates[i].observedAt.After(candidates[j].observedAt)
+		}
+		if candidates[i].semantic != candidates[j].semantic {
+			return !candidates[i].semantic
+		}
+		return candidates[i].fragmentID < candidates[j].fragmentID
 	})
+	candidates = mergeRecallCandidates(candidates)
 	response := v1alpha1.RecallResponse{
 		Fragments:        make([]v1alpha1.RecallFragment, 0, min(len(candidates), request.Budget.MaxFragments)),
 		ConsistencyToken: request.MinConsistencyToken,
+		Degraded:         degraded,
 	}
 	for index, candidate := range candidates {
 		if err := contextError(ctx); err != nil {
@@ -357,15 +377,16 @@ func (s *Store) Recall(
 			response.Truncated = true
 			break
 		}
-		text, truncated, fits := fitProjectedText(response.Fragments, candidate.receipt.text, request.Budget.MaxBytes)
+		text, truncated, fits := fitProjectedText(response.Fragments, candidate.text, request.Budget.MaxBytes)
 		if !fits {
 			response.Truncated = true
 			break
 		}
 		response.Fragments = append(response.Fragments, v1alpha1.RecallFragment{
-			FragmentID:   "fragment:" + string(candidate.receipt.id),
+			FragmentID:   candidate.fragmentID,
 			Text:         text,
-			EvidenceRefs: []v1alpha1.ReceiptID{candidate.receipt.id},
+			EvidenceRefs: candidate.evidenceRefs,
+			RecordRefs:   candidate.recordRefs,
 			SpaceClass:   candidate.class,
 		})
 		response.Truncated = response.Truncated || truncated || index < len(candidates)-1 && len(response.Fragments) == request.Budget.MaxFragments

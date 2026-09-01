@@ -66,6 +66,7 @@ func run() error {
 			return err
 		}
 	}
+	store.SetStewardRuntimeDiagnostics(len(providers), workerOptions.Workers)
 	socketPath := filepath.Join(dataDir, appliance.SocketFilename)
 	listener, err := localtransport.ListenUnix(socketPath)
 	if err != nil {

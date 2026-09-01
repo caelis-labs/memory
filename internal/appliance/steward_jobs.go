@@ -45,6 +45,19 @@ func (s *Store) ClaimStewardJob(ctx context.Context, leaseDuration time.Duration
 	if leaseDuration < minStewardLease || leaseDuration > maxStewardLease {
 		return StewardWork{}, false, fmt.Errorf("Steward lease duration must be within %s..%s", minStewardLease, maxStewardLease)
 	}
+	formattedNow := formatTime(s.now().UTC())
+	var available bool
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT EXISTS(
+		 SELECT 1 FROM steward_jobs
+		 WHERE (state = 'pending' AND available_at <= ?)
+		 OR (state = 'leased' AND lease_expires_at <= ?)
+		)`, formattedNow, formattedNow).Scan(&available); err != nil {
+		return StewardWork{}, false, fmt.Errorf("inspect available Steward jobs: %w", err)
+	}
+	if !available {
+		return StewardWork{}, false, nil
+	}
 	leaseToken, err := s.randomToken(32)
 	if err != nil {
 		return StewardWork{}, false, fmt.Errorf("create Steward lease: %w", err)

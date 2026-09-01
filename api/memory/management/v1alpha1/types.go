@@ -85,6 +85,7 @@ type Inspection struct {
 	Receipts          ReceiptDiagnostics    `json:"receipts"`
 	Projection        ProjectionDiagnostics `json:"projection"`
 	Capabilities      CapabilityDiagnostics `json:"capabilities"`
+	Steward           StewardDiagnostics    `json:"steward"`
 }
 
 // ReceiptState describes whether canonical receipt text is active, shadowed by

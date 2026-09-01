@@ -43,6 +43,15 @@ Recall may merge receipt and record candidates, but it deduplicates presentation
 without erasing receipt evidence. If the semantic store, model, or jobs are
 unavailable, receipt-only Recall remains correct.
 
+The implemented merge enters each semantic FTS table only after its Space is in
+the authorized View. It joins active heads to their exact current Revision and
+revalidates that every Evidence receipt still exists, is uncorrected, and is in
+the same Space. Semantic faults discard only the affected derived stream and
+mark the response degraded. Normalized equal text is folded only across a
+semantic candidate and overlapping receipt Evidence, or between semantic
+candidates; equal independent receipts remain separate. Evidence and Record
+references are unioned and sorted for deterministic provenance.
+
 ## Steward execution
 
 A logical Steward is a versioned profile plus durable jobs executed by a shared

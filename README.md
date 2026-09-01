@@ -69,10 +69,11 @@ The M4 Semantic Steward foundation additionally provides:
   the owner management plane;
 - an optional bounded shared Worker pool with HTTPS or loopback HTTP providers,
   owner-only out-of-band credentials, durable leases, retries, and terminal
-  poisoning controls.
-
-Semantic Recall merge and observable receipt-only fallback are the remaining
-M4 slice.
+  poisoning controls;
+- authorization-first per-Space semantic Recall, deterministic receipt/Record
+  merge and deduplication with complete provenance;
+- receipt-only fallback with `degraded=true`, semantic projection rebuild, and
+  secret-free profile, backlog, Record, Worker, and projection diagnostics.
 
 Read [the specification](docs/memory-appliance-spec.md),
 [roadmap](docs/memory-appliance-roadmap.md), and

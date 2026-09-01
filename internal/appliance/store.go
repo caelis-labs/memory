@@ -39,6 +39,18 @@ type Store struct {
 	managementSum      [sha256.Size]byte
 	managementMu       sync.RWMutex
 	managementRotateMu sync.Mutex
+	stewardProviders   atomic.Int64
+	stewardWorkers     atomic.Int64
+}
+
+// SetStewardRuntimeDiagnostics publishes process configuration counts to the
+// secret-free management inspection. Durable Steward policy remains in SQLite.
+func (s *Store) SetStewardRuntimeDiagnostics(providers, workers int) {
+	if providers < 0 || workers < 0 {
+		return
+	}
+	s.stewardProviders.Store(int64(providers))
+	s.stewardWorkers.Store(int64(workers))
 }
 
 // Open acquires the data-directory owner lock, migrates SQLite, and initializes

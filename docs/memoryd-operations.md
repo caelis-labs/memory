@@ -74,7 +74,7 @@ by a host:
 
 ```sh
 ./memoryctl -socket /tmp/caelis-memory/memoryd.sock compatibility \
-  -service-version 0.3.0-alpha.1 \
+  -service-version 0.4.0-alpha.1 \
   -build-revision FULL_GIT_OBJECT_ID
 ```
 
@@ -352,8 +352,11 @@ later configured Worker may reclaim it.
 Inspect reports management protocol, schema and storage generations, pending
 restore and rollback state, topology, filesystem and database capacity,
 receipt and processing counts, projection drift and last rebuild, and bounded
-capability counts. It omits receipt text, paths derived from content, and all
-bearer values. Search returns active receipt content by default;
+capability counts. Steward diagnostics add profile/binding counts, configured
+provider/Worker counts, durable Job states, active/invalidated Record counts,
+oldest outstanding work, and semantic projection health. They omit prompts,
+provider references, receipt text, paths derived from content, and all bearer
+values. Search returns active receipt content by default;
 `-include-corrected` exposes shadowed originals for audit. Trace connects a
 Recall evidence ID to active evidence, correction links, or a content-free
 tombstone.
@@ -366,10 +369,12 @@ uses the same idempotency key. Reusing a key with changed input conflicts; an
 old Runtime Remember retry also conflicts after deletion, preventing content
 resurrection.
 
-Rebuild deletes only disposable per-Space FTS state and repopulates it from
-remaining immutable receipts. Durable correction relations continue to hide
-superseded originals, and deleted receipts have no payload to rebuild. Grant
-revocation invalidates all derived capabilities on their next call.
+Rebuild deletes only disposable per-Space FTS state and repopulates receipt
+entries from remaining immutable receipts and semantic entries from active
+current Revisions. It makes no provider call. Durable correction relations
+continue to hide superseded originals, invalidated Records remain excluded, and
+deleted receipts have no payload to rebuild. Grant revocation invalidates all
+derived capabilities on their next call.
 
 Rotate the root management bearer in place after suspected exposure or on the
 operator's schedule:

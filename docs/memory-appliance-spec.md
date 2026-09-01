@@ -248,7 +248,7 @@ RecallFragment
   fragment_id
   text
   evidence_refs[]
-  record_refs[]         empty until a semantic extension exists
+  record_refs[]         contributing semantic Record IDs, when present
   space_class           private | shared
 
 RecallResponse
@@ -274,6 +274,26 @@ truncates extractive text on a UTF-8 boundary; the host SDK performs a final
 hard check before exposing the bytes to a model. `deadline_ms` is combined with
 any earlier caller deadline and applies through candidate scanning, ranking, and
 result encoding.
+
+Recall authorizes the View before entering either receipt or semantic indexes.
+Each readable Space has a separate semantic FTS projection. Active Record heads
+join only to their exact current Revision, and every returned derived fragment
+must still resolve all Evidence to existing, uncorrected receipts in that same
+Space. Invalid or incomplete derived candidates are discarded.
+
+Receipt and semantic streams are merged with deterministic rank, time, source,
+and stable-identity tie breaks. A semantic presentation duplicates a receipt
+only when normalized text and Evidence overlap; it is then folded into the
+receipt fragment while retaining the Record reference and the union of Evidence.
+Independent receipts with equal text remain independent evidence. Cross-Space
+deduplication adopts the most restrictive contributing Space class.
+
+Semantic backlog, non-governance terminal Job failure, projection drift, a
+missing semantic index, or invalid derived provenance sets `degraded=true` but
+does not turn a successful receipt Recall into an error. Core receipt-index,
+authorization, storage, or deadline failure remains a service error. Rebuilding
+FTS reconstructs receipt entries from receipts and semantic entries only from
+active current Revisions; it never calls a provider.
 
 ## Error envelope
 

@@ -35,6 +35,7 @@ func (s *Store) Inspect(ctx context.Context) (Inspection, error) {
 	for _, table := range []string{
 		"realms", "identities", "spaces", "views", "grants", "capabilities",
 		"receipts", "receipt_corrections", "receipt_tombstones",
+		"steward_profiles", "space_steward_bindings", "steward_jobs", "semantic_records",
 	} {
 		var count int64
 		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+table).Scan(&count); err != nil {
@@ -112,6 +113,9 @@ func (s *Store) Inspect(ctx context.Context) (Inspection, error) {
 		return Inspection{}, err
 	}
 	if err := s.inspectCapabilityDiagnostics(ctx, &result); err != nil {
+		return Inspection{}, err
+	}
+	if err := s.inspectStewardDiagnostics(ctx, &result); err != nil {
 		return Inspection{}, err
 	}
 	storage, err := inspectStorage(s.dataDir)
@@ -225,6 +229,102 @@ func (s *Store) inspectCapabilityDiagnostics(ctx context.Context, result *Inspec
 	return nil
 }
 
+func (s *Store) inspectStewardDiagnostics(ctx context.Context, result *Inspection) error {
+	result.Steward.Profiles = result.Counts["steward_profiles"]
+	result.Steward.Bindings = result.Counts["space_steward_bindings"]
+	result.Steward.ConfiguredProviders = s.stewardProviders.Load()
+	result.Steward.ConfiguredWorkers = s.stewardWorkers.Load()
+	rows, err := s.db.QueryContext(ctx, `SELECT state, COUNT(*) FROM steward_jobs GROUP BY state`)
+	if err != nil {
+		return fmt.Errorf("count Steward job states: %w", err)
+	}
+	for rows.Next() {
+		var state string
+		var count int64
+		if err := rows.Scan(&state, &count); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("read Steward job state: %w", err)
+		}
+		switch state {
+		case "pending":
+			result.Steward.PendingJobs = count
+		case "leased":
+			result.Steward.LeasedJobs = count
+		case "completed":
+			result.Steward.CompletedJobs = count
+		case "failed":
+			result.Steward.FailedJobs = count
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("count Steward job states: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close Steward job states: %w", err)
+	}
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT
+		 COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0),
+		 COALESCE(SUM(CASE WHEN status = 'invalidated' THEN 1 ELSE 0 END), 0)
+		 FROM semantic_records`).Scan(&result.Steward.ActiveRecords, &result.Steward.InvalidatedRecords); err != nil {
+		return fmt.Errorf("count semantic Record states: %w", err)
+	}
+	result.Steward.ProjectionExpected = result.Steward.ActiveRecords
+	result.Steward.ProjectionStatus = "ok"
+	result.Steward.ProjectionHealthy = true
+	indexRows, err := s.db.QueryContext(ctx, `SELECT space_id, table_name FROM semantic_space_indexes ORDER BY space_id`)
+	if err != nil {
+		return fmt.Errorf("list semantic projection diagnostics: %w", err)
+	}
+	for indexRows.Next() {
+		var spaceID v1alpha1.SpaceID
+		var tableName string
+		if err := indexRows.Scan(&spaceID, &tableName); err != nil {
+			_ = indexRows.Close()
+			return fmt.Errorf("read semantic projection diagnostic: %w", err)
+		}
+		if tableName != semanticSpaceIndexTable(spaceID) {
+			result.Steward.ProjectionHealthy = false
+			result.Steward.ProjectionStatus = "unavailable"
+			continue
+		}
+		var count int64
+		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+tableName).Scan(&count); err != nil {
+			result.Steward.ProjectionHealthy = false
+			result.Steward.ProjectionStatus = "unavailable"
+			continue
+		}
+		result.Steward.ProjectionEntries += count
+	}
+	if err := indexRows.Err(); err != nil {
+		_ = indexRows.Close()
+		return fmt.Errorf("list semantic projection diagnostics: %w", err)
+	}
+	if err := indexRows.Close(); err != nil {
+		return fmt.Errorf("close semantic projection diagnostics: %w", err)
+	}
+	result.Counts["semantic_fts"] = result.Steward.ProjectionEntries
+	result.Steward.ProjectionDrift = result.Steward.ProjectionEntries - result.Steward.ProjectionExpected
+	if result.Steward.ProjectionStatus == "ok" && result.Steward.ProjectionDrift != 0 {
+		result.Steward.ProjectionHealthy = false
+		result.Steward.ProjectionStatus = "drift"
+	}
+	var oldest sql.NullString
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT MIN(created_at) FROM steward_jobs WHERE state IN ('pending', 'leased')`).Scan(&oldest); err != nil {
+		return fmt.Errorf("read oldest Steward job: %w", err)
+	}
+	if oldest.Valid {
+		value, err := parseTime(oldest.String)
+		if err != nil {
+			return fmt.Errorf("read oldest Steward job time: %w", err)
+		}
+		result.Steward.OldestOutstandingAt = &value
+	}
+	return nil
+}
+
 func inspectStorage(dataDir string) (managementv1alpha1.StorageDiagnostics, error) {
 	var result managementv1alpha1.StorageDiagnostics
 	paths := []struct {
@@ -306,6 +406,51 @@ func (s *Store) RebuildFTS(ctx context.Context) error {
 			 SELECT receipt_id, text FROM receipts WHERE space_id = ? ORDER BY commit_sequence`, item.spaceID); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("rebuild Space FTS projection: %w", err)
+		}
+	}
+	semanticRows, err := tx.QueryContext(ctx, `SELECT space_id, table_name FROM semantic_space_indexes ORDER BY space_id`)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("list semantic Space indexes: %w", err)
+	}
+	var semanticIndexes []index
+	for semanticRows.Next() {
+		var item index
+		if err := semanticRows.Scan(&item.spaceID, &item.tableName); err != nil {
+			_ = semanticRows.Close()
+			_ = tx.Rollback()
+			return fmt.Errorf("read semantic Space index: %w", err)
+		}
+		if item.tableName != semanticSpaceIndexTable(item.spaceID) {
+			_ = semanticRows.Close()
+			_ = tx.Rollback()
+			return fmt.Errorf("semantic Space index identity mismatch")
+		}
+		semanticIndexes = append(semanticIndexes, item)
+	}
+	if err := semanticRows.Err(); err != nil {
+		_ = semanticRows.Close()
+		_ = tx.Rollback()
+		return fmt.Errorf("list semantic Space indexes: %w", err)
+	}
+	if err := semanticRows.Close(); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("close semantic Space indexes: %w", err)
+	}
+	for _, item := range semanticIndexes {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM `+item.tableName); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("clear semantic Space FTS projection: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO `+item.tableName+`(record_id, revision, text)
+			 SELECT r.record_id, r.current_revision, v.text
+			 FROM semantic_records r
+			 JOIN semantic_revisions v ON v.record_id = r.record_id AND v.revision = r.current_revision
+			 WHERE r.space_id = ? AND r.status = 'active'
+			 ORDER BY r.record_id`, item.spaceID); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("rebuild semantic Space FTS projection: %w", err)
 		}
 	}
 	if _, err := tx.ExecContext(ctx,
