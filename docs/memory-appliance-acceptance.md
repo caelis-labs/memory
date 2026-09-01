@@ -117,7 +117,10 @@ harness. `make durable` reruns the cross-process proof without cached results.
 | `G-007` | Every delete response and operator guide identifies Caelis Session history as a separate erasure scope |
 | `G-008` | Backup is confidential and integrity checked; restore rotates storage generation and stale cursors fail explicitly |
 | `G-009` | Corrupted backup, partial migration, and failed upgrade preserve the last acknowledged usable generation |
-| `G-010` | Diagnostics bound capacity, storage, receipt, projection, capability, and backup state without receipt text or credentials |
+| `G-010` | Diagnostics bound capacity, storage, receipt, projection, capability, restore, and rollback state without receipt text or credentials |
+| `G-011` | Management credential rotation revokes the old bearer immediately and across restart; either interrupted rename outcome recovers deterministically |
+| `G-012` | Offline upgrade preparation captures the exact stopped generation, gates all acknowledgements until commit, and permits old-version rollback without acknowledged loss |
+| `G-013` | A supported `darwin/arm64` sidecar binds exact version, revision, platform, and SHA-256; buildable previews are not accepted as supported artifacts |
 
 ## Failure injection by milestone
 

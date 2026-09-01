@@ -17,6 +17,31 @@ import (
 
 const ManifestFormatVersion = 1
 
+// Platform identifies one native sidecar release target.
+type Platform struct {
+	GOOS   string
+	GOARCH string
+}
+
+var supportedPlatforms = []Platform{{GOOS: "darwin", GOARCH: "arm64"}}
+
+// SupportedPlatforms returns the native platforms covered by this release
+// line's lifecycle and packaging acceptance evidence.
+func SupportedPlatforms() []Platform {
+	return append([]Platform(nil), supportedPlatforms...)
+}
+
+// IsSupportedPlatform reports whether a platform has native release evidence.
+// A buildable platform is not necessarily a supported release platform.
+func IsSupportedPlatform(goos, goarch string) bool {
+	for _, platform := range supportedPlatforms {
+		if platform.GOOS == goos && platform.GOARCH == goarch {
+			return true
+		}
+	}
+	return false
+}
+
 // Manifest binds one native executable to its service and protocol identity.
 type Manifest struct {
 	FormatVersion  int    `json:"format_version"`
@@ -135,6 +160,18 @@ func (m Manifest) VerifyNative(directory string) (string, error) {
 		return "", fmt.Errorf("sidecar executable digest mismatch")
 	}
 	return path, nil
+}
+
+// VerifySupportedNative additionally requires the manifest platform to be in
+// the release line's explicit support matrix.
+func (m Manifest) VerifySupportedNative(directory string) (string, error) {
+	if err := m.Validate(); err != nil {
+		return "", err
+	}
+	if !IsSupportedPlatform(m.GOOS, m.GOARCH) {
+		return "", fmt.Errorf("sidecar platform %s/%s is not a supported release platform", m.GOOS, m.GOARCH)
+	}
+	return m.VerifyNative(directory)
 }
 
 func fileDigest(path string) (string, error) {

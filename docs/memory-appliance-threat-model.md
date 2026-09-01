@@ -53,6 +53,9 @@ does not grant access.
 | Backup file discloses raw receipts | Chunked authenticated encryption with a separate random owner-only key |
 | Corrupt or partial backup replaces live data | Authenticate, integrity-check, migrate, and stage completely before atomic replacement |
 | Rollback loses writes accepted after restore | Keep restored generation management-only until explicit commit removes rollback |
+| Online backup leaves a pre-upgrade acknowledgement gap | Stop first, snapshot the exact database offline, and start the new binary behind the pending-generation write barrier |
+| Stolen management bearer remains valid after response loss | Atomically replace the fixed owner-only token and recover current versus pending digests on restart |
+| Cross-compiled preview is presented as supported | Keep an explicit native-evidence support matrix and reject unsupported release packaging |
 
 ## Core Profile information flow
 
@@ -77,7 +80,10 @@ exact replay metadata, and output-sink enforcement. The M3 governance plane adds
 versioned root management authorization, same-Space append-only correction,
 idempotent deletion tombstones, and restart/reindex deletion verification.
 The recoverability slice adds encrypted streaming backup, staged restore,
-generation rotation, and a no-write pending state for lossless rollback.
-Expanded credential recovery and incident diagnostics remain required before
-M3 exits. M4 must add provider data-egress policy, prompt-injection resistance,
-cost bounds, and job poisoning controls.
+generation rotation, and a no-write pending state for lossless rollback. M3
+also adds secret-free incident diagnostics, crash-recoverable management-token
+rotation, stopped-generation upgrade preparation, and an explicit
+`darwin/arm64` native support boundary. The local owner account and its data
+directory remain one trust domain; remote organization tenancy and hardware
+key custody are not provided. M4 must add provider data-egress policy,
+prompt-injection resistance, cost bounds, and job poisoning controls.

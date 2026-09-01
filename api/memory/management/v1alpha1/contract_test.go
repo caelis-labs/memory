@@ -57,7 +57,8 @@ func TestManagementProtocolAndPathsAreVersioned(t *testing.T) {
 		"search": LocalPathSearch, "trace": LocalPathTrace,
 		"correct": LocalPathCorrect, "delete": LocalPathDelete,
 		"export": LocalPathExport, "backup": LocalPathBackup,
-		"commit_restore": LocalPathCommitRestore,
+		"commit_restore":    LocalPathCommitRestore,
+		"rotate_management": LocalPathRotateManagement,
 	} {
 		if len(path) <= len("/memory.management.v1alpha1/") || path[:len("/memory.management.v1alpha1/")] != "/memory.management.v1alpha1/" {
 			t.Fatalf("%s path = %q", name, path)

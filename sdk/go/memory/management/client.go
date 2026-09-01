@@ -103,6 +103,11 @@ func (c *Client) RotateIssuerCredential(ctx context.Context, principalRef string
 	return response, err
 }
 
+func (c *Client) RotateManagementCredential(ctx context.Context) error {
+	var response managementv1alpha1.RotateManagementCredentialResponse
+	return c.do(ctx, http.MethodPost, managementv1alpha1.LocalPathRotateManagement, struct{}{}, &response)
+}
+
 func (c *Client) CloseIdleConnections() {
 	c.http.CloseIdleConnections()
 }

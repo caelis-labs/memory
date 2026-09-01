@@ -258,6 +258,63 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 	if bytes.Contains(afterRestart, []byte("memoryctl corrected fact")) {
 		t.Fatalf("deleted replacement reappeared after rebuild/restart = %s", afterRestart)
 	}
+	oldCredentialBytes, err := os.ReadFile(managementPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldCredential := strings.TrimSpace(string(oldCredentialBytes))
+	runCommand(t, memoryctl,
+		"-socket", process.socket,
+		"-management-credential", managementPath, "rotate-management",
+	)
+	newCredentialBytes, err := os.ReadFile(managementPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newCredential := strings.TrimSpace(string(newCredentialBytes))
+	if newCredential == "" || newCredential == oldCredential {
+		t.Fatal("memoryctl did not replace the management credential file")
+	}
+	if _, err := managementclient.NewClient(process.socket, oldCredential).Inspect(t.Context()); err == nil {
+		t.Fatal("old management credential remained authorized after rotation")
+	}
+	rotatedInspection := runCommand(t, memoryctl,
+		"-socket", process.socket,
+		"-management-credential", managementPath, "inspect",
+	)
+	if !bytes.Contains(rotatedInspection, []byte(`"protocol_version": "memory.management.v1alpha1"`)) {
+		t.Fatalf("rotated management credential could not inspect: %s", rotatedInspection)
+	}
+	runCommand(t, memoryctl,
+		"-socket", process.socket,
+		"remember", "-authorization", authorizationPath,
+		"-text", "latest stopped upgrade snapshot fact", "-idempotency-key", "upgrade-snapshot-latest",
+	)
+	process.stop(t)
+	preparedOutput := runCommand(t, memoryctl,
+		"-management-credential", managementPath,
+		"prepare-upgrade", "-data-dir", dataDir,
+	)
+	if !bytes.Contains(preparedOutput, []byte(`"rollback_available": true`)) {
+		t.Fatalf("prepare-upgrade output = %s", preparedOutput)
+	}
+	process = startMemorydPendingRestore(t, memoryd, dataDir)
+	if _, err := localclient.NewClient(process.socket).Recall(t.Context(), v1alpha1.CallAuthorization{}, v1alpha1.RecallRequest{}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
+		t.Fatalf("pending upgrade Recall error = %v, want unavailable", err)
+	}
+	process.stop(t)
+	runCommand(t, memoryctl,
+		"-management-credential", managementPath,
+		"restore-rollback", "-data-dir", dataDir,
+	)
+	process = startMemoryd(t, memoryd, dataDir)
+	afterUpgradeRollback := runCommand(t, memoryctl,
+		"-socket", process.socket,
+		"recall", "-authorization", authorizationPath, "-query", "latest stopped upgrade snapshot",
+	)
+	if !bytes.Contains(afterUpgradeRollback, []byte("latest stopped upgrade snapshot fact")) {
+		t.Fatalf("upgrade rollback lost the latest acknowledged fact: %s", afterUpgradeRollback)
+	}
 }
 
 func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {

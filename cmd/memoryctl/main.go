@@ -48,7 +48,7 @@ func run(arguments []string) error {
 	}
 	command := global.Arg(0)
 	commandArgs := global.Args()[1:]
-	if command == "restore" || command == "restore-rollback" {
+	if command == "restore" || command == "restore-rollback" || command == "prepare-upgrade" {
 		return runOfflineRestore(command, commandArgs, credentialPath)
 	}
 	if socketPath == "" {
@@ -282,6 +282,14 @@ func run(arguments []string) error {
 			return fmt.Errorf("issuer rotated but credential output failed; rotate again: %w", err)
 		}
 		return writeResult(map[string]any{"rotated": true, "issuer_credentials_file": outputPath}, nil)
+	case "rotate-management":
+		if len(commandArgs) != 0 {
+			return fmt.Errorf("rotate-management accepts no command arguments")
+		}
+		if err := admin.RotateManagementCredential(ctx); err != nil {
+			return err
+		}
+		return writeResult(map[string]any{"rotated": true, "management_credential_file": credentialPath}, nil)
 	default:
 		return fmt.Errorf("unknown command %q", command)
 	}
@@ -374,6 +382,9 @@ func runOfflineRestore(command string, arguments []string, credentialPath string
 		return fmt.Errorf("%s requires -data-dir", command)
 	}
 	switch command {
+	case "prepare-upgrade":
+		result, err := appliance.PrepareUpgrade(context.Background(), dataDir, credential)
+		return writeResult(result, err)
 	case "restore-rollback":
 		result, err := appliance.RollbackRestore(context.Background(), dataDir, credential, rand.Reader)
 		return writeResult(result, err)

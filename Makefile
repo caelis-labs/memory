@@ -5,8 +5,9 @@ GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 ARTIFACT_DIR ?= dist
 SIDECAR_NAME := memoryd-$(GOOS)-$(GOARCH)
+MANIFEST_SUPPORT_FLAG ?=
 
-.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar check
+.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported check
 
 docs-links:
 	GOWORK=off go run ./scripts/markdown_links
@@ -44,7 +45,10 @@ sidecar:
 		-binary "$(ARTIFACT_DIR)/$(SIDECAR_NAME)" \
 		-output "$(ARTIFACT_DIR)/$(SIDECAR_NAME).manifest.json" \
 		-service-version "$(SERVICE_VERSION)" -revision "$(REVISION)" \
-		-goos "$(GOOS)" -goarch "$(GOARCH)"
+		-goos "$(GOOS)" -goarch "$(GOARCH)" $(MANIFEST_SUPPORT_FLAG)
+
+sidecar-supported:
+	$(MAKE) sidecar MANIFEST_SUPPORT_FLAG=-require-supported
 
 check: docs-links fmt-check whitespace-check test vet build
 	git diff --check

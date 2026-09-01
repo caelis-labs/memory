@@ -372,6 +372,13 @@ inspect the appliance, search and trace receipts, correct or delete receipt
 content, rebuild projections, revoke Grants, and rotate issuer credentials.
 None of these operations is model-accessible.
 
+Inspection returns only bounded topology and operational aggregates: storage
+and filesystem byte counts, receipt processing counts and time range,
+projection health and drift, capability counts, restore state, and rollback
+availability. It contains neither receipt text nor bearer values. A missing or
+drifting disposable projection is a diagnosable state and does not erase the
+canonical topology needed to repair it.
+
 Management search is lexical and may be restricted to one Space. It returns
 receipt text and audit metadata, so its output is sensitive operator data even
 though it contains no bearer. Corrected originals are hidden by default but may
@@ -398,6 +405,15 @@ request under the same management key conflicts.
 Management authorization is root authority for this local profile. A rich
 product Surface must call this plane rather than mirror appliance state or
 policy in Caelis Control.
+
+The fixed owner-only management token is rotatable without returning its raw
+value over the API: the manager writes a replacement at the same protected
+path, revokes the old digest, and returns only a success receipt. Durable
+pending-digest recovery makes interruption before or after the atomic file
+rename deterministic on restart. Rotation remains available while a restored
+generation is pending so an owner can recover authority; topology, issuer,
+Grant, correction, deletion, and Runtime capability mutations remain disabled
+until that generation is committed.
 
 ### Export, backup, restore, and generation
 
@@ -432,6 +448,15 @@ is still eligible for rollback. Restore and rollback each rotate generation;
 all prior consistency tokens fail with `stale_consistency_token` rather than
 being interpreted against different state.
 
+An upgrade uses the same pending-generation barrier. With the service stopped,
+the old `memoryctl prepare-upgrade` authenticates the owner, snapshots the exact
+stopped database into the rollback image, and marks the live database pending
+before a new binary may migrate it. The new binary exposes health and
+authenticated verification operations but cannot acknowledge a receipt or
+other governed mutation. Acceptance commits through `restore-commit`; failure
+is rolled back with the old `memoryctl`, preserving every effect acknowledged
+before shutdown.
+
 ## Replay and deletion boundary
 
 The host persists the exact model-visible Memory ToolResult plus bounded hidden
@@ -454,6 +479,11 @@ response reports the packaged service version, exact source revision, and
 diagnostic storage schema version. The host separately verifies the native
 binary SHA-256 from a pinned sidecar manifest before launch and compares the
 handshake build identity with that manifest after readiness.
+
+Buildability is not a support claim. A release line separately publishes its
+native support matrix; the M3 Alpha matrix contains only `darwin/arm64`.
+Supported packaging rejects an artifact outside that matrix even when Go can
+cross-compile it.
 
 Runtime capability issuance is a separate issuer-plane operation. Its request
 contains principal, Grant, actor, audience, operation, and TTL references while

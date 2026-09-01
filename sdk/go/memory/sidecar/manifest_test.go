@@ -34,6 +34,46 @@ func TestManifestVerifiesExactNativeExecutable(t *testing.T) {
 	}
 }
 
+func TestSupportedPlatformRequiresNativeReleaseEvidence(t *testing.T) {
+	platforms := SupportedPlatforms()
+	if len(platforms) != 1 || platforms[0] != (Platform{GOOS: "darwin", GOARCH: "arm64"}) {
+		t.Fatalf("SupportedPlatforms() = %+v", platforms)
+	}
+	platforms[0] = Platform{GOOS: "changed", GOARCH: "changed"}
+	if !IsSupportedPlatform("darwin", "arm64") {
+		t.Fatal("caller mutated the supported platform authority")
+	}
+	for _, platform := range []Platform{
+		{GOOS: "darwin", GOARCH: "amd64"},
+		{GOOS: "linux", GOARCH: "amd64"},
+		{GOOS: "linux", GOARCH: "arm64"},
+	} {
+		if IsSupportedPlatform(platform.GOOS, platform.GOARCH) {
+			t.Fatalf("unsupported platform accepted: %+v", platform)
+		}
+	}
+}
+
+func TestVerifySupportedNativeRejectsBuildablePreview(t *testing.T) {
+	directory := t.TempDir()
+	binaryPath := filepath.Join(directory, "memoryd-test")
+	if err := os.WriteFile(binaryPath, []byte("executable"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := CreateManifest(binaryPath, "0.3.0-alpha.1", strings.Repeat("a", 40), runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = manifest.VerifySupportedNative(directory)
+	if IsSupportedPlatform(runtime.GOOS, runtime.GOARCH) {
+		if err != nil {
+			t.Fatalf("VerifySupportedNative() = %v", err)
+		}
+	} else if err == nil || !strings.Contains(err.Error(), "not a supported release platform") {
+		t.Fatalf("VerifySupportedNative(preview) error = %v", err)
+	}
+}
+
 func TestManifestRejectsPlatformTraversalAndSymlink(t *testing.T) {
 	directory := t.TempDir()
 	binaryPath := filepath.Join(directory, "memoryd-test")

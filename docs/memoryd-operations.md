@@ -18,11 +18,17 @@ GOWORK=off go build -o ./memoryctl ./cmd/memoryctl
 ./memoryd -data-dir /tmp/caelis-memory
 ```
 
-For a host-managed native sidecar, build only from a clean exact revision:
+For a host-managed native sidecar on a supported platform, build only from a
+clean exact revision:
 
 ```sh
-make sidecar
+make sidecar-supported
 ```
+
+The M3 Alpha support matrix contains macOS on Apple silicon
+(`darwin/arm64`) only. `make sidecar` can still create buildable preview
+artifacts for development, but preview buildability is not native lifecycle or
+release support evidence.
 
 The target emits `dist/memoryd-$GOOS-$GOARCH` and a neighboring JSON manifest.
 The manifest binds service version, source revision, protocol, API, Core
@@ -64,7 +70,7 @@ by a host:
 
 ```sh
 ./memoryctl -socket /tmp/caelis-memory/memoryd.sock compatibility \
-  -service-version 0.2.0-alpha.1 \
+  -service-version 0.3.0-alpha.1 \
   -build-revision FULL_GIT_OBJECT_ID
 ```
 
@@ -232,11 +238,14 @@ idempotency key.
   revoke-grant -id grant-bot-a
 ```
 
-Inspect reports management protocol, schema version, storage generation,
-topology, and row counts; it omits receipt text and all bearer values. Search
-returns active receipt content by default; `-include-corrected` exposes shadowed
-originals for audit. Trace connects a Recall evidence ID to active evidence,
-correction links, or a content-free tombstone.
+Inspect reports management protocol, schema and storage generations, pending
+restore and rollback state, topology, filesystem and database capacity,
+receipt and processing counts, projection drift and last rebuild, and bounded
+capability counts. It omits receipt text, paths derived from content, and all
+bearer values. Search returns active receipt content by default;
+`-include-corrected` exposes shadowed originals for audit. Trace connects a
+Recall evidence ID to active evidence, correction links, or a content-free
+tombstone.
 
 Correction appends same-Space replacement evidence and leaves the original
 payload immutable. Deletion physically removes appliance receipt content, but
@@ -250,6 +259,21 @@ Rebuild deletes only disposable per-Space FTS state and repopulates it from
 remaining immutable receipts. Durable correction relations continue to hide
 superseded originals, and deleted receipts have no payload to rebuild. Grant
 revocation invalidates all derived capabilities on their next call.
+
+Rotate the root management bearer in place after suspected exposure or on the
+operator's schedule:
+
+```sh
+./memoryctl \
+  -socket /tmp/caelis-memory/memoryd.sock \
+  -management-credential /tmp/caelis-memory/management.token \
+  rotate-management
+```
+
+The response contains only the fixed credential-file path. Read the new value
+from that owner-only file; the old bearer is rejected immediately and after
+restart. If the process stops during rotation, startup reconciles the current
+or pending digest with whichever token file rename became durable.
 
 ## Export, backup, restore, and rollback
 
@@ -320,6 +344,56 @@ or stop `memoryd` and roll back offline:
 Commit deletes the rollback image and then enables readiness and the data
 plane. Rollback reinstalls the pre-restore image and rotates generation again.
 All consistency tokens from before either transition fail explicitly as stale.
+
+## Upgrade, failed-upgrade rollback, and disable
+
+Keep the old `memoryd` and `memoryctl` binaries until acceptance completes.
+First stop `memoryd`; then use the old control binary to capture the exact
+stopped state and erect the pending-generation write barrier:
+
+```sh
+./old-memoryctl \
+  -management-credential /tmp/caelis-memory/management.token \
+  prepare-upgrade -data-dir /tmp/caelis-memory
+```
+
+This operation refuses a running owner, verifies SQLite and management
+authority, writes `memory.db.rollback`, and marks the live generation pending.
+It is safe to repeat after an interrupted preparation. Start the new exact
+digest-verified artifact. Health, inspect, search, trace, export, backup, FTS
+repair, compatibility, and management-token recovery remain available, while
+readiness, Runtime calls, capability issuance, topology changes, corrections,
+deletions, issuer rotation, and Grant revocation remain unavailable.
+
+Verify the new manifest and handshake, inspect schema/projection/capability
+diagnostics, and exercise read-only evidence queries. To accept the upgrade:
+
+```sh
+./new-memoryctl \
+  -socket /tmp/caelis-memory/memoryd.sock \
+  -management-credential /tmp/caelis-memory/management.token \
+  restore-commit
+```
+
+If any check fails, stop the new service and use the old control binary so the
+rollback image is interpreted by the pre-upgrade schema owner:
+
+```sh
+./old-memoryctl \
+  -management-credential /tmp/caelis-memory/management.token \
+  restore-rollback -data-dir /tmp/caelis-memory
+```
+
+Rollback rotates storage generation, so cached consistency cursors fail stale;
+it does not lose an effect acknowledged before the old service stopped. Start
+the old exact artifact and rerun readiness plus the Golden Path.
+
+To disable Memory at the product layer, first remove the two tools through the
+Caelis Memory feature flag or kill switch, then stop its managed sidecar. This
+does not delete or rewrite the appliance directory. Re-enabling may reuse it
+only after the pinned manifest, digest, compatibility identity, and management
+diagnostics pass again. Erasure is the explicit deletion workflow, never a
+side effect of feature disable or binary rollback.
 
 Send `SIGTERM` or interrupt `memoryd` for a bounded graceful drain. A crash may
 leave the Socket node behind, but the process owner lock is released by the OS

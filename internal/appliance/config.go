@@ -28,8 +28,8 @@ type authorizedView struct {
 
 // Bootstrap creates a complete local topology in one transaction.
 func (s *Store) Bootstrap(ctx context.Context, request BootstrapRequest) (BootstrapResponse, error) {
-	if s.closing.Load() {
-		return BootstrapResponse{}, fmt.Errorf("appliance is shutting down")
+	if err := s.requireMutableGeneration(); err != nil {
+		return BootstrapResponse{}, err
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -267,6 +267,9 @@ func readSpaceScope(ctx context.Context, db databaseExecutor, spaceID v1alpha1.S
 // IssueCapability creates random bearer authority backed by durable server-side
 // state. A Grant reference without principal authentication is insufficient.
 func (s *Store) IssueCapability(ctx context.Context, request IssueCapabilityRequest) (RuntimeCapability, error) {
+	if err := s.requireMutableGeneration(); err != nil {
+		return RuntimeCapability{}, err
+	}
 	if request.Authorization.PrincipalRef == "" || request.Authorization.Credential == "" {
 		return RuntimeCapability{}, fmt.Errorf("%w: issuer authorization is required", ErrCapabilityIssueInvalid)
 	}
@@ -378,6 +381,9 @@ func (s *Store) IssueCapability(ctx context.Context, request IssueCapabilityRequ
 // authorization. Rotation is recoverable: if its response is lost, an
 // authenticated manager can rotate the same principal again.
 func (s *Store) RotateIssuerCredential(ctx context.Context, principalRef string) (IssuerAuthorization, error) {
+	if err := s.requireMutableGeneration(); err != nil {
+		return IssuerAuthorization{}, err
+	}
 	if principalRef == "" {
 		return IssuerAuthorization{}, fmt.Errorf("issuer principal is required")
 	}
@@ -403,6 +409,9 @@ func (s *Store) RotateIssuerCredential(ctx context.Context, principalRef string)
 
 // RevokeGrant durably invalidates all capabilities derived from one Grant.
 func (s *Store) RevokeGrant(ctx context.Context, grantID v1alpha1.GrantID) error {
+	if err := s.requireMutableGeneration(); err != nil {
+		return err
+	}
 	result, err := s.db.ExecContext(ctx, `UPDATE grants SET revoked = 1 WHERE id = ?`, grantID)
 	if err != nil {
 		return fmt.Errorf("revoke Grant: %w", err)

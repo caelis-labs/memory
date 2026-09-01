@@ -37,24 +37,27 @@ The Memory-owned M2 boundary additionally provides:
 - `make sidecar`, which accepts only a clean exact HEAD and emits a native
   executable plus SHA-256 manifest.
 
-The M3 management foundation additionally provides:
+M3 Governance and Production Safety additionally provides:
 
 - versioned `memory.management.v1alpha1` wire types and Go client;
 - owner-authorized receipt search and provenance trace;
 - append-only, same-Space corrections that shadow rather than rewrite evidence;
 - idempotent hard deletion with content-free tombstones and resurrection
   prevention;
-- `memoryctl` search, trace, correction, and deletion commands.
+- secret-free capacity, storage, receipt, projection, capability, restore, and
+  rollback diagnostics;
+- recoverable management-bearer rotation plus `memoryctl` governance commands;
+- sensitive NDJSON export, streaming encrypted backup with a separate
+  owner-only key, offline verified restore, storage-generation rotation, and a
+  management-only verification state with explicit commit or rollback;
+- lossless offline upgrade preparation and supported native sidecar packaging
+  for macOS on Apple silicon (`darwin/arm64`).
 
-The recoverability slice adds sensitive NDJSON export, streaming encrypted
-backup with a separate owner-only key, offline verified restore, storage
-generation rotation, and a management-only verification state with explicit
-commit or rollback.
-
-The appliance remains deliberately model-free. Expanded diagnostics and
-platform rollout complete M3; Steward, semantic records, and vector/graph
-retrieval remain M4 work. Caelis integration is independently
-owned and pins an exact published Memory revision and sidecar digest.
+The appliance remains deliberately model-free. Other buildable platforms are
+preview-only until they receive native lifecycle evidence. Steward, semantic
+records, and semantic retrieval remain M4 work. Caelis integration is
+independently owned and pins an exact published Memory revision and sidecar
+digest.
 
 Read [the specification](docs/memory-appliance-spec.md),
 [roadmap](docs/memory-appliance-roadmap.md), and

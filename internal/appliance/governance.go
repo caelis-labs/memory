@@ -143,6 +143,9 @@ func (s *Store) CorrectReceipt(
 	ctx context.Context,
 	request managementv1alpha1.CorrectReceiptRequest,
 ) (managementv1alpha1.CorrectReceiptResponse, error) {
+	if err := s.requireMutableGeneration(); err != nil {
+		return managementv1alpha1.CorrectReceiptResponse{}, err
+	}
 	if err := request.Validate(); err != nil {
 		return managementv1alpha1.CorrectReceiptResponse{}, s.serviceError(v1alpha1.ErrorCodeInvalidArgument, err.Error(), false)
 	}
@@ -261,6 +264,9 @@ func (s *Store) DeleteReceipt(
 	ctx context.Context,
 	request managementv1alpha1.DeleteReceiptRequest,
 ) (managementv1alpha1.DeleteReceiptResponse, error) {
+	if err := s.requireMutableGeneration(); err != nil {
+		return managementv1alpha1.DeleteReceiptResponse{}, err
+	}
 	if err := request.Validate(); err != nil {
 		return managementv1alpha1.DeleteReceiptResponse{}, s.serviceError(v1alpha1.ErrorCodeInvalidArgument, err.Error(), false)
 	}

@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -24,18 +25,20 @@ import (
 
 // Store is the single durable authority behind memoryd.
 type Store struct {
-	db             *sql.DB
-	lock           *ownerLock
-	dataDir        string
-	now            func() time.Time
-	random         io.Reader
-	faults         Faults
-	candidateRead  func(v1alpha1.SpaceID)
-	requestID      atomic.Uint64
-	closing        atomic.Bool
-	restorePending atomic.Bool
-	generation     string
-	managementSum  [sha256.Size]byte
+	db                 *sql.DB
+	lock               *ownerLock
+	dataDir            string
+	now                func() time.Time
+	random             io.Reader
+	faults             Faults
+	candidateRead      func(v1alpha1.SpaceID)
+	requestID          atomic.Uint64
+	closing            atomic.Bool
+	restorePending     atomic.Bool
+	generation         string
+	managementSum      [sha256.Size]byte
+	managementMu       sync.RWMutex
+	managementRotateMu sync.Mutex
 }
 
 // Open acquires the data-directory owner lock, migrates SQLite, and initializes
@@ -140,6 +143,40 @@ func (s *Store) initializeManagementCredential(ctx context.Context) error {
 	}
 	credential, readErr := os.ReadFile(path)
 	storedDigest, metadataErr := s.metadata(ctx, "management_credential_digest")
+	pendingDigest, pendingErr := s.metadata(ctx, "management_credential_digest_pending")
+	if pendingErr != nil && !errors.Is(pendingErr, sql.ErrNoRows) {
+		return fmt.Errorf("read pending management credential digest: %w", pendingErr)
+	}
+	if pendingErr == nil && readErr == nil {
+		actualDigest := digestString(string(trimCredential(credential)))
+		switch {
+		case metadataErr == nil && actualDigest == storedDigest:
+			if _, err := s.db.ExecContext(ctx, `DELETE FROM metadata WHERE key = 'management_credential_digest_pending'`); err != nil {
+				return fmt.Errorf("clear abandoned management credential rotation: %w", err)
+			}
+		case actualDigest == pendingDigest:
+			tx, err := s.db.BeginTx(ctx, nil)
+			if err != nil {
+				return fmt.Errorf("recover management credential rotation: %w", err)
+			}
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO metadata(key, value) VALUES ('management_credential_digest', ?)
+				 ON CONFLICT(key) DO UPDATE SET value = excluded.value`, pendingDigest); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("recover management credential rotation: %w", err)
+			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM metadata WHERE key = 'management_credential_digest_pending'`); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("recover management credential rotation: %w", err)
+			}
+			if err := tx.Commit(); err != nil {
+				return fmt.Errorf("recover management credential rotation: %w", err)
+			}
+			storedDigest, metadataErr = pendingDigest, nil
+		default:
+			return fmt.Errorf("management credential does not match current or pending durable state")
+		}
+	}
 	switch {
 	case errors.Is(readErr, os.ErrNotExist) && errors.Is(metadataErr, sql.ErrNoRows):
 		token, err := s.randomToken(32)
@@ -199,7 +236,9 @@ func (s *Store) initializeManagementCredential(ctx context.Context) error {
 	if err != nil || len(decoded) != sha256.Size {
 		return fmt.Errorf("management credential digest is invalid")
 	}
+	s.managementMu.Lock()
 	copy(s.managementSum[:], decoded)
+	s.managementMu.Unlock()
 	return nil
 }
 
@@ -223,6 +262,8 @@ func (s *Store) AuthenticateManagement(credential string) bool {
 		return false
 	}
 	got := sha256.Sum256([]byte(credential))
+	s.managementMu.RLock()
+	defer s.managementMu.RUnlock()
 	return subtle.ConstantTimeCompare(got[:], s.managementSum[:]) == 1
 }
 
@@ -240,6 +281,16 @@ func (s *Store) Ready(ctx context.Context) error {
 		return fmt.Errorf("restored generation awaits operator commit")
 	}
 	return s.db.PingContext(ctx)
+}
+
+func (s *Store) requireMutableGeneration() error {
+	if s.closing.Load() {
+		return s.serviceError(v1alpha1.ErrorCodeUnavailable, "appliance is shutting down", false)
+	}
+	if s.restorePending.Load() {
+		return s.serviceError(v1alpha1.ErrorCodeUnavailable, "restored generation awaits operator commit", false)
+	}
+	return nil
 }
 
 // Close rejects new calls, drains database users, and releases ownership.

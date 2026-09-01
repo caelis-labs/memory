@@ -74,13 +74,17 @@ type BootstrapResponse struct {
 
 // Inspection is a secret-free summary for operation and acceptance.
 type Inspection struct {
-	ProtocolVersion   string           `json:"protocol_version"`
-	SchemaVersion     int              `json:"schema_version"`
-	Generation        string           `json:"generation"`
-	RestorePending    bool             `json:"restore_pending"`
-	RollbackAvailable bool             `json:"rollback_available"`
-	Counts            map[string]int64 `json:"counts"`
-	Spaces            []Space          `json:"spaces"`
+	ProtocolVersion   string                `json:"protocol_version"`
+	SchemaVersion     int                   `json:"schema_version"`
+	Generation        string                `json:"generation"`
+	RestorePending    bool                  `json:"restore_pending"`
+	RollbackAvailable bool                  `json:"rollback_available"`
+	Counts            map[string]int64      `json:"counts"`
+	Spaces            []Space               `json:"spaces"`
+	Storage           StorageDiagnostics    `json:"storage"`
+	Receipts          ReceiptDiagnostics    `json:"receipts"`
+	Projection        ProjectionDiagnostics `json:"projection"`
+	Capabilities      CapabilityDiagnostics `json:"capabilities"`
 }
 
 // ReceiptState describes whether canonical receipt text is active, shadowed by
@@ -194,6 +198,10 @@ type RevokeGrantResponse struct {
 
 type RotateIssuerRequest struct {
 	PrincipalRef string `json:"principal_ref"`
+}
+
+type RotateManagementCredentialResponse struct {
+	Rotated bool `json:"rotated"`
 }
 
 // IssuerAuthorization contains a newly rotated issuer bearer and must be

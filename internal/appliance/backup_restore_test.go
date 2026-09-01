@@ -88,6 +88,29 @@ func TestBackupRestoreRotatesGenerationAndRollbackPreservesAcknowledgedState(t *
 	if _, err := restoredStore.Recall(t.Context(), auth, testRecall("backup", before.ConsistencyToken)); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
 		t.Fatalf("pending restored Recall error = %v, want unavailable", err)
 	}
+	if _, err := restoredStore.CorrectReceipt(t.Context(), managementv1alpha1.CorrectReceiptRequest{
+		ReceiptID: before.ReceiptID, ReplacementText: "must not commit while pending",
+		Reason: "pending restore test", IdempotencyKey: "pending-correction",
+	}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
+		t.Fatalf("pending restored correction error = %v, want unavailable", err)
+	}
+	if _, err := restoredStore.DeleteReceipt(t.Context(), managementv1alpha1.DeleteReceiptRequest{
+		ReceiptID: before.ReceiptID, Reason: "pending restore test", IdempotencyKey: "pending-deletion",
+	}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
+		t.Fatalf("pending restored deletion error = %v, want unavailable", err)
+	}
+	if err := restoredStore.RevokeGrant(t.Context(), "grant-bot-a"); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
+		t.Fatalf("pending restored revoke error = %v, want unavailable", err)
+	}
+	if _, err := restoredStore.RotateIssuerCredential(t.Context(), "principal:actor-bot-a"); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
+		t.Fatalf("pending restored issuer rotation error = %v, want unavailable", err)
+	}
+	if _, err := restoredStore.Bootstrap(t.Context(), BootstrapRequest{}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
+		t.Fatalf("pending restored bootstrap error = %v, want unavailable", err)
+	}
+	if _, err := restoredStore.IssueCapability(t.Context(), IssueCapabilityRequest{}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
+		t.Fatalf("pending restored capability issue error = %v, want unavailable", err)
+	}
 	if err := restoredStore.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -203,5 +226,101 @@ func TestCommitRestoreRemovesRollbackOnlyWhileOffline(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dataDir, RollbackDatabaseFilename)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("rollback database still exists: %v", err)
+	}
+}
+
+func TestPrepareUpgradeCapturesStoppedGenerationAndGatesNewWrites(t *testing.T) {
+	dataDir := t.TempDir()
+	store, auth := newGoldenStore(t, dataDir, time.Now)
+	remembered, err := store.Remember(t.Context(), auth, v1alpha1.RememberRequest{
+		Text: "latest acknowledged pre-upgrade fact", IdempotencyKey: "pre-upgrade-latest",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentialBytes, err := os.ReadFile(store.ManagementCredentialPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential := string(trimCredential(credentialBytes))
+	if _, err := PrepareUpgrade(t.Context(), dataDir, credential); !errors.Is(err, ErrOwnerLocked) {
+		t.Fatalf("online PrepareUpgrade error = %v, want ErrOwnerLocked", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PrepareUpgrade(t.Context(), dataDir, "wrong-management-credential"); err == nil {
+		t.Fatal("PrepareUpgrade accepted the wrong management credential")
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, RollbackDatabaseFilename)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unauthorized PrepareUpgrade created rollback state: %v", err)
+	}
+	orphanPath := filepath.Join(dataDir, RollbackDatabaseFilename)
+	created, err := createRollbackSnapshot(t.Context(), filepath.Join(dataDir, DatabaseFilename), orphanPath)
+	if err != nil || !created {
+		t.Fatalf("create interrupted preparation fixture = %t, %v", created, err)
+	}
+	resumed, err := Open(t.Context(), Options{DataDir: dataDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	later, err := resumed.Remember(t.Context(), auth, v1alpha1.RememberRequest{
+		Text: "acknowledged after abandoned upgrade snapshot", IdempotencyKey: "after-abandoned-upgrade-snapshot",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := resumed.Close(); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := PrepareUpgrade(t.Context(), dataDir, credential)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !prepared.RollbackAvailable || prepared.SourceGeneration != prepared.StorageGeneration {
+		t.Fatalf("prepared upgrade = %+v", prepared)
+	}
+	if retry, err := PrepareUpgrade(t.Context(), dataDir, credential); err != nil || retry != prepared {
+		t.Fatalf("prepare retry = %+v, %v; want %+v", retry, err, prepared)
+	}
+	pending, err := Open(t.Context(), Options{DataDir: dataDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pending.Remember(t.Context(), auth, v1alpha1.RememberRequest{
+		Text: "must not be acknowledged", IdempotencyKey: "pending-upgrade-write",
+	}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
+		t.Fatalf("pending upgrade Remember error = %v, want unavailable", err)
+	}
+	if err := pending.Close(); err != nil {
+		t.Fatal(err)
+	}
+	rolledBack, err := RollbackRestore(t.Context(), dataDir, credential, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rolledBack.StorageGeneration == prepared.StorageGeneration {
+		t.Fatalf("upgrade rollback did not rotate generation: %+v", rolledBack)
+	}
+	reopened, err := Open(t.Context(), Options{DataDir: dataDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+	response, err := reopened.Recall(t.Context(), auth, testRecall("latest pre-upgrade", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertHasText(t, response, "latest acknowledged pre-upgrade fact")
+	response, err = reopened.Recall(t.Context(), auth, testRecall("abandoned upgrade snapshot", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertHasText(t, response, "acknowledged after abandoned upgrade snapshot")
+	if _, err := reopened.Recall(t.Context(), auth, testRecall("latest", remembered.ConsistencyToken)); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeStaleConsistencyToken) {
+		t.Fatalf("pre-upgrade cursor error = %v, want stale_consistency_token", err)
+	}
+	if _, err := reopened.Recall(t.Context(), auth, testRecall("abandoned", later.ConsistencyToken)); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeStaleConsistencyToken) {
+		t.Fatalf("post-abandoned-snapshot cursor error = %v, want stale_consistency_token", err)
 	}
 }

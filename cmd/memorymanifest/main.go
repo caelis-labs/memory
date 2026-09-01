@@ -19,12 +19,14 @@ func main() {
 
 func run() error {
 	var binaryPath, outputPath, serviceVersion, revision, goos, goarch string
+	var requireSupported bool
 	flag.StringVar(&binaryPath, "binary", "", "memoryd executable path")
 	flag.StringVar(&outputPath, "output", "", "manifest output path")
 	flag.StringVar(&serviceVersion, "service-version", "", "memoryd service version")
 	flag.StringVar(&revision, "revision", "", "exact source revision")
 	flag.StringVar(&goos, "goos", "", "artifact GOOS")
 	flag.StringVar(&goarch, "goarch", "", "artifact GOARCH")
+	flag.BoolVar(&requireSupported, "require-supported", false, "require a platform with native release evidence")
 	flag.Parse()
 	if binaryPath == "" || outputPath == "" {
 		return fmt.Errorf("-binary and -output are required")
@@ -32,6 +34,9 @@ func run() error {
 	manifest, err := sidecar.CreateManifest(binaryPath, serviceVersion, revision, goos, goarch)
 	if err != nil {
 		return err
+	}
+	if requireSupported && !sidecar.IsSupportedPlatform(manifest.GOOS, manifest.GOARCH) {
+		return fmt.Errorf("platform %s/%s is not a supported release platform", manifest.GOOS, manifest.GOARCH)
 	}
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 		return fmt.Errorf("create manifest directory: %w", err)

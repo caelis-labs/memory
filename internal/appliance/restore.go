@@ -3,6 +3,7 @@ package appliance
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -29,6 +30,152 @@ type RestoreResult struct {
 	SchemaVersion     int    `json:"schema_version"`
 	RollbackAvailable bool   `json:"rollback_available"`
 	RollbackPath      string `json:"rollback_path,omitempty"`
+}
+
+// PrepareUpgrade captures the exact stopped database and marks the live
+// generation pending before a new binary can migrate or serve it. The new
+// process remains management-readable but cannot acknowledge mutations until
+// CommitRestore; the old memoryctl can use RollbackRestore on failure.
+func PrepareUpgrade(ctx context.Context, dataDir, managementCredential string) (RestoreResult, error) {
+	credential := strings.TrimSpace(managementCredential)
+	if dataDir == "" || credential == "" {
+		return RestoreResult{}, fmt.Errorf("upgrade data directory and management credential are required")
+	}
+	lock, err := acquireOwnerLock(dataDir)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	defer lock.close()
+	databasePath := filepath.Join(dataDir, DatabaseFilename)
+	rollbackPath := filepath.Join(dataDir, RollbackDatabaseFilename)
+	for _, path := range []string{databasePath, rollbackPath} {
+		if err := requireRegularOrAbsent(path); err != nil {
+			return RestoreResult{}, fmt.Errorf("secure upgrade database %s: %w", filepath.Base(path), err)
+		}
+	}
+	if _, err := os.Stat(databasePath); err != nil {
+		return RestoreResult{}, fmt.Errorf("inspect upgrade database: %w", err)
+	}
+	if err := verifySQLiteFile(ctx, databasePath, true); err != nil {
+		return RestoreResult{}, fmt.Errorf("verify upgrade database: %w", err)
+	}
+	database, err := sql.Open("sqlite", databasePath)
+	if err != nil {
+		return RestoreResult{}, fmt.Errorf("open upgrade database: %w", err)
+	}
+	var generation, storedDigest, pending string
+	var schemaVersion int
+	readErr := database.QueryRowContext(ctx,
+		`SELECT
+		 (SELECT value FROM metadata WHERE key = 'storage_generation'),
+		 (SELECT value FROM metadata WHERE key = 'management_credential_digest'),
+		 COALESCE((SELECT value FROM metadata WHERE key = 'restore_pending'), '0'),
+		 (SELECT MAX(version) FROM schema_migrations)`).Scan(
+		&generation, &storedDigest, &pending, &schemaVersion)
+	closeErr := database.Close()
+	if readErr != nil {
+		return RestoreResult{}, fmt.Errorf("read upgrade state: %w", readErr)
+	}
+	if closeErr != nil {
+		return RestoreResult{}, fmt.Errorf("close upgrade database: %w", closeErr)
+	}
+	if subtle.ConstantTimeCompare([]byte(digestString(credential)), []byte(storedDigest)) != 1 {
+		return RestoreResult{}, fmt.Errorf("management credential does not authorize upgrade preparation")
+	}
+	rollbackExists := false
+	if _, err := os.Lstat(rollbackPath); err == nil {
+		rollbackExists = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return RestoreResult{}, fmt.Errorf("inspect upgrade rollback database: %w", err)
+	}
+	if pending == "1" {
+		if !rollbackExists {
+			return RestoreResult{}, fmt.Errorf("generation is already pending without a rollback database")
+		}
+		if err := verifySQLiteFile(ctx, rollbackPath, true); err != nil {
+			return RestoreResult{}, fmt.Errorf("verify upgrade rollback database: %w", err)
+		}
+		var rollbackGeneration string
+		rollback, err := sql.Open("sqlite", rollbackPath)
+		if err != nil {
+			return RestoreResult{}, fmt.Errorf("open upgrade rollback database: %w", err)
+		}
+		readErr := rollback.QueryRowContext(ctx,
+			`SELECT value FROM metadata WHERE key = 'storage_generation'`).Scan(&rollbackGeneration)
+		closeErr := rollback.Close()
+		if readErr != nil {
+			return RestoreResult{}, fmt.Errorf("read upgrade rollback generation: %w", readErr)
+		}
+		if closeErr != nil {
+			return RestoreResult{}, fmt.Errorf("close upgrade rollback database: %w", closeErr)
+		}
+		if rollbackGeneration != generation {
+			return RestoreResult{}, fmt.Errorf("existing rollback database belongs to another generation")
+		}
+		return RestoreResult{
+			SourceGeneration: generation, StorageGeneration: generation,
+			SchemaVersion: schemaVersion, RollbackAvailable: true, RollbackPath: rollbackPath,
+		}, nil
+	}
+	if pending != "0" {
+		return RestoreResult{}, fmt.Errorf("stored pending state is invalid")
+	}
+	if rollbackExists {
+		// A rollback image with no pending barrier can only be an interrupted
+		// preparation. It may predate later acknowledged writes, so recapture
+		// the exact stopped database instead of trusting generation identity.
+		if err := os.Remove(rollbackPath); err != nil {
+			return RestoreResult{}, fmt.Errorf("remove abandoned upgrade rollback database: %w", err)
+		}
+		if err := syncDirectory(dataDir); err != nil {
+			return RestoreResult{}, err
+		}
+		rollbackExists = false
+	}
+	createdRollback := false
+	if !rollbackExists {
+		createdRollback, err = createRollbackSnapshot(ctx, databasePath, rollbackPath)
+		if err != nil {
+			return RestoreResult{}, err
+		}
+		if !createdRollback {
+			return RestoreResult{}, fmt.Errorf("upgrade database is unavailable")
+		}
+		if err := syncDirectory(dataDir); err != nil {
+			_ = os.Remove(rollbackPath)
+			return RestoreResult{}, err
+		}
+	}
+	removeCreatedRollback := func() {
+		if createdRollback {
+			_ = os.Remove(rollbackPath)
+		}
+	}
+	database, err = sql.Open("sqlite", databasePath)
+	if err != nil {
+		removeCreatedRollback()
+		return RestoreResult{}, fmt.Errorf("open upgrade database: %w", err)
+	}
+	if _, err := database.ExecContext(ctx,
+		`INSERT INTO metadata(key, value) VALUES ('restore_pending', '1')
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`); err != nil {
+		_ = database.Close()
+		return RestoreResult{}, fmt.Errorf("mark upgrade pending: %w", err)
+	}
+	if _, err := database.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		_ = database.Close()
+		return RestoreResult{}, fmt.Errorf("checkpoint pending upgrade database: %w", err)
+	}
+	if err := database.Close(); err != nil {
+		return RestoreResult{}, fmt.Errorf("close pending upgrade database: %w", err)
+	}
+	if err := syncDirectory(dataDir); err != nil {
+		return RestoreResult{}, err
+	}
+	return RestoreResult{
+		SourceGeneration: generation, StorageGeneration: generation,
+		SchemaVersion: schemaVersion, RollbackAvailable: true, RollbackPath: rollbackPath,
+	}, nil
 }
 
 // Restore installs a fully authenticated plaintext snapshot only after the
@@ -320,6 +467,20 @@ func createRollbackSnapshot(ctx context.Context, databasePath, rollbackPath stri
 	if err := verifySQLiteFile(ctx, rollbackPath, true); err != nil {
 		_ = os.Remove(rollbackPath)
 		return false, fmt.Errorf("verify rollback snapshot: %w", err)
+	}
+	rollback, err := os.OpenFile(rollbackPath, os.O_RDWR, 0)
+	if err != nil {
+		_ = os.Remove(rollbackPath)
+		return false, fmt.Errorf("open rollback snapshot for sync: %w", err)
+	}
+	if err := rollback.Sync(); err != nil {
+		_ = rollback.Close()
+		_ = os.Remove(rollbackPath)
+		return false, fmt.Errorf("sync rollback snapshot: %w", err)
+	}
+	if err := rollback.Close(); err != nil {
+		_ = os.Remove(rollbackPath)
+		return false, fmt.Errorf("close rollback snapshot: %w", err)
 	}
 	return true, nil
 }

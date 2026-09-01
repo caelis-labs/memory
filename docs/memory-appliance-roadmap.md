@@ -232,6 +232,7 @@ become a second Control-owned mirror.
 - Session copies remain explicitly discoverable as a separate erasure scope;
 - backup/restore changes storage generation and stale tokens fail explicitly;
 - failed upgrades roll back without acknowledged receipt loss;
+- management credential rotation is recoverable across either rename outcome;
 - platform artifacts identify exact version and digest.
 
 ## M4: Semantic Steward Extension

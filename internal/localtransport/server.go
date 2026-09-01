@@ -233,6 +233,14 @@ func Handler(store *appliance.Store, serviceInfo ...ServiceInfo) http.Handler {
 		response, err := store.RotateIssuerCredential(request.Context(), input.PrincipalRef)
 		writeManagement(writer, response, err)
 	}))
+	mux.HandleFunc(managementv1alpha1.LocalPathRotateManagement, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input struct{}
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		err := store.RotateManagementCredential(request.Context())
+		writeManagement(writer, managementv1alpha1.RotateManagementCredentialResponse{Rotated: err == nil}, err)
+	}))
 	return mux
 }
 
