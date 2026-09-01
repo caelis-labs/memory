@@ -13,7 +13,7 @@ const (
 	DatabaseFilename           = "memory.db"
 	OwnerLockFilename          = "memoryd.lock"
 	ManagementCredentialFile   = "management.token"
-	SocketFilename             = "memoryd.sock"
+	SocketFilename             = v1alpha1.LocalSocketFilename
 	CurrentSchemaVersion       = 1
 	defaultSQLiteBusyTimeoutMS = 2_000
 )
