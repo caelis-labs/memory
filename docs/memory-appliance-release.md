@@ -51,7 +51,8 @@ durable system suite.
 
 | Measure | Fixed dataset | Measured | RC regression budget |
 | --- | ---: | ---: | ---: |
-| Remember p50/p95/p99 | 50 durable writes | 282/494/517 us | p99 <= 5 ms |
+| Cold Remember p50/p95/p99 | first write in 50 fresh Stores | 364/543/648 us | p99 <= 25 ms |
+| Warm Remember p50/p95/p99 | 50 durable writes after one warmup | 363/494/523 us | p99 <= 5 ms |
 | Recall p50/p95/p99 | 200 receipts, 50 queries | 236/501/634 us | p99 <= 5 ms |
 | Startup/readiness p50/p95/p99 | 50 fresh stores | 15.0/17.0/17.7 ms | p99 <= 150 ms |
 | Receipt plus semantic reindex | 500 entries, 50 runs | 268,312 entries/s | >= 50,000 entries/s |
@@ -62,10 +63,13 @@ durable system suite.
 The command prints raw benchmark and allocation data. Same-hardware regression
 comparisons use the same hardware class, Go version, dataset, and command; the
 absolute budgets also gate the slower supported GitHub Apple M1 Virtual runner.
-The startup budget was reset from 100ms to 150ms after the first pre-RC native
-run measured a 115ms cold-start p99 on that runner. A budget miss blocks the
-candidate until classified and reviewed; changing a budget, corpus, prompt,
-provider, or ranking policy starts a new RC run.
+Cold first-write behavior is measured across fresh Stores independently from
+the warm write distribution. The cold Remember budget was frozen at 25ms after
+two unchanged pre-split native runs exposed 13.2ms and 13.4ms cold outliers on
+that runner; the warm budget remains 5ms. The startup budget was reset from
+100ms to 150ms after an earlier native run measured a 115ms cold-start p99. A
+budget miss blocks the candidate until classified and reviewed; changing a
+budget, corpus, prompt, provider, or ranking policy starts a new RC run.
 
 The fixed RC retrieval corpus has 100 receipt and 100 semantic queries. Every
 case requires Recall@1, precision 1.0, current provenance, no unsupported

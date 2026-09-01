@@ -18,6 +18,11 @@ import (
 func BenchmarkM5Remember(b *testing.B) {
 	store, auth := newGoldenStore(b, b.TempDir(), time.Now)
 	b.Cleanup(func() { _ = store.Close() })
+	if _, err := store.Remember(b.Context(), auth, v1alpha1.RememberRequest{
+		Text: "M5 Remember warmup marker", IdempotencyKey: "m5-remember-warmup",
+	}); err != nil {
+		b.Fatal(err)
+	}
 	durations := make([]time.Duration, 0, b.N)
 	b.ResetTimer()
 	for index := range b.N {
@@ -33,6 +38,35 @@ func BenchmarkM5Remember(b *testing.B) {
 	b.StopTimer()
 	if p99 := reportPercentiles(b, "remember", durations); p99 > 5*time.Millisecond {
 		b.Fatalf("Remember p99 %s exceeds 5ms RC budget", p99)
+	}
+}
+
+func BenchmarkM5ColdRemember(b *testing.B) {
+	root := b.TempDir()
+	durations := make([]time.Duration, 0, b.N)
+	for index := range b.N {
+		b.StopTimer()
+		store, auth := newGoldenStore(b, filepath.Join(root, fmt.Sprintf("cold-remember-%08d", index)), time.Now)
+		b.StartTimer()
+		started := time.Now()
+		_, err := store.Remember(b.Context(), auth, v1alpha1.RememberRequest{
+			Text:           fmt.Sprintf("M5 cold durable Remember marker%08d", index),
+			IdempotencyKey: fmt.Sprintf("m5-cold-remember-%08d", index),
+		})
+		durations = append(durations, time.Since(started))
+		b.StopTimer()
+		if err != nil {
+			_ = store.Close()
+			b.Fatal(err)
+		}
+		if err := store.Close(); err != nil {
+			b.Fatal(err)
+		}
+		b.StartTimer()
+	}
+	b.StopTimer()
+	if p99 := reportPercentiles(b, "cold_remember", durations); p99 > 25*time.Millisecond {
+		b.Fatalf("cold Remember p99 %s exceeds 25ms RC budget", p99)
 	}
 }
 
