@@ -250,7 +250,7 @@ func testStewardProfile(version uint64, prompt string) stewardv1alpha1.ProfileSp
 	}
 }
 
-func putAndBindSteward(t *testing.T, store *Store, version uint64) {
+func putAndBindSteward(t testing.TB, store *Store, version uint64) {
 	t.Helper()
 	if _, err := store.PutStewardProfile(t.Context(), managementv1alpha1.PutStewardProfileRequest{
 		Profile: testStewardProfile(version, "organize evidence"),
@@ -260,7 +260,7 @@ func putAndBindSteward(t *testing.T, store *Store, version uint64) {
 	bindStewardProfile(t, store, version)
 }
 
-func bindStewardProfile(t *testing.T, store *Store, version uint64) {
+func bindStewardProfile(t testing.TB, store *Store, version uint64) {
 	t.Helper()
 	if _, err := store.BindStewardProfile(t.Context(), managementv1alpha1.BindStewardProfileRequest{
 		ProfileID: "profile-managed", Version: version, SpaceIDs: []v1alpha1.SpaceID{"space-bot-a"},

@@ -7,7 +7,7 @@ ARTIFACT_DIR ?= dist
 SIDECAR_NAME := memoryd-$(GOOS)-$(GOARCH)
 MANIFEST_SUPPORT_FLAG ?=
 
-.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported check
+.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported check m5-benchmark release-candidate
 
 docs-links:
 	GOWORK=off go run ./scripts/markdown_links
@@ -49,6 +49,11 @@ sidecar:
 
 sidecar-supported:
 	$(MAKE) sidecar MANIFEST_SUPPORT_FLAG=-require-supported
+
+m5-benchmark:
+	GOWORK=off go test ./internal/appliance -run '^$$' -bench '^BenchmarkM5' -benchtime=50x -benchmem
+
+release-candidate: check durable race m5-benchmark sidecar-supported
 
 check: docs-links fmt-check whitespace-check test vet build
 	git diff --check

@@ -93,6 +93,74 @@ func TestSemanticMigrationCreatesPerSpaceIndexesTransactionally(t *testing.T) {
 	}
 }
 
+func TestMinimumSupportedSchemaTwoUpgradePreservesAcknowledgedReceipt(t *testing.T) {
+	dataDir := t.TempDir()
+	database, err := sql.Open("sqlite", filepath.Join(dataDir, DatabaseFilename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	if err := migrateTo(t.Context(), database, now, 2); err != nil {
+		t.Fatal(err)
+	}
+	statements := []string{
+		`INSERT INTO realms(id, created_at) VALUES ('realm-upgrade', '` + formatTime(now) + `')`,
+		`INSERT INTO identities(id, realm_id, created_at) VALUES ('identity-upgrade', 'realm-upgrade', '` + formatTime(now) + `')`,
+		`INSERT INTO spaces(id, realm_id, identity_id, class, created_at)
+		 VALUES ('space-upgrade', 'realm-upgrade', 'identity-upgrade', 'private', '` + formatTime(now) + `')`,
+		`INSERT INTO receipts(receipt_id, space_id, text, source_context, occurred_at, received_at,
+		 idempotency_key, request_digest, consistency_token)
+		 VALUES ('receipt-upgrade', 'space-upgrade', 'minimum supported upgrade sentinel', '{}', NULL,
+		 '` + formatTime(now) + `', 'upgrade-effect', 'upgrade-digest', 'upgrade-cursor')`,
+		`INSERT INTO receipt_processing(receipt_id, state) VALUES ('receipt-upgrade', 'accepted')`,
+		`INSERT INTO consistency_cursors(token, generation, space_id, commit_sequence)
+		 SELECT 'upgrade-cursor', 'generation-upgrade', 'space-upgrade', commit_sequence
+		 FROM receipts WHERE receipt_id = 'receipt-upgrade'`,
+	}
+	for _, statement := range statements {
+		if _, err := database.ExecContext(t.Context(), statement); err != nil {
+			_ = database.Close()
+			t.Fatal(err)
+		}
+	}
+	tableName := spaceIndexTable("space-upgrade")
+	if _, err := database.ExecContext(t.Context(),
+		`INSERT INTO space_indexes(space_id, table_name) VALUES ('space-upgrade', ?)`, tableName); err != nil {
+		_ = database.Close()
+		t.Fatal(err)
+	}
+	if _, err := database.ExecContext(t.Context(),
+		`CREATE VIRTUAL TABLE `+tableName+` USING fts5(receipt_id UNINDEXED, text, tokenize = 'unicode61')`); err != nil {
+		_ = database.Close()
+		t.Fatal(err)
+	}
+	if _, err := database.ExecContext(t.Context(),
+		`INSERT INTO `+tableName+`(receipt_id, text) VALUES ('receipt-upgrade', 'minimum supported upgrade sentinel')`); err != nil {
+		_ = database.Close()
+		t.Fatal(err)
+	}
+	if err := database.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(t.Context(), Options{DataDir: dataDir, Clock: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	result, err := store.SearchReceipts(t.Context(), managementv1alpha1.SearchReceiptsRequest{
+		Query: "upgrade sentinel", SpaceID: "space-upgrade", Limit: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Receipts) != 1 || result.Receipts[0].Text != "minimum supported upgrade sentinel" {
+		t.Fatalf("upgraded receipt search = %+v", result.Receipts)
+	}
+	if _, err := readSemanticSpaceIndex(t.Context(), store.db, "space-upgrade"); err != nil {
+		t.Fatalf("upgraded semantic Space index: %v", err)
+	}
+}
+
 func TestSemanticMigrationFailureRollsBackSchemaAndDynamicIndexes(t *testing.T) {
 	database, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "semantic-migration-failure.db"))
 	if err != nil {

@@ -565,7 +565,7 @@ binary SHA-256 from a pinned sidecar manifest before launch and compares the
 handshake build identity with that manifest after readiness.
 
 Buildability is not a support claim. A release line separately publishes its
-native support matrix; the M3 Alpha matrix contains only `darwin/arm64`.
+native support matrix; the first M5 candidate contains only `darwin/arm64`.
 Supported packaging rejects an artifact outside that matrix even when Go can
 cross-compile it.
 

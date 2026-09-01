@@ -29,7 +29,7 @@ clean exact revision:
 make sidecar-supported
 ```
 
-The M3 Alpha support matrix contains macOS on Apple silicon
+The first M5 release-candidate support matrix contains macOS on Apple silicon
 (`darwin/arm64`) only. `make sidecar` can still create buildable preview
 artifacts for development, but preview buildability is not native lifecycle or
 release support evidence.
@@ -74,7 +74,7 @@ by a host:
 
 ```sh
 ./memoryctl -socket /tmp/caelis-memory/memoryd.sock compatibility \
-  -service-version 0.4.0-alpha.1 \
+  -service-version 0.5.0-rc.1 \
   -build-revision FULL_GIT_OBJECT_ID
 ```
 

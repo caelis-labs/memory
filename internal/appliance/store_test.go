@@ -454,12 +454,12 @@ func newConformanceFixture(t *testing.T) conformance.Fixture {
 	}
 }
 
-func newGoldenStore(t *testing.T, dataDir string, clock func() time.Time) (*Store, v1alpha1.CallAuthorization) {
+func newGoldenStore(t testing.TB, dataDir string, clock func() time.Time) (*Store, v1alpha1.CallAuthorization) {
 	t.Helper()
 	return newGoldenStoreWithOptions(t, Options{DataDir: dataDir, Clock: clock})
 }
 
-func newGoldenStoreWithOptions(t *testing.T, options Options) (*Store, v1alpha1.CallAuthorization) {
+func newGoldenStoreWithOptions(t testing.TB, options Options) (*Store, v1alpha1.CallAuthorization) {
 	t.Helper()
 	store, credentials := bootstrapFixture(t, options)
 	capability := mustIssue(t, store, credentials["principal:actor-bot-a"], issueRequest(
@@ -469,7 +469,7 @@ func newGoldenStoreWithOptions(t *testing.T, options Options) (*Store, v1alpha1.
 	return store, callAuth(capability, "actor-bot-a", v1alpha1.AudiencePrivate)
 }
 
-func bootstrapFixture(t *testing.T, options Options) (*Store, map[string]string) {
+func bootstrapFixture(t testing.TB, options Options) (*Store, map[string]string) {
 	t.Helper()
 	if options.Clock == nil {
 		options.Clock = time.Now
@@ -522,7 +522,7 @@ func issueRequest(grantID v1alpha1.GrantID, actor string, audience v1alpha1.Audi
 	return IssueCapabilityRequest{GrantRef: grantID, ActorRef: actor, Audience: audience, Operations: operations, TTL: time.Hour}
 }
 
-func mustIssue(t *testing.T, store *Store, credential string, request IssueCapabilityRequest) RuntimeCapability {
+func mustIssue(t testing.TB, store *Store, credential string, request IssueCapabilityRequest) RuntimeCapability {
 	t.Helper()
 	request.Authorization = IssuerAuthorization{PrincipalRef: "principal:" + request.ActorRef, Credential: credential}
 	capability, err := store.IssueCapability(t.Context(), request)

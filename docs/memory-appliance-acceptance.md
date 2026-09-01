@@ -139,6 +139,24 @@ harness. `make durable` reruns the cross-process proof without cached results.
 | `S-011` | Recall enters only authorized per-Space semantic indexes, merges deterministically, deduplicates presentation, and retains complete receipt provenance |
 | `S-012` | Disabling Steward stops new semantic work without deleting receipts, Records, Revisions, Evidence, or baseline projections |
 
+## M5 Release Candidate and GA matrix
+
+| ID | Behavior |
+| --- | --- |
+| `V-001` | One clean exact commit passes documentation, format, whitespace, full test, vet, build, durable separate-process, and full race gates |
+| `V-002` | Portable Core gates pass on Linux and the complete candidate gate runs natively on the supported `darwin/arm64` platform |
+| `V-003` | The frozen 200-case receipt/semantic corpus has Recall@1 and precision 1.0 with complete provenance and no unsupported fragment |
+| `V-004` | Remember, Recall, startup, reindex, backup, restore, and backlog measurements remain within the frozen same-hardware RC budgets |
+| `V-005` | The minimum supported schema-2 generation migrates transactionally with acknowledged receipt preservation and rollback remains lossless |
+| `V-006` | The packaged executable and manifest bind exact service version, commit, platform, protocols, filename, and SHA-256 |
+| `V-007` | API module, SDK, service artifact, Caelis integration, and package consumers pin the same reviewed compatibility identity |
+| `V-008` | Storage, corruption, backup, provider, capability, Session-copy, upgrade, and release incidents have an accountable owner and safe first response |
+| `V-009` | Publication occurs only after explicit release authority and required exact-SHA CI succeeds |
+| `V-010` | A clean external consumer verifies the public artifact and passes Golden Path, crash/restart, disable, and zero-call Replay smoke |
+
+`V-001` through `V-008` produce a validated candidate. `V-009` and `V-010`
+are mandatory to call that candidate a completed GA release.
+
 ## Failure injection by milestone
 
 M1 adds process kill after commit, database lock, disk-full simulation,

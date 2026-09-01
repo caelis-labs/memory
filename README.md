@@ -79,7 +79,8 @@ Read [the specification](docs/memory-appliance-spec.md),
 [roadmap](docs/memory-appliance-roadmap.md), and
 [acceptance plan](docs/memory-appliance-acceptance.md) before extending the API.
 Use the [memoryd operations guide](docs/memoryd-operations.md) to run the standalone
-Golden Path.
+Golden Path. The [release procedure](docs/memory-appliance-release.md) owns M5
+quality, native artifact, incident, upgrade, and publication gates.
 
 Run the current gates with:
 
@@ -87,6 +88,7 @@ Run the current gates with:
 make check
 make race
 make durable
+make release-candidate
 ```
 
 The repository gates set `GOWORK=off` so the module remains independently
