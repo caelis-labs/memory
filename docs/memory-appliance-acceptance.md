@@ -104,6 +104,21 @@ harness. `make durable` reruns the cross-process proof without cached results.
 | `I-009` | Private/shared audience admission fails before a result reaches an incompatible model or output sink |
 | `I-010` | Sidecar start failure, service loss, version mismatch, and unknown Remember outcome remain distinguishable |
 
+## M3 Governance and Production Safety matrix
+
+| ID | Behavior |
+| --- | --- |
+| `G-001` | Management bearer, issuer credential, and Runtime capability remain non-interchangeable on every management endpoint |
+| `G-002` | Owner search and trace resolve a Recall evidence reference without exposing bearer values |
+| `G-003` | Correction appends same-Space replacement evidence, never updates the original payload, and exact retry returns one replacement |
+| `G-004` | Corrected originals remain auditable but do not reappear in baseline Recall after restart or FTS rebuild |
+| `G-005` | Delete removes receipt text and leaves only a content-free audit tombstone; an old Remember effect cannot resurrect it |
+| `G-006` | Deleted content remains absent after restart, FTS rebuild, and repeated deletion requests |
+| `G-007` | Every delete response and operator guide identifies Caelis Session history as a separate erasure scope |
+| `G-008` | Backup is confidential and integrity checked; restore rotates storage generation and stale cursors fail explicitly |
+| `G-009` | Corrupted backup, partial migration, and failed upgrade preserve the last acknowledged usable generation |
+| `G-010` | Diagnostics bound capacity, storage, receipt, projection, capability, and backup state without receipt text or credentials |
+
 ## Failure injection by milestone
 
 M1 adds process kill after commit, database lock, disk-full simulation,

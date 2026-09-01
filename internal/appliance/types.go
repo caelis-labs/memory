@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 )
 
@@ -14,7 +15,7 @@ const (
 	OwnerLockFilename          = "memoryd.lock"
 	ManagementCredentialFile   = "management.token"
 	SocketFilename             = v1alpha1.LocalSocketFilename
-	CurrentSchemaVersion       = 1
+	CurrentSchemaVersion       = 2
 	defaultSQLiteBusyTimeoutMS = 2_000
 )
 
@@ -45,72 +46,15 @@ var ErrCapabilityIssueInvalid = errors.New("capability issue request is invalid"
 // audience, operation, or View authorization mismatch without identifying it.
 var ErrCapabilityIssueUnauthorized = errors.New("capability issuer is unauthorized")
 
-// Realm is one appliance administrative root.
-type Realm struct {
-	ID v1alpha1.RealmID `json:"id"`
-}
+type Realm = managementv1alpha1.Realm
+type Identity = managementv1alpha1.Identity
+type Space = managementv1alpha1.Space
+type ViewDefinition = managementv1alpha1.ViewDefinition
+type Grant = managementv1alpha1.Grant
+type BootstrapRequest = managementv1alpha1.BootstrapRequest
+type BootstrapResponse = managementv1alpha1.BootstrapResponse
 
-// Identity is stable cognitive continuity within a Realm.
-type Identity struct {
-	ID      v1alpha1.IdentityID `json:"id"`
-	RealmID v1alpha1.RealmID    `json:"realm_id"`
-}
-
-// Space is a durable storage and authorization boundary.
-type Space struct {
-	ID         v1alpha1.SpaceID    `json:"id"`
-	RealmID    v1alpha1.RealmID    `json:"realm_id"`
-	IdentityID v1alpha1.IdentityID `json:"identity_id,omitempty"`
-	Class      v1alpha1.SpaceClass `json:"class"`
-}
-
-// ViewDefinition selects readable and writable Spaces independently from a
-// principal delegation.
-type ViewDefinition struct {
-	ID                 v1alpha1.ViewID     `json:"id"`
-	RealmID            v1alpha1.RealmID    `json:"realm_id"`
-	ReadSpaceIDs       []v1alpha1.SpaceID  `json:"read_space_ids"`
-	WriteSpaceID       v1alpha1.SpaceID    `json:"write_space_id,omitempty"`
-	MaxDisclosureClass v1alpha1.SpaceClass `json:"max_disclosure_class"`
-	RecallPolicyRef    string              `json:"recall_policy_ref,omitempty"`
-	Version            uint64              `json:"version"`
-}
-
-// Grant delegates one View to a principal and Runtime actor.
-type Grant struct {
-	ID                v1alpha1.GrantID     `json:"id"`
-	PrincipalRef      string               `json:"principal_ref"`
-	ActorRef          string               `json:"actor_ref"`
-	ViewRef           v1alpha1.ViewID      `json:"view_ref"`
-	AllowedOperations []v1alpha1.Operation `json:"allowed_operations"`
-	AllowedAudiences  []v1alpha1.Audience  `json:"allowed_audiences"`
-	ExpiresAt         time.Time            `json:"expires_at"`
-	Revoked           bool                 `json:"revoked,omitempty"`
-	Version           uint64               `json:"version"`
-}
-
-// BootstrapRequest creates a topology atomically. IssuerPrincipals names the
-// principals that receive newly generated local issuer credentials.
-type BootstrapRequest struct {
-	Realms           []Realm          `json:"realms"`
-	Identities       []Identity       `json:"identities"`
-	Spaces           []Space          `json:"spaces"`
-	Views            []ViewDefinition `json:"views"`
-	Grants           []Grant          `json:"grants"`
-	IssuerPrincipals []string         `json:"issuer_principals"`
-}
-
-// BootstrapResponse returns issuer credentials once. The caller must store
-// them in an owner-only file; the appliance persists only their digests.
-type BootstrapResponse struct {
-	IssuerCredentials map[string]string `json:"issuer_credentials"`
-}
-
-// IssuerAuthorization authenticates the principal redeeming a Grant.
-type IssuerAuthorization struct {
-	PrincipalRef string `json:"principal_ref"`
-	Credential   string `json:"credential"`
-}
+type IssuerAuthorization = managementv1alpha1.IssuerAuthorization
 
 // IssueCapabilityRequest asks the local issuer for bounded Runtime authority.
 type IssueCapabilityRequest struct {
@@ -129,10 +73,4 @@ type RuntimeCapability struct {
 	ExpiresAt time.Time                `json:"expires_at"`
 }
 
-// Inspection is a secret-free summary for local operation and acceptance.
-type Inspection struct {
-	SchemaVersion int              `json:"schema_version"`
-	Generation    string           `json:"generation"`
-	Counts        map[string]int64 `json:"counts"`
-	Spaces        []Space          `json:"spaces"`
-}
+type Inspection = managementv1alpha1.Inspection

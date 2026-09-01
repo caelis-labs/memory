@@ -12,18 +12,12 @@ import (
 	"strings"
 	"time"
 
+	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 	"github.com/caelis-labs/memory/internal/appliance"
 )
 
-const (
-	AdminPathBootstrap = "/admin/m1/bootstrap"
-	AdminPathInspect   = "/admin/m1/inspect"
-	AdminPathRebuild   = "/admin/m1/rebuild-fts"
-	AdminPathRevoke    = "/admin/m1/revoke-grant"
-	AdminPathRotate    = "/admin/m1/rotate-issuer"
-	maxRequestBytes    = 128 << 10
-)
+const maxRequestBytes = 128 << 10
 
 // ServiceInfo is immutable build identity reported by the compatibility
 // handshake. The artifact digest remains owned by the pre-launch manifest.
@@ -138,41 +132,69 @@ func Handler(store *appliance.Store, serviceInfo ...ServiceInfo) http.Handler {
 		response, err := store.GetReceiptStatus(request.Context(), callAuthorization(request), input)
 		writeDataPlane(writer, response, err)
 	}))
-	mux.HandleFunc(AdminPathBootstrap, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
-		var input appliance.BootstrapRequest
+	mux.HandleFunc(managementv1alpha1.LocalPathBootstrap, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input managementv1alpha1.BootstrapRequest
 		if !decodeJSON(writer, request, &input) {
 			return
 		}
 		response, err := store.Bootstrap(request.Context(), input)
-		writeAdmin(writer, response, err)
+		writeManagement(writer, response, err)
 	}))
-	mux.HandleFunc(AdminPathInspect, admin(store, http.MethodGet, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc(managementv1alpha1.LocalPathInspect, admin(store, http.MethodGet, func(writer http.ResponseWriter, request *http.Request) {
 		response, err := store.Inspect(request.Context())
-		writeAdmin(writer, response, err)
+		writeManagement(writer, response, err)
 	}))
-	mux.HandleFunc(AdminPathRebuild, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
-		err := store.RebuildFTS(request.Context())
-		writeAdmin(writer, map[string]bool{"rebuilt": err == nil}, err)
-	}))
-	mux.HandleFunc(AdminPathRevoke, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
-		var input struct {
-			GrantID v1alpha1.GrantID `json:"grant_id"`
+	mux.HandleFunc(managementv1alpha1.LocalPathSearch, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input managementv1alpha1.SearchReceiptsRequest
+		if !decodeJSON(writer, request, &input) {
+			return
 		}
+		response, err := store.SearchReceipts(request.Context(), input)
+		writeManagement(writer, response, err)
+	}))
+	mux.HandleFunc(managementv1alpha1.LocalPathTrace, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input managementv1alpha1.TraceReceiptRequest
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		response, err := store.TraceReceipt(request.Context(), input)
+		writeManagement(writer, response, err)
+	}))
+	mux.HandleFunc(managementv1alpha1.LocalPathCorrect, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input managementv1alpha1.CorrectReceiptRequest
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		response, err := store.CorrectReceipt(request.Context(), input)
+		writeManagement(writer, response, err)
+	}))
+	mux.HandleFunc(managementv1alpha1.LocalPathDelete, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input managementv1alpha1.DeleteReceiptRequest
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		response, err := store.DeleteReceipt(request.Context(), input)
+		writeManagement(writer, response, err)
+	}))
+	mux.HandleFunc(managementv1alpha1.LocalPathRebuild, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		err := store.RebuildFTS(request.Context())
+		writeManagement(writer, managementv1alpha1.RebuildFTSResponse{Rebuilt: err == nil}, err)
+	}))
+	mux.HandleFunc(managementv1alpha1.LocalPathRevokeGrant, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input managementv1alpha1.RevokeGrantRequest
 		if !decodeJSON(writer, request, &input) {
 			return
 		}
 		err := store.RevokeGrant(request.Context(), input.GrantID)
-		writeAdmin(writer, map[string]bool{"revoked": err == nil}, err)
+		writeManagement(writer, managementv1alpha1.RevokeGrantResponse{Revoked: err == nil}, err)
 	}))
-	mux.HandleFunc(AdminPathRotate, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
-		var input struct {
-			PrincipalRef string `json:"principal_ref"`
-		}
+	mux.HandleFunc(managementv1alpha1.LocalPathRotateIssuer, admin(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input managementv1alpha1.RotateIssuerRequest
 		if !decodeJSON(writer, request, &input) {
 			return
 		}
 		response, err := store.RotateIssuerCredential(request.Context(), input.PrincipalRef)
-		writeAdmin(writer, response, err)
+		writeManagement(writer, response, err)
 	}))
 	return mux
 }
@@ -191,7 +213,9 @@ func method(expected string, handler http.HandlerFunc) http.HandlerFunc {
 func admin(store *appliance.Store, expected string, handler http.HandlerFunc) http.HandlerFunc {
 	return method(expected, func(writer http.ResponseWriter, request *http.Request) {
 		if !store.AuthenticateManagement(bearer(request.Header.Get("Authorization"))) {
-			writeJSON(writer, http.StatusUnauthorized, map[string]string{"error": "management authorization required"})
+			writeDataPlane(writer, nil, &v1alpha1.ServiceError{
+				Code: v1alpha1.ErrorCodeUnauthorized, Message: "management authorization required", RequestID: "local-management",
+			})
 			return
 		}
 		handler(writer, request)
@@ -274,12 +298,18 @@ func writeDataPlane(writer http.ResponseWriter, response any, err error) {
 	writeJSON(writer, statusForCode(serviceErr.Code), serviceErr)
 }
 
-func writeAdmin(writer http.ResponseWriter, response any, err error) {
-	if err != nil {
-		writeJSON(writer, http.StatusBadRequest, map[string]string{"error": err.Error()})
+func writeManagement(writer http.ResponseWriter, response any, err error) {
+	if err == nil {
+		writeJSON(writer, http.StatusOK, response)
 		return
 	}
-	writeJSON(writer, http.StatusOK, response)
+	var serviceErr *v1alpha1.ServiceError
+	if !errors.As(err, &serviceErr) {
+		serviceErr = &v1alpha1.ServiceError{
+			Code: v1alpha1.ErrorCodeInternal, Message: "memoryd failed to process the management request", RequestID: "local-management",
+		}
+	}
+	writeJSON(writer, statusForCode(serviceErr.Code), serviceErr)
 }
 
 func writeJSON(writer http.ResponseWriter, status int, value any) {

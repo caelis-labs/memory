@@ -212,6 +212,10 @@ func TestReceiptPayloadIsImmutable(t *testing.T) {
 		`UPDATE receipts SET text = 'mutated' WHERE receipt_id = ?`, remembered.ReceiptID); err == nil {
 		t.Fatal("receipt payload update succeeded")
 	}
+	if _, err := store.db.ExecContext(t.Context(),
+		`DELETE FROM receipts WHERE receipt_id = ?`, remembered.ReceiptID); err == nil {
+		t.Fatal("receipt payload delete succeeded without a governance tombstone")
+	}
 	recalled, err := store.Recall(t.Context(), auth, testRecall("immutable", remembered.ConsistencyToken))
 	if err != nil {
 		t.Fatal(err)

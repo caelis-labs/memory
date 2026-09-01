@@ -67,6 +67,17 @@ func (s *Store) Remember(
 		_ = tx.Rollback()
 		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "View has no writable Space", false)
 	}
+	deletedEffect, err := rowExists(ctx, tx,
+		`SELECT EXISTS(SELECT 1 FROM receipt_tombstones WHERE space_id = ? AND idempotency_key = ?)`,
+		view.writeSpaceID, request.IdempotencyKey)
+	if err != nil {
+		_ = tx.Rollback()
+		return v1alpha1.RememberResponse{}, s.databaseError("read deleted idempotency state", err)
+	}
+	if deletedEffect {
+		_ = tx.Rollback()
+		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeConflict, "idempotent effect was deleted by management; use a new effect identity to remember it again", false)
+	}
 	previous, found, err := lookupIdempotentReceipt(ctx, tx, view.writeSpaceID, request.IdempotencyKey)
 	if err != nil {
 		_ = tx.Rollback()
@@ -278,6 +289,9 @@ func (s *Store) Recall(
 			 JOIN receipts r ON r.receipt_id = f.receipt_id AND r.space_id = ?
 			 JOIN receipt_processing p ON p.receipt_id = r.receipt_id
 			 WHERE `+tableName+` MATCH ?
+			 AND NOT EXISTS (
+				 SELECT 1 FROM receipt_corrections c WHERE c.original_receipt_id = r.receipt_id
+			 )
 			 ORDER BY bm25(`+tableName+`), r.commit_sequence DESC, r.receipt_id
 			 LIMIT 512`, spaceID, ftsQuery)
 		if err != nil {

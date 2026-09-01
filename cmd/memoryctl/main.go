@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
+	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
-	"github.com/caelis-labs/memory/internal/appliance"
-	"github.com/caelis-labs/memory/internal/localtransport"
 	localclient "github.com/caelis-labs/memory/sdk/go/memory/local"
+	managementclient "github.com/caelis-labs/memory/sdk/go/memory/management"
 )
 
 type authorizationFile struct {
@@ -118,10 +118,10 @@ func run(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	admin := localtransport.NewAdminClient(socketPath, credential)
+	admin := managementclient.NewClient(socketPath, credential)
 	switch command {
 	case "bootstrap":
-		var request appliance.BootstrapRequest
+		var request managementv1alpha1.BootstrapRequest
 		outputPath, err := readSecretOutputFlags(command, commandArgs, "issuer-output", &request)
 		if err != nil {
 			return err
@@ -142,6 +142,45 @@ func run(arguments []string) error {
 		return writeResult(map[string]any{"bootstrapped": true, "issuer_credentials_file": outputPath}, nil)
 	case "inspect":
 		response, err := admin.Inspect(ctx)
+		return writeResult(response, err)
+	case "search":
+		flags := flag.NewFlagSet(command, flag.ContinueOnError)
+		var query, spaceID string
+		var limit int
+		var includeCorrected bool
+		flags.StringVar(&query, "query", "", "receipt text query")
+		flags.StringVar(&spaceID, "space", "", "optional Space ID")
+		flags.IntVar(&limit, "limit", 20, "maximum results (1..100)")
+		flags.BoolVar(&includeCorrected, "include-corrected", false, "include shadowed original receipts")
+		if err := flags.Parse(commandArgs); err != nil {
+			return err
+		}
+		response, err := admin.SearchReceipts(ctx, managementv1alpha1.SearchReceiptsRequest{
+			Query: query, SpaceID: v1alpha1.SpaceID(spaceID), Limit: limit, IncludeCorrected: includeCorrected,
+		})
+		return writeResult(response, err)
+	case "trace-receipt":
+		flags := flag.NewFlagSet(command, flag.ContinueOnError)
+		var receiptID string
+		flags.StringVar(&receiptID, "id", "", "Receipt ID from Recall evidence")
+		if err := flags.Parse(commandArgs); err != nil {
+			return err
+		}
+		response, err := admin.TraceReceipt(ctx, managementv1alpha1.TraceReceiptRequest{ReceiptID: v1alpha1.ReceiptID(receiptID)})
+		return writeResult(response, err)
+	case "correct-receipt":
+		request, err := parseCorrectReceipt(command, commandArgs)
+		if err != nil {
+			return err
+		}
+		response, err := admin.CorrectReceipt(ctx, request)
+		return writeResult(response, err)
+	case "delete-receipt":
+		request, err := parseDeleteReceipt(command, commandArgs)
+		if err != nil {
+			return err
+		}
+		response, err := admin.DeleteReceipt(ctx, request)
 		return writeResult(response, err)
 	case "rebuild-fts":
 		if err := admin.RebuildFTS(ctx); err != nil {
@@ -230,6 +269,37 @@ func runDataPlane(ctx context.Context, socketPath, command string, arguments []s
 	return writeResult(response, err)
 }
 
+func parseCorrectReceipt(command string, arguments []string) (managementv1alpha1.CorrectReceiptRequest, error) {
+	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+	var receiptID, text, reason, key string
+	flags.StringVar(&receiptID, "id", "", "Receipt ID")
+	flags.StringVar(&text, "text", "", "replacement fact text")
+	flags.StringVar(&reason, "reason", "", "operator audit reason")
+	flags.StringVar(&key, "idempotency-key", "", "stable management effect key")
+	if err := flags.Parse(arguments); err != nil {
+		return managementv1alpha1.CorrectReceiptRequest{}, err
+	}
+	request := managementv1alpha1.CorrectReceiptRequest{
+		ReceiptID: v1alpha1.ReceiptID(receiptID), ReplacementText: text, Reason: reason, IdempotencyKey: key,
+	}
+	return request, request.Validate()
+}
+
+func parseDeleteReceipt(command string, arguments []string) (managementv1alpha1.DeleteReceiptRequest, error) {
+	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+	var receiptID, reason, key string
+	flags.StringVar(&receiptID, "id", "", "Receipt ID")
+	flags.StringVar(&reason, "reason", "", "operator audit reason")
+	flags.StringVar(&key, "idempotency-key", "", "stable management effect key")
+	if err := flags.Parse(arguments); err != nil {
+		return managementv1alpha1.DeleteReceiptRequest{}, err
+	}
+	request := managementv1alpha1.DeleteReceiptRequest{
+		ReceiptID: v1alpha1.ReceiptID(receiptID), Reason: reason, IdempotencyKey: key,
+	}
+	return request, request.Validate()
+}
+
 func readSecretOutputFlags(command string, arguments []string, outputFlag string, output any) (string, error) {
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	var path, outputPath string
@@ -273,11 +343,11 @@ func readIssuerCredential(path, principalRef string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var bootstrap appliance.BootstrapResponse
+	var bootstrap managementv1alpha1.BootstrapResponse
 	if json.Unmarshal(value, &bootstrap) == nil && bootstrap.IssuerCredentials[principalRef] != "" {
 		return bootstrap.IssuerCredentials[principalRef], nil
 	}
-	var rotated appliance.IssuerAuthorization
+	var rotated managementv1alpha1.IssuerAuthorization
 	if json.Unmarshal(value, &rotated) == nil && rotated.PrincipalRef == principalRef && rotated.Credential != "" {
 		return rotated.Credential, nil
 	}

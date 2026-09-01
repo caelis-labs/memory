@@ -1,14 +1,14 @@
 # memoryd Operations
 
-Status: current operator guide for the standalone durable Core and packaged
-local sidecar.
+Status: current operator guide for the standalone durable Core, versioned owner
+management plane, and packaged local sidecar.
 
 `memoryd` runs without Caelis and without a model. It exposes
 `memory.v1alpha1` over an
 owner-only Unix Socket and keeps all authority under one owner-only data
-directory. The local management protocol remains internal; the data plane,
-compatibility handshake, issuer plane, SDK, and sidecar manifest are the
-host-integration boundary.
+directory. The versioned owner-management plane is independent from the data
+and issuer planes. Its search and trace output may contain receipt text and must
+be handled as sensitive operator data.
 
 ## Build and start
 
@@ -190,12 +190,37 @@ SQLite transaction. If the transport fails around that boundary, the Go local
 client returns `unknown_outcome`; retry the exact request with the same
 idempotency key.
 
-## Inspect, rebuild, revoke, and stop
+## Inspect, search, correct, delete, rebuild, revoke, and stop
 
 ```sh
 ./memoryctl \
   -socket /tmp/caelis-memory/memoryd.sock \
   -management-credential /tmp/caelis-memory/management.token inspect
+
+./memoryctl \
+  -socket /tmp/caelis-memory/memoryd.sock \
+  -management-credential /tmp/caelis-memory/management.token \
+  search -query 'commit push' -space space-bot-a
+
+./memoryctl \
+  -socket /tmp/caelis-memory/memoryd.sock \
+  -management-credential /tmp/caelis-memory/management.token \
+  trace-receipt -id receipt-RECEIPT_ID
+
+./memoryctl \
+  -socket /tmp/caelis-memory/memoryd.sock \
+  -management-credential /tmp/caelis-memory/management.token \
+  correct-receipt -id receipt-RECEIPT_ID \
+  -text 'commit does not authorize push or tag' \
+  -reason 'operator verified correction' \
+  -idempotency-key correction-20260901-1
+
+./memoryctl \
+  -socket /tmp/caelis-memory/memoryd.sock \
+  -management-credential /tmp/caelis-memory/management.token \
+  delete-receipt -id receipt-REPLACEMENT_ID \
+  -reason 'approved appliance erasure request' \
+  -idempotency-key deletion-20260901-1
 
 ./memoryctl \
   -socket /tmp/caelis-memory/memoryd.sock \
@@ -207,10 +232,24 @@ idempotency key.
   revoke-grant -id grant-bot-a
 ```
 
-Inspect reports schema version, storage generation, topology, and row counts;
-it omits receipt text and all bearer values. Rebuild deletes only disposable
-per-Space FTS state and repopulates it from immutable receipts. Grant revocation
-invalidates all derived capabilities on their next call.
+Inspect reports management protocol, schema version, storage generation,
+topology, and row counts; it omits receipt text and all bearer values. Search
+returns active receipt content by default; `-include-corrected` exposes shadowed
+originals for audit. Trace connects a Recall evidence ID to active evidence,
+correction links, or a content-free tombstone.
+
+Correction appends same-Space replacement evidence and leaves the original
+payload immutable. Deletion physically removes appliance receipt content, but
+text already copied into a canonical Caelis Session remains in that separate
+history until the Session is deleted or redacted. An exact management retry
+uses the same idempotency key. Reusing a key with changed input conflicts; an
+old Runtime Remember retry also conflicts after deletion, preventing content
+resurrection.
+
+Rebuild deletes only disposable per-Space FTS state and repopulates it from
+remaining immutable receipts. Durable correction relations continue to hide
+superseded originals, and deleted receipts have no payload to rebuild. Grant
+revocation invalidates all derived capabilities on their next call.
 
 Send `SIGTERM` or interrupt `memoryd` for a bounded graceful drain. A crash may
 leave the Socket node behind, but the process owner lock is released by the OS

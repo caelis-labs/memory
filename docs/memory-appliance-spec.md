@@ -1,7 +1,7 @@
 # Memory Appliance Specification
 
-Status: normative `memory.v1alpha1` contract. The M0 reference implementation
-is not a durable production service.
+Status: normative `memory.v1alpha1` data-plane and
+`memory.management.v1alpha1` owner-management contracts.
 
 This document owns the stable boundary between an Agent host such as Caelis and
 the independently running Memory Appliance. Internal algorithms and future
@@ -362,6 +362,42 @@ documented ranking stability.
 Semantic records and Steward output are optional enhancement candidates. Recall
 must remain useful and read-your-writes must remain correct when those systems
 are disabled or unavailable.
+
+## Owner-management plane
+
+The local management protocol is `memory.management.v1alpha1`. Its bearer is
+carried outside request bodies and is independent from issuer credentials and
+Runtime capabilities. The owner-management client can bootstrap topology,
+inspect the appliance, search and trace receipts, correct or delete receipt
+content, rebuild projections, revoke Grants, and rotate issuer credentials.
+None of these operations is model-accessible.
+
+Management search is lexical and may be restricted to one Space. It returns
+receipt text and audit metadata, so its output is sensitive operator data even
+though it contains no bearer. Corrected originals are hidden by default but may
+be included for an explicit audit search. Trace resolves a Recall evidence
+reference to active receipt content, its correction links, or a content-free
+deletion tombstone.
+
+Correction never updates an immutable receipt. It appends a replacement receipt
+in the same Space, records the relation and audit reason, and excludes the
+original from baseline Recall. The replacement has its own receipt ID,
+consistency token, immutable payload, and processing state. Rebuilding the FTS
+projection retains both receipt payloads while Recall applies the durable
+correction relation.
+
+Deletion first records a content-free tombstone containing the receipt and
+Space references, original effect identity and digest, deletion time, and audit
+reason. It then removes receipt text, processing state, and projection entries
+in the same transaction. The retained effect identity makes an old Remember
+retry conflict rather than recreate deleted content; remembering the fact again
+requires a new host effect identity. Delete and correction requests have their
+own idempotency keys and return the original result on an exact retry. A changed
+request under the same management key conflicts.
+
+Management authorization is root authority for this local profile. A rich
+product Surface must call this plane rather than mirror appliance state or
+policy in Caelis Control.
 
 ## Replay and deletion boundary
 

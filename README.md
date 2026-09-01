@@ -10,11 +10,10 @@ recall(query)
 
 The appliance, rather than an Agent host, owns identity continuity, Spaces,
 Views, durable receipts, retrieval, classification, consolidation, lifecycle,
-and forgetting. The repository ships the standalone durable Core plus the M2
-host-integration boundary: exact compatibility handshake, issuer-plane client,
-and digest-verifiable native sidecar manifest.
+and forgetting. The repository ships the standalone durable Core, the M2
+host-integration boundary, and the versioned owner-management foundation.
 
-## Current milestone
+## Current capabilities
 
 M0 froze the contract and M1 provides:
 
@@ -38,9 +37,19 @@ The Memory-owned M2 boundary additionally provides:
 - `make sidecar`, which accepts only a clean exact HEAD and emits a native
   executable plus SHA-256 manifest.
 
-The appliance remains deliberately model-free and has no completed Caelis integration, Steward,
-semantic records, vector/graph retrieval, governance deletion, backup, or rich
-management Surface. Those boundaries remain assigned to later milestones.
+The M3 management foundation additionally provides:
+
+- versioned `memory.management.v1alpha1` wire types and Go client;
+- owner-authorized receipt search and provenance trace;
+- append-only, same-Space corrections that shadow rather than rewrite evidence;
+- idempotent hard deletion with content-free tombstones and resurrection
+  prevention;
+- `memoryctl` search, trace, correction, and deletion commands.
+
+The appliance remains deliberately model-free. Backup/restore, expanded
+diagnostics and platform rollout complete M3; Steward, semantic records, and
+vector/graph retrieval remain M4 work. Caelis integration is independently
+owned and pins an exact published Memory revision and sidecar digest.
 
 Read [the specification](docs/memory-appliance-spec.md),
 [roadmap](docs/memory-appliance-roadmap.md), and

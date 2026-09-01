@@ -70,7 +70,9 @@ single-owner locking, digest-backed opaque capabilities, transactional receipt
 acceptance, and storage failure injection. The Memory-owned M2 boundary adds
 sidecar artifact integrity, exact compatibility identity, and a distinct public
 issuer plane. Caelis integration must still add in-process capability handling,
-exact replay metadata, and output-sink enforcement. M3 must add backup confidentiality, hardened
-management authorization, deletion verification, and incident diagnostics. M4
-must add provider data-egress policy, prompt-injection resistance, cost bounds,
-and job poisoning controls.
+exact replay metadata, and output-sink enforcement. The M3 governance plane adds
+versioned root management authorization, same-Space append-only correction,
+idempotent deletion tombstones, and restart/reindex deletion verification.
+Backup confidentiality, restore validation, credential recovery, and incident
+diagnostics remain required before M3 exits. M4 must add provider data-egress
+policy, prompt-injection resistance, cost bounds, and job poisoning controls.

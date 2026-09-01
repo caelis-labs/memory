@@ -14,11 +14,12 @@ import (
 	"testing"
 	"time"
 
+	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 	"github.com/caelis-labs/memory/conformance"
 	"github.com/caelis-labs/memory/internal/appliance"
-	"github.com/caelis-labs/memory/internal/localtransport"
 	localclient "github.com/caelis-labs/memory/sdk/go/memory/local"
+	managementclient "github.com/caelis-labs/memory/sdk/go/memory/management"
 	"github.com/caelis-labs/memory/sdk/go/memory/sidecar"
 )
 
@@ -36,7 +37,7 @@ func TestGoldenPathPrivateAndSharedSurvivesProcessRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin := localtransport.NewAdminClient(process.socket, strings.TrimSpace(string(credentialBytes)))
+	admin := managementclient.NewClient(process.socket, strings.TrimSpace(string(credentialBytes)))
 	now := time.Now().UTC()
 	operations := []v1alpha1.Operation{v1alpha1.OperationRemember, v1alpha1.OperationRecall, v1alpha1.OperationReceiptStatus}
 	grant := func(id, principal, actor string, view v1alpha1.ViewID, audience v1alpha1.Audience) appliance.Grant {
@@ -173,6 +174,10 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 	if !bytes.Contains(rememberOutput, []byte(`"accepted": true`)) {
 		t.Fatalf("memoryctl Remember output = %s", rememberOutput)
 	}
+	var remembered v1alpha1.RememberResponse
+	if err := json.Unmarshal(rememberOutput, &remembered); err != nil {
+		t.Fatal(err)
+	}
 	recallOutput := runCommand(t, memoryctl,
 		"-socket", process.socket,
 		"recall", "-authorization", authorizationPath, "-query", "standalone fact",
@@ -186,6 +191,72 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 	)
 	if !bytes.Contains(inspectOutput, []byte(`"receipts": 1`)) {
 		t.Fatalf("memoryctl Inspect output = %s", inspectOutput)
+	}
+	searchOutput := runCommand(t, memoryctl,
+		"-socket", process.socket,
+		"-management-credential", managementPath,
+		"search", "-query", "standalone fact",
+	)
+	if !bytes.Contains(searchOutput, []byte(remembered.ReceiptID)) || !bytes.Contains(searchOutput, []byte("memoryctl standalone fact")) {
+		t.Fatalf("memoryctl Search output = %s", searchOutput)
+	}
+	traceOutput := runCommand(t, memoryctl,
+		"-socket", process.socket,
+		"-management-credential", managementPath,
+		"trace-receipt", "-id", string(remembered.ReceiptID),
+	)
+	if !bytes.Contains(traceOutput, []byte(`"state": "active"`)) {
+		t.Fatalf("memoryctl Trace output = %s", traceOutput)
+	}
+	correctOutput := runCommand(t, memoryctl,
+		"-socket", process.socket,
+		"-management-credential", managementPath,
+		"correct-receipt", "-id", string(remembered.ReceiptID),
+		"-text", "memoryctl corrected fact", "-reason", "system test correction",
+		"-idempotency-key", "memoryctl-correction",
+	)
+	var corrected managementv1alpha1.CorrectReceiptResponse
+	if err := json.Unmarshal(correctOutput, &corrected); err != nil {
+		t.Fatal(err)
+	}
+	if corrected.ReplacementReceiptID == "" {
+		t.Fatalf("memoryctl Correct output = %s", correctOutput)
+	}
+	oldRecallOutput := runCommand(t, memoryctl,
+		"-socket", process.socket,
+		"recall", "-authorization", authorizationPath, "-query", "standalone",
+	)
+	if bytes.Contains(oldRecallOutput, []byte("memoryctl standalone fact")) {
+		t.Fatalf("corrected original remained in Recall output = %s", oldRecallOutput)
+	}
+	correctedRecallOutput := runCommand(t, memoryctl,
+		"-socket", process.socket,
+		"recall", "-authorization", authorizationPath, "-query", "corrected",
+	)
+	if !bytes.Contains(correctedRecallOutput, []byte("memoryctl corrected fact")) {
+		t.Fatalf("replacement missing from Recall output = %s", correctedRecallOutput)
+	}
+	deleteOutput := runCommand(t, memoryctl,
+		"-socket", process.socket,
+		"-management-credential", managementPath,
+		"delete-receipt", "-id", string(corrected.ReplacementReceiptID),
+		"-reason", "system test erasure", "-idempotency-key", "memoryctl-deletion",
+	)
+	if !bytes.Contains(deleteOutput, []byte(`"deleted": true`)) || !bytes.Contains(deleteOutput, []byte("Session history")) {
+		t.Fatalf("memoryctl Delete output = %s", deleteOutput)
+	}
+	runCommand(t, memoryctl,
+		"-socket", process.socket,
+		"-management-credential", managementPath, "rebuild-fts",
+	)
+	process.kill(t)
+	process = startMemoryd(t, memoryd, dataDir)
+	afterRestart := runCommand(t, memoryctl,
+		"-socket", process.socket,
+		"recall", "-authorization", authorizationPath, "-query", "corrected",
+	)
+	if bytes.Contains(afterRestart, []byte("memoryctl corrected fact")) {
+		t.Fatalf("deleted replacement reappeared after rebuild/restart = %s", afterRestart)
 	}
 }
 
@@ -237,7 +308,7 @@ func TestPackagedSidecarIdentityHandshakeAndIssuerPlane(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin := localtransport.NewAdminClient(process.socket, strings.TrimSpace(string(credentialBytes)))
+	admin := managementclient.NewClient(process.socket, strings.TrimSpace(string(credentialBytes)))
 	bootstrap, err := admin.Bootstrap(t.Context(), appliance.BootstrapRequest{
 		Realms:     []appliance.Realm{{ID: "realm-m2"}},
 		Identities: []appliance.Identity{{ID: "identity-m2", RealmID: "realm-m2"}},
@@ -305,7 +376,7 @@ func newDurableProcessFixture(t *testing.T) conformance.DurableFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin := localtransport.NewAdminClient(process.socket, strings.TrimSpace(string(credentialBytes)))
+	admin := managementclient.NewClient(process.socket, strings.TrimSpace(string(credentialBytes)))
 	now := time.Now().UTC()
 	bootstrap, err := admin.Bootstrap(t.Context(), appliance.BootstrapRequest{
 		Realms:     []appliance.Realm{{ID: "realm-system"}},

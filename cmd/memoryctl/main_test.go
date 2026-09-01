@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/caelis-labs/memory/internal/appliance"
+	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
 )
 
 func TestSecretOutputIsExclusiveAndOwnerOnly(t *testing.T) {
@@ -56,7 +56,7 @@ func TestReadIssuerCredentialFormats(t *testing.T) {
 		}
 		return path
 	}
-	bootstrap := write("bootstrap.json", appliance.BootstrapResponse{
+	bootstrap := write("bootstrap.json", managementv1alpha1.BootstrapResponse{
 		IssuerCredentials: map[string]string{"principal:a": "secret-a"},
 	})
 	if got, err := readIssuerCredential(bootstrap, "principal:a"); err != nil || got != "secret-a" {
@@ -65,7 +65,7 @@ func TestReadIssuerCredentialFormats(t *testing.T) {
 	if _, err := readIssuerCredential(bootstrap, "principal:b"); err == nil {
 		t.Fatal("readIssuerCredential() accepted a missing principal")
 	}
-	rotated := write("rotated.json", appliance.IssuerAuthorization{PrincipalRef: "principal:a", Credential: "secret-b"})
+	rotated := write("rotated.json", managementv1alpha1.IssuerAuthorization{PrincipalRef: "principal:a", Credential: "secret-b"})
 	if got, err := readIssuerCredential(rotated, "principal:a"); err != nil || got != "secret-b" {
 		t.Fatalf("rotated credential = %q, %v", got, err)
 	}

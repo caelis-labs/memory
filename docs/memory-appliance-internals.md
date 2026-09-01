@@ -101,3 +101,12 @@ process liveness; readiness additionally reaches SQLite. This is an M1 local
 implementation, not a promise that a future remote backend uses SQLite or the
 same physical index layout. Another backend must pass the same semantic and
 durable conformance appropriate to its milestone.
+
+M3 governance keeps corrections and deletion separate from receipt mutation.
+A correction adds a normal immutable receipt plus a durable same-Space relation;
+candidate lookup filters a corrected original after its Space is authorized.
+A deletion transaction writes a content-free tombstone before the guarded
+receipt delete trigger permits physical removal. Tombstones retain the original
+Space-scoped idempotency identity and request digest so a delayed Runtime retry
+cannot resurrect erased content. Management mutation results have a separate
+idempotency ledger and never reuse Runtime capabilities.

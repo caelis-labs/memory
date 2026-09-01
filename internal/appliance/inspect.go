@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 )
 
@@ -12,11 +13,15 @@ import (
 // receipt text.
 func (s *Store) Inspect(ctx context.Context) (Inspection, error) {
 	result := Inspection{
-		SchemaVersion: CurrentSchemaVersion,
-		Generation:    s.generation,
-		Counts:        make(map[string]int64),
+		ProtocolVersion: managementv1alpha1.ProtocolVersion,
+		SchemaVersion:   CurrentSchemaVersion,
+		Generation:      s.generation,
+		Counts:          make(map[string]int64),
 	}
-	for _, table := range []string{"realms", "identities", "spaces", "views", "grants", "capabilities", "receipts"} {
+	for _, table := range []string{
+		"realms", "identities", "spaces", "views", "grants", "capabilities",
+		"receipts", "receipt_corrections", "receipt_tombstones",
+	} {
 		var count int64
 		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+table).Scan(&count); err != nil {
 			return Inspection{}, fmt.Errorf("count %s: %w", table, err)

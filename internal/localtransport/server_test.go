@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 	"github.com/caelis-labs/memory/internal/appliance"
 )
@@ -56,7 +57,7 @@ func TestManagementAuthorizationIsSeparateAndFailClosed(t *testing.T) {
 		"issuer":  bootstrap.IssuerCredentials["principal:auth"],
 	} {
 		t.Run(name+" is not management authority", func(t *testing.T) {
-			request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+AdminPathInspect, nil)
+			request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+managementv1alpha1.LocalPathInspect, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -76,7 +77,7 @@ func TestManagementAuthorizationIsSeparateAndFailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+AdminPathInspect, nil)
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+managementv1alpha1.LocalPathInspect, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,23 +12,24 @@ type migration struct {
 	statements []string
 }
 
-var migrations = []migration{{
-	version: 1,
-	statements: []string{
-		`CREATE TABLE metadata (
+var migrations = []migration{
+	{
+		version: 1,
+		statements: []string{
+			`CREATE TABLE metadata (
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL
 		) STRICT`,
-		`CREATE TABLE realms (
+			`CREATE TABLE realms (
 			id TEXT PRIMARY KEY,
 			created_at TEXT NOT NULL
 		) STRICT`,
-		`CREATE TABLE identities (
+			`CREATE TABLE identities (
 			id TEXT PRIMARY KEY,
 			realm_id TEXT NOT NULL REFERENCES realms(id),
 			created_at TEXT NOT NULL
 		) STRICT`,
-		`CREATE TABLE spaces (
+			`CREATE TABLE spaces (
 			id TEXT PRIMARY KEY,
 			realm_id TEXT NOT NULL REFERENCES realms(id),
 			identity_id TEXT REFERENCES identities(id),
@@ -37,7 +38,7 @@ var migrations = []migration{{
 			CHECK ((class = 'private' AND identity_id IS NOT NULL) OR
 			       (class = 'shared' AND identity_id IS NULL))
 		) STRICT`,
-		`CREATE TABLE views (
+			`CREATE TABLE views (
 			id TEXT PRIMARY KEY,
 			realm_id TEXT NOT NULL REFERENCES realms(id),
 			write_space_id TEXT REFERENCES spaces(id),
@@ -46,14 +47,14 @@ var migrations = []migration{{
 			version INTEGER NOT NULL CHECK (version > 0),
 			created_at TEXT NOT NULL
 		) STRICT`,
-		`CREATE TABLE view_read_spaces (
+			`CREATE TABLE view_read_spaces (
 			view_id TEXT NOT NULL REFERENCES views(id) ON DELETE CASCADE,
 			space_id TEXT NOT NULL REFERENCES spaces(id),
 			ordinal INTEGER NOT NULL,
 			PRIMARY KEY (view_id, space_id),
 			UNIQUE (view_id, ordinal)
 		) STRICT`,
-		`CREATE TABLE grants (
+			`CREATE TABLE grants (
 			id TEXT PRIMARY KEY,
 			principal_ref TEXT NOT NULL,
 			actor_ref TEXT NOT NULL,
@@ -63,22 +64,22 @@ var migrations = []migration{{
 			version INTEGER NOT NULL CHECK (version > 0),
 			created_at TEXT NOT NULL
 		) STRICT`,
-		`CREATE TABLE grant_operations (
+			`CREATE TABLE grant_operations (
 			grant_id TEXT NOT NULL REFERENCES grants(id) ON DELETE CASCADE,
 			operation TEXT NOT NULL CHECK (operation IN ('remember', 'recall', 'receipt_status')),
 			PRIMARY KEY (grant_id, operation)
 		) STRICT`,
-		`CREATE TABLE grant_audiences (
+			`CREATE TABLE grant_audiences (
 			grant_id TEXT NOT NULL REFERENCES grants(id) ON DELETE CASCADE,
 			audience TEXT NOT NULL CHECK (audience IN ('private', 'shared')),
 			PRIMARY KEY (grant_id, audience)
 		) STRICT`,
-		`CREATE TABLE issuer_credentials (
+			`CREATE TABLE issuer_credentials (
 			principal_ref TEXT PRIMARY KEY,
 			credential_digest BLOB NOT NULL,
 			created_at TEXT NOT NULL
 		) STRICT`,
-		`CREATE TABLE capabilities (
+			`CREATE TABLE capabilities (
 			token_digest BLOB PRIMARY KEY,
 			grant_id TEXT NOT NULL REFERENCES grants(id),
 			principal_ref TEXT NOT NULL,
@@ -88,12 +89,12 @@ var migrations = []migration{{
 			expires_at TEXT NOT NULL,
 			created_at TEXT NOT NULL
 		) STRICT`,
-		`CREATE TABLE capability_operations (
+			`CREATE TABLE capability_operations (
 			token_digest BLOB NOT NULL REFERENCES capabilities(token_digest) ON DELETE CASCADE,
 			operation TEXT NOT NULL CHECK (operation IN ('remember', 'recall', 'receipt_status')),
 			PRIMARY KEY (token_digest, operation)
 		) STRICT`,
-		`CREATE TABLE receipts (
+			`CREATE TABLE receipts (
 			commit_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
 			receipt_id TEXT NOT NULL UNIQUE,
 			space_id TEXT NOT NULL REFERENCES spaces(id),
@@ -106,7 +107,7 @@ var migrations = []migration{{
 			consistency_token TEXT NOT NULL UNIQUE,
 			UNIQUE (space_id, idempotency_key)
 		) STRICT`,
-		`CREATE TABLE receipt_processing (
+			`CREATE TABLE receipt_processing (
 			receipt_id TEXT PRIMARY KEY REFERENCES receipts(receipt_id),
 			state TEXT NOT NULL CHECK (state IN ('accepted', 'processing', 'organized', 'failed')),
 			attempts INTEGER NOT NULL DEFAULT 0,
@@ -114,30 +115,75 @@ var migrations = []migration{{
 			terminal_error_code TEXT NOT NULL DEFAULT '',
 			semantic_generation TEXT NOT NULL DEFAULT ''
 		) STRICT`,
-		`CREATE TABLE consistency_cursors (
+			`CREATE TABLE consistency_cursors (
 			token TEXT PRIMARY KEY,
 			generation TEXT NOT NULL,
 			space_id TEXT NOT NULL REFERENCES spaces(id),
 			commit_sequence INTEGER NOT NULL
 		) STRICT`,
-		`CREATE TABLE space_indexes (
+			`CREATE TABLE space_indexes (
 			space_id TEXT PRIMARY KEY REFERENCES spaces(id),
 			table_name TEXT NOT NULL UNIQUE
 		) STRICT`,
-		`CREATE TRIGGER receipts_immutable_update
+			`CREATE TRIGGER receipts_immutable_update
 		BEFORE UPDATE ON receipts BEGIN
 			SELECT RAISE(ABORT, 'receipt payload is immutable');
 		END`,
-		`CREATE TRIGGER receipts_immutable_delete
+			`CREATE TRIGGER receipts_immutable_delete
 		BEFORE DELETE ON receipts BEGIN
 			SELECT RAISE(ABORT, 'receipt payload is immutable');
 		END`,
-		`CREATE INDEX receipts_space_sequence ON receipts(space_id, commit_sequence DESC)`,
-		`CREATE INDEX view_read_spaces_space ON view_read_spaces(space_id)`,
+			`CREATE INDEX receipts_space_sequence ON receipts(space_id, commit_sequence DESC)`,
+			`CREATE INDEX view_read_spaces_space ON view_read_spaces(space_id)`,
+		},
 	},
-}}
+	{
+		version: 2,
+		statements: []string{
+			`CREATE TABLE receipt_tombstones (
+				tombstone_id TEXT PRIMARY KEY,
+				receipt_id TEXT NOT NULL UNIQUE,
+				space_id TEXT NOT NULL REFERENCES spaces(id),
+				idempotency_key TEXT NOT NULL,
+				request_digest TEXT NOT NULL,
+				deleted_at TEXT NOT NULL,
+				reason TEXT NOT NULL,
+				UNIQUE (space_id, idempotency_key)
+			) STRICT`,
+			`CREATE TABLE receipt_corrections (
+				original_receipt_id TEXT PRIMARY KEY,
+				replacement_receipt_id TEXT NOT NULL UNIQUE,
+				space_id TEXT NOT NULL REFERENCES spaces(id),
+				created_at TEXT NOT NULL,
+				reason TEXT NOT NULL
+			) STRICT`,
+			`CREATE TABLE management_effects (
+				operation TEXT NOT NULL,
+				idempotency_key TEXT NOT NULL,
+				request_digest TEXT NOT NULL,
+				result_json TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				PRIMARY KEY (operation, idempotency_key)
+			) STRICT`,
+			`DROP TRIGGER receipts_immutable_delete`,
+			`CREATE TRIGGER receipts_governed_delete
+			BEFORE DELETE ON receipts
+			WHEN NOT EXISTS (
+				SELECT 1 FROM receipt_tombstones WHERE receipt_id = OLD.receipt_id
+			) BEGIN
+				SELECT RAISE(ABORT, 'receipt deletion requires a governance tombstone');
+			END`,
+			`CREATE INDEX receipt_corrections_replacement ON receipt_corrections(replacement_receipt_id)`,
+			`CREATE INDEX receipt_tombstones_space ON receipt_tombstones(space_id, deleted_at)`,
+		},
+	},
+}
 
 func migrate(ctx context.Context, db *sql.DB, now time.Time) error {
+	return migrateTo(ctx, db, now, CurrentSchemaVersion)
+}
+
+func migrateTo(ctx context.Context, db *sql.DB, now time.Time, targetVersion int) error {
 	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
 		version INTEGER PRIMARY KEY,
 		applied_at TEXT NOT NULL
@@ -148,10 +194,13 @@ func migrate(ctx context.Context, db *sql.DB, now time.Time) error {
 	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&version); err != nil {
 		return fmt.Errorf("read schema version: %w", err)
 	}
-	if version > CurrentSchemaVersion {
-		return fmt.Errorf("database schema version %d is newer than supported version %d", version, CurrentSchemaVersion)
+	if version > targetVersion {
+		return fmt.Errorf("database schema version %d is newer than supported version %d", version, targetVersion)
 	}
 	for _, item := range migrations {
+		if item.version > targetVersion {
+			break
+		}
 		if item.version <= version {
 			continue
 		}
