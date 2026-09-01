@@ -62,11 +62,12 @@ sandbox access, or handoff authority.
 
 ## Residual risks by milestone
 
-M0 has no durable process or network transport; it proves semantics only. M1
-must add local credential storage, filesystem permissions, owner-lock safety,
-database corruption handling, and process lifecycle tests. M2 must add sidecar
+M0 had no durable process or network transport; it proved semantics only. M1
+adds owner-only local credentials and Unix Socket, a `0700` data boundary,
+single-owner locking, digest-backed opaque capabilities, transactional receipt
+acceptance, and storage failure injection. M2 must add sidecar
 artifact integrity, capability handling inside Caelis, exact replay metadata,
-and output-sink enforcement. M3 must add backup confidentiality, management
-authentication, deletion verification, and incident diagnostics. M4 must add
-provider data-egress policy, prompt-injection resistance, cost bounds, and job
-poisoning controls.
+and output-sink enforcement. M3 must add backup confidentiality, hardened
+management authorization, deletion verification, and incident diagnostics. M4
+must add provider data-egress policy, prompt-injection resistance, cost bounds,
+and job poisoning controls.

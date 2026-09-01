@@ -1,0 +1,179 @@
+package appliance
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"time"
+)
+
+type migration struct {
+	version    int
+	statements []string
+}
+
+var migrations = []migration{{
+	version: 1,
+	statements: []string{
+		`CREATE TABLE metadata (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		) STRICT`,
+		`CREATE TABLE realms (
+			id TEXT PRIMARY KEY,
+			created_at TEXT NOT NULL
+		) STRICT`,
+		`CREATE TABLE identities (
+			id TEXT PRIMARY KEY,
+			realm_id TEXT NOT NULL REFERENCES realms(id),
+			created_at TEXT NOT NULL
+		) STRICT`,
+		`CREATE TABLE spaces (
+			id TEXT PRIMARY KEY,
+			realm_id TEXT NOT NULL REFERENCES realms(id),
+			identity_id TEXT REFERENCES identities(id),
+			class TEXT NOT NULL CHECK (class IN ('private', 'shared')),
+			created_at TEXT NOT NULL,
+			CHECK ((class = 'private' AND identity_id IS NOT NULL) OR
+			       (class = 'shared' AND identity_id IS NULL))
+		) STRICT`,
+		`CREATE TABLE views (
+			id TEXT PRIMARY KEY,
+			realm_id TEXT NOT NULL REFERENCES realms(id),
+			write_space_id TEXT REFERENCES spaces(id),
+			max_disclosure_class TEXT NOT NULL CHECK (max_disclosure_class IN ('private', 'shared')),
+			recall_policy_ref TEXT NOT NULL,
+			version INTEGER NOT NULL CHECK (version > 0),
+			created_at TEXT NOT NULL
+		) STRICT`,
+		`CREATE TABLE view_read_spaces (
+			view_id TEXT NOT NULL REFERENCES views(id) ON DELETE CASCADE,
+			space_id TEXT NOT NULL REFERENCES spaces(id),
+			ordinal INTEGER NOT NULL,
+			PRIMARY KEY (view_id, space_id),
+			UNIQUE (view_id, ordinal)
+		) STRICT`,
+		`CREATE TABLE grants (
+			id TEXT PRIMARY KEY,
+			principal_ref TEXT NOT NULL,
+			actor_ref TEXT NOT NULL,
+			view_id TEXT NOT NULL REFERENCES views(id),
+			expires_at TEXT NOT NULL,
+			revoked INTEGER NOT NULL CHECK (revoked IN (0, 1)),
+			version INTEGER NOT NULL CHECK (version > 0),
+			created_at TEXT NOT NULL
+		) STRICT`,
+		`CREATE TABLE grant_operations (
+			grant_id TEXT NOT NULL REFERENCES grants(id) ON DELETE CASCADE,
+			operation TEXT NOT NULL CHECK (operation IN ('remember', 'recall', 'receipt_status')),
+			PRIMARY KEY (grant_id, operation)
+		) STRICT`,
+		`CREATE TABLE grant_audiences (
+			grant_id TEXT NOT NULL REFERENCES grants(id) ON DELETE CASCADE,
+			audience TEXT NOT NULL CHECK (audience IN ('private', 'shared')),
+			PRIMARY KEY (grant_id, audience)
+		) STRICT`,
+		`CREATE TABLE issuer_credentials (
+			principal_ref TEXT PRIMARY KEY,
+			credential_digest BLOB NOT NULL,
+			created_at TEXT NOT NULL
+		) STRICT`,
+		`CREATE TABLE capabilities (
+			token_digest BLOB PRIMARY KEY,
+			grant_id TEXT NOT NULL REFERENCES grants(id),
+			principal_ref TEXT NOT NULL,
+			view_version INTEGER NOT NULL,
+			actor_ref TEXT NOT NULL,
+			audience TEXT NOT NULL CHECK (audience IN ('private', 'shared')),
+			expires_at TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		) STRICT`,
+		`CREATE TABLE capability_operations (
+			token_digest BLOB NOT NULL REFERENCES capabilities(token_digest) ON DELETE CASCADE,
+			operation TEXT NOT NULL CHECK (operation IN ('remember', 'recall', 'receipt_status')),
+			PRIMARY KEY (token_digest, operation)
+		) STRICT`,
+		`CREATE TABLE receipts (
+			commit_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+			receipt_id TEXT NOT NULL UNIQUE,
+			space_id TEXT NOT NULL REFERENCES spaces(id),
+			text TEXT NOT NULL,
+			source_context TEXT NOT NULL,
+			occurred_at TEXT,
+			received_at TEXT NOT NULL,
+			idempotency_key TEXT NOT NULL,
+			request_digest TEXT NOT NULL,
+			consistency_token TEXT NOT NULL UNIQUE,
+			UNIQUE (space_id, idempotency_key)
+		) STRICT`,
+		`CREATE TABLE receipt_processing (
+			receipt_id TEXT PRIMARY KEY REFERENCES receipts(receipt_id),
+			state TEXT NOT NULL CHECK (state IN ('accepted', 'processing', 'organized', 'failed')),
+			attempts INTEGER NOT NULL DEFAULT 0,
+			last_attempt_at TEXT,
+			terminal_error_code TEXT NOT NULL DEFAULT '',
+			semantic_generation TEXT NOT NULL DEFAULT ''
+		) STRICT`,
+		`CREATE TABLE consistency_cursors (
+			token TEXT PRIMARY KEY,
+			generation TEXT NOT NULL,
+			space_id TEXT NOT NULL REFERENCES spaces(id),
+			commit_sequence INTEGER NOT NULL
+		) STRICT`,
+		`CREATE TABLE space_indexes (
+			space_id TEXT PRIMARY KEY REFERENCES spaces(id),
+			table_name TEXT NOT NULL UNIQUE
+		) STRICT`,
+		`CREATE TRIGGER receipts_immutable_update
+		BEFORE UPDATE ON receipts BEGIN
+			SELECT RAISE(ABORT, 'receipt payload is immutable');
+		END`,
+		`CREATE TRIGGER receipts_immutable_delete
+		BEFORE DELETE ON receipts BEGIN
+			SELECT RAISE(ABORT, 'receipt payload is immutable');
+		END`,
+		`CREATE INDEX receipts_space_sequence ON receipts(space_id, commit_sequence DESC)`,
+		`CREATE INDEX view_read_spaces_space ON view_read_spaces(space_id)`,
+	},
+}}
+
+func migrate(ctx context.Context, db *sql.DB, now time.Time) error {
+	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
+		version INTEGER PRIMARY KEY,
+		applied_at TEXT NOT NULL
+	) STRICT`); err != nil {
+		return fmt.Errorf("create migration ledger: %w", err)
+	}
+	var version int
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&version); err != nil {
+		return fmt.Errorf("read schema version: %w", err)
+	}
+	if version > CurrentSchemaVersion {
+		return fmt.Errorf("database schema version %d is newer than supported version %d", version, CurrentSchemaVersion)
+	}
+	for _, item := range migrations {
+		if item.version <= version {
+			continue
+		}
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("begin schema migration %d: %w", item.version, err)
+		}
+		for _, statement := range item.statements {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("apply schema migration %d: %w", item.version, err)
+			}
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)`,
+			item.version, formatTime(now)); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("record schema migration %d: %w", item.version, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit schema migration %d: %w", item.version, err)
+		}
+	}
+	return nil
+}

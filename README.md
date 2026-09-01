@@ -10,31 +10,40 @@ recall(query)
 
 The appliance, rather than an Agent host, owns identity continuity, Spaces,
 Views, durable receipts, retrieval, classification, consolidation, lifecycle,
-and forgetting. The current repository is at the `memory.v1alpha1` contract
-baseline; it does not yet ship the durable SQLite `memoryd` planned for M1.
+and forgetting. The repository currently ships the M1 standalone durable Core:
+a model-free SQLite `memoryd`, versioned local transport, Go client, and minimum
+`memoryctl` operations.
 
 ## Current milestone
 
-M0 provides:
+M0 froze the contract. M1 now provides:
 
-- the normative data-plane and authorization contract;
-- transport-neutral Go types and service interfaces;
-- a Go SDK with deterministic model-visible projections;
-- an in-memory reference service;
-- a reusable semantic conformance suite and Golden Path tests.
+- immutable durable receipts with separate processing state;
+- Realm, Identity, private/shared Space, View, Grant, issuer, capability, and
+  idempotency state in a migrated SQLite authority;
+- independent per-Space FTS5 projections rebuildable from receipts;
+- owner locking, owner-only credentials and Unix Socket transport;
+- health, readiness, graceful shutdown, bootstrap, issue, issuer rotation,
+  inspect, revoke, Remember, Recall, and FTS-rebuild commands;
+- semantic conformance plus a separate-process crash/restart harness proving
+  acknowledged durability and restart idempotency.
 
-M0 proves protocol and authorization semantics only. It cannot prove durable
-acknowledgement; that claim requires the M1 cross-process crash/restart harness.
+M1 remains deliberately model-free and has no Caelis integration, Steward,
+semantic records, vector/graph retrieval, governance deletion, backup, or rich
+management Surface. Those boundaries remain assigned to later milestones.
 
 Read [the specification](docs/memory-appliance-spec.md),
 [roadmap](docs/memory-appliance-roadmap.md), and
 [acceptance plan](docs/memory-appliance-acceptance.md) before extending the API.
+Use the [M1 operations guide](docs/memoryd-operations.md) to run the standalone
+Golden Path.
 
 Run the current gates with:
 
 ```sh
 make check
 make race
+make durable
 ```
 
 The repository gates set `GOWORK=off` so the module remains independently

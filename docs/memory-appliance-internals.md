@@ -77,10 +77,27 @@ search, relation graphs, and automatic retention are future extensions. Private
 evidence may influence a private result but cannot mutate or generate shared
 canonical state.
 
-## Local deployment direction
+## Local durable Core
 
-M1 is expected to use one SQLite database for many Spaces, WAL where supported,
-transactional receipts and idempotency state, an FTS projection, migrations,
-and an owner lock. This is a reference direction, not an API promise. A future
-remote implementation may use different storage while passing the same
-semantic and durable conformance suites appropriate to its milestone.
+M1 uses one migrated SQLite database for many Spaces, WAL, `synchronous=FULL`,
+foreign keys, transactional receipts and idempotency state, and an advisory
+single-process owner lock. Receipt payload updates and deletes are rejected by
+database triggers. Mutable processing state is stored separately.
+
+Each Space owns an independent FTS5 virtual table. Its table name is derived
+from the SHA-256 digest of the Space ID rather than interpolating an external
+identifier. Remember writes the receipt and that one Space projection in the
+same transaction. Recall authorizes the View first and then enters only each
+readable Space's table; shared-only Recall therefore never queries a private
+index. All FTS tables are disposable and rebuild solely from receipts.
+
+Runtime capabilities and issuer credentials are random opaque values whose
+digests are stored in SQLite. The raw management credential is generated once
+in an owner-only local file. Management authorization, issuer authorization,
+and Runtime capabilities remain separate.
+
+The first local transport is HTTP over an owner-only Unix Socket. Health is
+process liveness; readiness additionally reaches SQLite. This is an M1 local
+implementation, not a promise that a future remote backend uses SQLite or the
+same physical index layout. Another backend must pass the same semantic and
+durable conformance appropriate to its milestone.

@@ -1,0 +1,69 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+
+	"github.com/caelis-labs/memory/internal/appliance"
+	"github.com/caelis-labs/memory/internal/localtransport"
+)
+
+func main() {
+	if err := run(); err != nil {
+		log.SetFlags(0)
+		log.Printf("memoryd: %v", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	var dataDir string
+	flag.StringVar(&dataDir, "data-dir", "", "owner-only memoryd data directory (required)")
+	flag.Parse()
+	if dataDir == "" {
+		return fmt.Errorf("-data-dir is required")
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	store, err := appliance.Open(ctx, appliance.Options{DataDir: dataDir})
+	if err != nil {
+		return err
+	}
+	socketPath := filepath.Join(dataDir, appliance.SocketFilename)
+	listener, err := localtransport.ListenUnix(socketPath)
+	if err != nil {
+		_ = store.Close()
+		return err
+	}
+	server := &http.Server{
+		Handler:           localtransport.Handler(store),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- server.Serve(listener)
+	}()
+	log.SetFlags(0)
+	log.Printf("memoryd ready: socket=%s management_credential=%s", socketPath, store.ManagementCredentialPath())
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		shutdownErr := localtransport.ShutdownServer(shutdownCtx, server)
+		return errors.Join(shutdownErr, store.Close())
+	case err := <-serveErr:
+		if errors.Is(err, http.ErrServerClosed) {
+			return store.Close()
+		}
+		return errors.Join(err, store.Close())
+	}
+}

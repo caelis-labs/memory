@@ -71,11 +71,29 @@ M0 is a semantic suite over an intentionally volatile reference service. It
 does not satisfy `INV-DUR-001`; only M1 may call the combined semantic plus
 cross-process suite durable Core conformance.
 
+## M1 durable Core matrix
+
+| ID | Behavior |
+| --- | --- |
+| `D-001` | A separate `memoryd` process is killed immediately after accepted Remember; restart Recalls the receipt |
+| `D-002` | Retrying the same effect after crash returns the original receipt |
+| `D-003` | Restart preserves capability, View, Space, idempotency, cursor, and receipt state |
+| `D-004` | Every Space has an independent FTS projection entered only after View authorization |
+| `D-005` | Deleted FTS state rebuilds solely from immutable receipts |
+| `D-006` | Receipt payload updates are rejected while processing state remains separate |
+| `D-007` | Owner lock, SQLite write lock, pre-commit failure, and migration failure are explicit |
+| `D-008` | Post-commit response failure is `unknown_outcome`; exact retry resolves one receipt |
+| `D-009` | Health, readiness, graceful shutdown cleanup, crash restart, and stale Socket replacement are exercised |
+| `D-010` | Management, issuer, and Runtime bearers remain distinct; lost issuer delivery is recoverable by repeatable rotation |
+
+`go test ./...` runs the semantic suite and the real-storage separate-process
+harness. `make durable` reruns the cross-process proof without cached results.
+
 ## Failure injection by milestone
 
 M1 adds process kill after commit, database lock, disk-full simulation,
-migration interruption, FTS deletion/rebuild, concurrent revocation, and graceful
-shutdown races. M2 adds sidecar start failure, version mismatch, Caelis restart,
+transactional migration failure, FTS deletion/rebuild, concurrent revocation,
+and shutdown races. M2 adds sidecar start failure, version mismatch, Caelis restart,
 service loss during Recall, unknown Remember outcome, Session round trip, and
 zero-call Replay instrumentation. M3 adds restore generation changes, corrupted
 backup, partial migration rollback, delete/reindex/restart, and credential
