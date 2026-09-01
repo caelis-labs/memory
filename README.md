@@ -21,7 +21,8 @@ M0 froze the contract and M1 provides:
 - Realm, Identity, private/shared Space, View, Grant, issuer, capability, and
   idempotency state in a migrated SQLite authority;
 - independent per-Space FTS5 projections rebuildable from receipts;
-- owner locking, owner-only credentials and Unix Socket transport;
+- owner locking, distinct owner-only management/Worker credentials, Unix Domain
+  Socket transport, and a buildable Windows named-pipe transport preview;
 - health, readiness, graceful shutdown, bootstrap, issue, issuer rotation,
   inspect, revoke, Remember, Recall, and FTS-rebuild commands;
 - semantic conformance plus a separate-process crash/restart harness proving
@@ -34,8 +35,9 @@ The Memory-owned M2 boundary additionally provides:
 - a public issuer plane that keeps issuer credentials outside request bodies;
 - a Go SDK for handshake, Runtime capability issuance/renewal, and native
   sidecar manifest verification;
-- `make sidecar`, which accepts only a clean exact HEAD and emits a native
-  executable, SHA-256 manifest, and detached checksum.
+- `make sidecar`, which accepts only a clean exact HEAD and emits native
+  `memoryd` and `memoryctl` executables with SHA-256 manifests and detached
+  checksums.
 
 M3 Governance and Production Safety additionally provides:
 
@@ -65,22 +67,35 @@ The M4 Semantic Steward foundation additionally provides:
 - migrated Record, immutable Revision/Evidence, profile, and durable Job state;
 - deterministic same-Space validation, optimistic Revisions, governance
   invalidation, and idempotent unknown-outcome recovery;
-- immutable model/prompt profile versions and future-Job Space bindings through
+- immutable prompt-policy profile versions and future-Job Space bindings through
   the owner management plane;
-- an optional bounded shared Worker pool with HTTPS or loopback HTTP providers,
-  owner-only out-of-band credentials, durable leases, retries, and terminal
-  poisoning controls;
+- a versioned external Worker claim/apply/fail protocol and Go SDK `Generator`
+  callback, letting downstream hosts reuse their existing provider, model, and
+  credentials;
+- appliance-owned durable leases, retry ceilings, evidence validation, atomic
+  application, and terminal poisoning controls, with no outbound model adapter
+  in `memoryd`;
 - authorization-first per-Space semantic Recall, deterministic receipt/Record
   merge and deduplication with complete provenance;
 - receipt-only fallback with `degraded=true`, semantic projection rebuild, and
-  secret-free profile, backlog, Record, Worker, and projection diagnostics.
+  secret-free profile, backlog, Record, and projection diagnostics.
+
+`v0.5.0-rc.1` has native `darwin/arm64` candidate evidence. The GA RoadMap now
+requires `darwin`/`linux`/`windows` on both `amd64` and `arm64`, packages both
+`memoryd` and the operator-facing `memoryctl`, and pauses for external review
+before publication. Agent-facing CLI/MCP adapters are deferred; the preferred
+post-GA ecosystem surface is a publishable Plugin over the same SDK contracts.
+The transport-neutral endpoint and Windows named-pipe/ACL/lock implementations
+now cross-build on both Windows architectures; native lifecycle evidence remains
+a release gate. Linux native gates run in the local OrbStack Rocky environment,
+with the current ARM64 machine covering only `linux/arm64`.
 
 Read [the specification](docs/memory-appliance-spec.md),
 [roadmap](docs/memory-appliance-roadmap.md), and
 [acceptance plan](docs/memory-appliance-acceptance.md) before extending the API.
 Use the [memoryd operations guide](docs/memoryd-operations.md) to run the standalone
 Golden Path. The [release procedure](docs/memory-appliance-release.md) owns M5
-quality, native artifact, incident, upgrade, and publication gates. The
+and GA Closure quality, native artifact, incident, upgrade, and publication gates. The
 [corpus evaluation procedure](docs/memory-appliance-evaluation.md) measures
 privacy-safe multi-round behavior with local Markdown or Session JSONL sources.
 

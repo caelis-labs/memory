@@ -52,12 +52,10 @@ type CapabilityDiagnostics struct {
 }
 
 // StewardDiagnostics summarizes optional semantic execution and projection
-// health without receipt text, provider references, prompts, or credentials.
+// health without receipt text, Worker leases, prompts, or credentials.
 type StewardDiagnostics struct {
 	Profiles            int64      `json:"profiles"`
 	Bindings            int64      `json:"bindings"`
-	ConfiguredProviders int64      `json:"configured_providers"`
-	ConfiguredWorkers   int64      `json:"configured_workers"`
 	PendingJobs         int64      `json:"pending_jobs"`
 	LeasedJobs          int64      `json:"leased_jobs"`
 	CompletedJobs       int64      `json:"completed_jobs"`

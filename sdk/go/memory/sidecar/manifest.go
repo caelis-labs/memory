@@ -149,7 +149,7 @@ func (m Manifest) VerifyNative(directory string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("inspect sidecar executable: %w", err)
 	}
-	if !info.Mode().IsRegular() || info.Mode()&0o111 == 0 {
+	if !isExecutableFile(info, path) {
 		return "", fmt.Errorf("sidecar executable must be a regular executable file")
 	}
 	digest, err := fileDigest(path)

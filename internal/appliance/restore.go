@@ -198,7 +198,7 @@ func Restore(ctx context.Context, options RestoreOptions) (RestoreResult, error)
 	if err := os.MkdirAll(options.DataDir, 0o700); err != nil {
 		return RestoreResult{}, fmt.Errorf("create restore data directory: %w", err)
 	}
-	if err := os.Chmod(options.DataDir, 0o700); err != nil {
+	if err := secureOwnerPath(options.DataDir, 0o700); err != nil {
 		return RestoreResult{}, fmt.Errorf("secure restore data directory: %w", err)
 	}
 	lock, err := acquireOwnerLock(options.DataDir)
@@ -272,7 +272,7 @@ func Restore(ctx context.Context, options RestoreOptions) (RestoreResult, error)
 		return RestoreResult{}, fmt.Errorf("install restored database: %w", err)
 	}
 	cleanupStage = false
-	if err := os.Chmod(databasePath, 0o600); err != nil {
+	if err := secureOwnerPath(databasePath, 0o600); err != nil {
 		return RestoreResult{}, fmt.Errorf("secure restored database: %w", err)
 	}
 	if err := syncDirectory(options.DataDir); err != nil {
@@ -329,7 +329,7 @@ func RollbackRestore(ctx context.Context, dataDir, managementCredential string, 
 	if err := os.Rename(rollbackPath, databasePath); err != nil {
 		return RestoreResult{}, fmt.Errorf("install rollback database: %w", err)
 	}
-	if err := os.Chmod(databasePath, 0o600); err != nil {
+	if err := secureOwnerPath(databasePath, 0o600); err != nil {
 		return RestoreResult{}, fmt.Errorf("secure rollback database: %w", err)
 	}
 	if err := syncDirectory(dataDir); err != nil {
@@ -460,7 +460,7 @@ func createRollbackSnapshot(ctx context.Context, databasePath, rollbackPath stri
 		_ = os.Remove(rollbackPath)
 		return false, fmt.Errorf("close pre-restore database: %w", err)
 	}
-	if err := os.Chmod(rollbackPath, 0o600); err != nil {
+	if err := secureOwnerPath(rollbackPath, 0o600); err != nil {
 		_ = os.Remove(rollbackPath)
 		return false, fmt.Errorf("secure rollback snapshot: %w", err)
 	}
@@ -495,7 +495,7 @@ func installManagementCredential(dataDir, credential string, random io.Reader) e
 		if strings.TrimSpace(string(current)) != credential {
 			return fmt.Errorf("existing management credential does not match restore authority")
 		}
-		if err := os.Chmod(path, 0o600); err != nil {
+		if err := secureOwnerPath(path, 0o600); err != nil {
 			return fmt.Errorf("secure restored management credential: %w", err)
 		}
 		return nil

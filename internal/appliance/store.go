@@ -37,20 +37,10 @@ type Store struct {
 	restorePending     atomic.Bool
 	generation         string
 	managementSum      [sha256.Size]byte
+	stewardWorkerSum   [sha256.Size]byte
 	managementMu       sync.RWMutex
 	managementRotateMu sync.Mutex
-	stewardProviders   atomic.Int64
-	stewardWorkers     atomic.Int64
-}
-
-// SetStewardRuntimeDiagnostics publishes process configuration counts to the
-// secret-free management inspection. Durable Steward policy remains in SQLite.
-func (s *Store) SetStewardRuntimeDiagnostics(providers, workers int) {
-	if providers < 0 || workers < 0 {
-		return
-	}
-	s.stewardProviders.Store(int64(providers))
-	s.stewardWorkers.Store(int64(workers))
+	stewardJobMu       sync.Mutex
 }
 
 // Open acquires the data-directory owner lock, migrates SQLite, and initializes
@@ -71,7 +61,7 @@ func Open(ctx context.Context, options Options) (*Store, error) {
 	if err := os.MkdirAll(options.DataDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create data directory: %w", err)
 	}
-	if err := os.Chmod(options.DataDir, 0o700); err != nil {
+	if err := secureOwnerPath(options.DataDir, 0o700); err != nil {
 		return nil, fmt.Errorf("secure data directory: %w", err)
 	}
 	lock, err := acquireOwnerLock(options.DataDir)
@@ -112,7 +102,7 @@ func Open(ctx context.Context, options Options) (*Store, error) {
 		_ = store.closeResources()
 		return nil, err
 	}
-	if err := os.Chmod(dbPath, 0o600); err != nil {
+	if err := secureOwnerPath(dbPath, 0o600); err != nil {
 		_ = store.closeResources()
 		return nil, fmt.Errorf("secure SQLite database: %w", err)
 	}
@@ -145,7 +135,51 @@ func (s *Store) initialize(ctx context.Context) error {
 		return fmt.Errorf("read restore state: %w", err)
 	}
 	s.restorePending.Store(restorePending == "1")
-	return s.initializeManagementCredential(ctx)
+	if err := s.initializeManagementCredential(ctx); err != nil {
+		return err
+	}
+	return s.initializeStewardWorkerCredential()
+}
+
+func (s *Store) initializeStewardWorkerCredential() error {
+	path := s.StewardWorkerCredentialPath()
+	if err := requireRegularOrAbsent(path); err != nil {
+		return fmt.Errorf("secure Steward Worker credential path: %w", err)
+	}
+	credential, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		token, tokenErr := s.randomToken(32)
+		if tokenErr != nil {
+			return fmt.Errorf("create Steward Worker credential: %w", tokenErr)
+		}
+		file, createErr := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if createErr != nil {
+			return fmt.Errorf("create Steward Worker credential file: %w", createErr)
+		}
+		if _, writeErr := file.WriteString(token + "\n"); writeErr != nil {
+			_ = file.Close()
+			return fmt.Errorf("write Steward Worker credential: %w", writeErr)
+		}
+		if syncErr := file.Sync(); syncErr != nil {
+			_ = file.Close()
+			return fmt.Errorf("sync Steward Worker credential: %w", syncErr)
+		}
+		if closeErr := file.Close(); closeErr != nil {
+			return fmt.Errorf("close Steward Worker credential: %w", closeErr)
+		}
+		credential = []byte(token)
+	} else if err != nil {
+		return fmt.Errorf("read Steward Worker credential: %w", err)
+	}
+	credential = trimCredential(credential)
+	if len(credential) == 0 {
+		return fmt.Errorf("Steward Worker credential is empty")
+	}
+	if err := secureOwnerPath(path, 0o600); err != nil {
+		return fmt.Errorf("secure Steward Worker credential: %w", err)
+	}
+	s.stewardWorkerSum = sha256.Sum256(credential)
+	return nil
 }
 
 func (s *Store) initializeManagementCredential(ctx context.Context) error {
@@ -241,7 +275,7 @@ func (s *Store) initializeManagementCredential(ctx context.Context) error {
 	if len(credential) == 0 {
 		return fmt.Errorf("management credential is empty")
 	}
-	if err := os.Chmod(path, 0o600); err != nil {
+	if err := secureOwnerPath(path, 0o600); err != nil {
 		return fmt.Errorf("secure management credential: %w", err)
 	}
 	decoded, err := hex.DecodeString(storedDigest)
@@ -282,6 +316,21 @@ func (s *Store) AuthenticateManagement(credential string) bool {
 // ManagementCredentialPath returns the owner-only bootstrap credential path.
 func (s *Store) ManagementCredentialPath() string {
 	return filepath.Join(s.dataDir, ManagementCredentialFile)
+}
+
+// AuthenticateStewardWorker validates the least-authority bearer accepted only
+// by external Worker claim/apply/fail routes.
+func (s *Store) AuthenticateStewardWorker(credential string) bool {
+	if credential == "" {
+		return false
+	}
+	got := sha256.Sum256([]byte(credential))
+	return subtle.ConstantTimeCompare(got[:], s.stewardWorkerSum[:]) == 1
+}
+
+// StewardWorkerCredentialPath returns the owner-only Worker credential path.
+func (s *Store) StewardWorkerCredentialPath() string {
+	return filepath.Join(s.dataDir, StewardWorkerCredentialFile)
 }
 
 // Ready verifies that the durable authority can answer a query.

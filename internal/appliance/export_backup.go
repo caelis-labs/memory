@@ -162,7 +162,7 @@ func (s *Store) CreateBackupSnapshot(ctx context.Context) (*BackupSnapshot, erro
 		cleanup()
 		return nil, s.databaseError("create consistent backup snapshot", err)
 	}
-	if err := os.Chmod(path, 0o600); err != nil {
+	if err := secureOwnerPath(path, 0o600); err != nil {
 		cleanup()
 		return nil, s.serviceError(v1alpha1.ErrorCodeUnavailable, "secure backup snapshot", true)
 	}

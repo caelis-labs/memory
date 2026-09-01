@@ -39,7 +39,7 @@ func TestProposalShapeVocabularyAndBounds(t *testing.T) {
 
 func TestProfileAndWorkRequestBounds(t *testing.T) {
 	profile := ProfileSpec{
-		ProfileID: "profile-a", Version: 1, ProviderRef: "provider-a", Model: "model-a",
+		ProfileID: "profile-a", Version: 1,
 		SystemPrompt: "organize supplied evidence", MaxContextRecords: 16,
 		MaxInputBytes: 128 << 10, MaxOutputBytes: 16 << 10,
 	}

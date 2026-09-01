@@ -1,11 +1,16 @@
 # Memory Appliance Roadmap
 
-Status: authorized six-milestone delivery plan. Execution evidence belongs in
-issues, reviews, commits, CI, and releases rather than edits to this document.
+Status: the original six-milestone line produced `v0.5.0-rc.1`; the GA Closure
+line below is now authoritative for the remaining work. RC1 is a candidate for
+`darwin/arm64`, not a GA release. Execution evidence belongs in issues, reviews,
+commits, CI, and releases rather than edits to this document.
 
 The roadmap favors early vertical evidence. It freezes hard boundaries first,
 then produces a durable standalone service, then immediately exercises it
-through Caelis before adding advanced cognition.
+through Caelis before adding advanced cognition. GA Closure corrects the
+Steward execution boundary, activates the already-published SDK integration,
+and closes corpus, lifecycle, and six-platform release evidence without adding
+new Memory domain features.
 
 ## Repository and delivery boundary
 
@@ -166,8 +171,8 @@ Deliver the first real user value chain before Governance or Steward expansion.
 
 ### Caelis deliverables
 
-- Control-owned `RuntimeActorRef`, `OutputAudience`, and immutable Memory binding
-  snapshot;
+- an opaque host-selected `BindingRef` that resolves to a Control-owned
+  `RuntimeActorRef`, `OutputAudience`, and immutable Memory binding snapshot;
 - private/shared single-audience admission rules;
 - managed-sidecar supervisor and pure SDK client;
 - exactly two model tools: `remember(text)` and `recall(query)`;
@@ -245,8 +250,12 @@ receipt/FTS path.
 ### Deliverables
 
 - versioned Record, Revision, and Evidence structures;
-- durable jobs and a shared worker pool, not one permanent Agent per Bot;
-- configurable model and prompt-policy profiles owned by the appliance;
+- durable jobs, leases, proposal validation, and canonical application owned by
+  the appliance;
+- versioned prompt-policy profiles owned by the appliance, with no provider,
+  model, credential, or outbound model transport configuration;
+- a versioned external Steward Worker protocol and Go SDK runner through which
+  a downstream host injects its existing model stack;
 - typed `ADD`, `MERGE`, `SUPERSEDE`, and `IGNORE` proposals;
 - deterministic validation, optimistic revision checks, and retry semantics;
 - Recall merge/dedup between receipt and semantic candidates;
@@ -269,9 +278,9 @@ different authorization. Model output never writes directly to canonical state.
 - every derived claim has evidence in the same Space;
 - private and shared jobs cannot cite or mutate across boundaries;
 - unknown worker outcome does not duplicate a mutation;
-- model outage and profile replacement leave baseline Recall working;
-- changing model/prompt affects only later jobs unless an explicit future
-  reinterpretation operation is invoked.
+- worker/model outage and profile replacement leave baseline Recall working;
+- changing the downstream model or an appliance prompt policy affects only
+  later jobs unless an explicit future reinterpretation operation is invoked.
 
 ## M5: Release Candidate and GA
 
@@ -310,6 +319,184 @@ permanent Steward conversation are not Core GA requirements.
 - documented owner for alerts, storage exhaustion, corruption, backup recovery,
   capability incidents, and rollback;
 - post-release smoke of the Golden Path with public artifact consumers.
+
+## GA Closure after `v0.5.0-rc.1`
+
+RC1 proves the standalone contract and the first native sidecar candidate. It
+does not close the product activation, external Steward execution, realistic
+long-run retrieval, process-attachment, or formal platform matrix required for
+GA. The following slices are ordered, independently reviewable, and must not be
+collapsed into one long-running release task:
+
+```text
+G0 Memory Contract Correction
+  -> G1 Caelis SDK Activation
+    -> G2 Caelis Sidecar Lifecycle
+      -> G3 External Steward Worker
+        -> G4 Corpus and Soak Qualification
+          -> G5 Six-Platform Distribution
+            -> G6 RC2, External Review, and GA
+```
+
+G0, G3, the Memory half of G4, and the Memory artifact half of G5 belong to
+this repository. G1, G2, Caelis product packaging, and zero-call Session Replay
+evidence belong to the Caelis repository. Cross-repository acceptance pins the
+exact source revisions and artifact digests from both repositories.
+
+### G0: Memory Contract Correction
+
+Goal: remove model-provider ownership from `memoryd` before a stable API freezes.
+
+Deliverables:
+
+- revise Spec, threat model, operations, and acceptance language so the
+  appliance owns policy, durable work, evidence, validation, and mutation only;
+- remove provider/model/credential fields from the public Steward profile;
+- define a least-authority Worker credential and claim/apply/fail protocol;
+- retain a documented private-schema upgrade residue only when required to
+  upgrade RC1 data, with a named removal condition.
+
+Exit: `memoryd` has no model-provider endpoint, model name, model credential,
+or outbound model HTTP configuration; baseline Recall remains independent of a
+Worker. This slice changes no Caelis code.
+
+### G1: Caelis SDK Activation
+
+Goal: make the already-published SDK tools visible to eligible Caelis Runtime
+models without teaching Caelis Memory domain or concrete product concepts.
+
+Deliverables:
+
+- initialize the Memory client and opaque binding resolver from product
+  configuration, with one explicit default binding;
+- inject exactly `remember(text)` and `recall(query)` during Runtime assembly;
+- preserve hidden actor, audience, capability, idempotency, budget, and cursor
+  values and byte-exact zero-call Replay;
+- add configuration diagnostics that distinguish disabled, unconfigured,
+  incompatible, and unavailable.
+
+Exit: a real local model sees both tools only when a valid binding exists. This
+contract does not define a Bot, user, tenant, workspace, or other product
+identity. A future product layer may map any such concept to a `BindingRef`
+without changing Runtime assembly or the Memory SDK.
+
+### G2: Caelis Sidecar Lifecycle
+
+Goal: make a managed `memoryd` reliable across multiple local Caelis processes.
+
+Deliverables:
+
+- per-Runtime immutable opaque binding rather than one process-global actor
+  binding;
+- attach to a healthy compatible owner process after supervisor or Caelis
+  restart instead of treating every extant lock as a fatal collision;
+- exact manifest/digest verification, readiness, shutdown ownership, version
+  mismatch, orphan, and kill-switch behavior;
+- crash/restart and concurrent-process product tests.
+
+Exit: one owner appliance can safely serve independently bound Runtimes and an
+orphaned healthy sidecar can be reattached without acknowledged-memory loss.
+
+### G3: External Steward Worker
+
+Goal: keep semantic organization replaceable without embedding a second model
+provider stack in Memory.
+
+Deliverables:
+
+- external Worker claim/apply/fail API authenticated independently from Runtime
+  capabilities and owner management;
+- Go SDK `Generator` callback and bounded runner; the callback receives only a
+  bounded `WorkRequest`, never a Space, capability, lease, or bearer;
+- appliance-owned leases, retry ceilings, stable failure codes, proposal shape,
+  evidence checks, revision conflicts, and atomic application;
+- worker-crash, lease-expiry, malformed-output, duplicate-apply, and no-worker
+  fallback tests.
+
+Exit: downstream code can reuse its existing provider configuration and inject
+a model callback, while `memoryd` makes no outbound provider call and receipt
+Recall remains useful with zero Workers.
+
+### G4: Corpus and Soak Qualification
+
+Goal: validate useful behavior across multi-round remembering and evolving
+facts rather than only protocol fixtures.
+
+Deliverables:
+
+- a reviewed, privacy-safe Chinese and mixed-language corpus covering exact
+  recall, paraphrase, chronology, corrections, contradictions, supersession,
+  abstention, and private/shared isolation;
+- a repeatable importer/evaluator for sanitized Caelis Session JSONL or an
+  operator-selected local MEMORY text source; raw private source text is never
+  committed or uploaded by the harness;
+- at least 100 Spaces, 100,000 receipts, and 10,000 semantic Record heads in the
+  release soak, including restart, reindex, backup/restore, and Worker backlog;
+- frozen Recall@k, precision, stale-current, unsupported-claim, leakage,
+  latency, database, WAL, and backlog-recovery reports for one candidate.
+
+Exit: the fixed release corpus contains at least 200 labeled cases, has complete
+provenance and zero private/shared leakage, and meets budgets frozen before the
+candidate run. Synthetic fixtures remain useful but are not sufficient alone.
+
+### G5: Six-Platform Distribution
+
+Goal: give Memory the same formal desktop/server matrix as Caelis.
+
+The GA support matrix is exactly:
+
+- `darwin/amd64`, `darwin/arm64`;
+- `linux/amd64`, `linux/arm64`;
+- `windows/amd64`, `windows/arm64`.
+
+Deliverables:
+
+- an endpoint abstraction with Unix Domain Socket implementations on Darwin
+  and Linux and a named-pipe implementation on Windows, preserving identical
+  application protocol and authorization semantics;
+- `memoryd` and public operator `memoryctl` artifacts for every platform;
+- exact version, revision, protocols, platform, filename, and SHA-256 in one
+  detached-checksum manifest contract;
+- native lifecycle, credential-permission, lock, upgrade, rollback, and Golden
+  Path evidence for every supported platform; cross-compilation alone is only a
+  buildability check.
+
+Linux native evidence is collected in Rocky Linux under the local OrbStack
+environment. The report records Rocky version, kernel, architecture, Go
+toolchain, and whether execution was native. The current `rocky` machine is
+Linux/ARM64; it can close `linux/arm64` but cannot substitute for a native
+Rocky Linux/AMD64 run.
+
+Exit: all twelve binaries (two executables times six platforms) are produced and
+each platform has native or explicitly approved equivalent execution evidence.
+Unsupported build previews are never listed in the support manifest.
+
+### G6: RC2, External Review, and GA
+
+Goal: create one immutable candidate, pause for independent review, then publish
+the exact accepted bytes.
+
+Deliverables:
+
+- exact-SHA Memory and Caelis gates, compatibility pins, SBOM/checksums, upgrade
+  from the minimum supported schema, rollback, and clean-consumer smoke;
+- an RC2 evidence bundle mapping every acceptance ID to logs and artifacts;
+- an explicit external-review hold point: no GA tag or publication while review
+  findings remain unresolved or accepted-risk decisions remain undocumented;
+- post-approval publication and public-artifact Golden Path smoke.
+
+Exit: GA is the reviewed RC2 bytes, not a rebuild. The overall RoadMap goal may
+close after the evidence bundle passes external acceptance and before any
+post-GA ecosystem integration begins.
+
+### Post-GA integration extensions
+
+CLI and MCP as Agent-facing Remember/Recall entry points are deferred. The
+preferred ecosystem surface is a publishable Plugin that packages the stable
+SDK and external Worker callback for additional Agents. Plugin work may be
+designed before GA but cannot change the Core data-plane or Worker contracts and
+is not a GA blocker. `memoryctl` is different: it is the required operator and
+recovery artifact in G5, not an Agent integration surface.
 
 ## Milestone tracking template
 

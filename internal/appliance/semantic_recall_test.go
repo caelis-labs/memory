@@ -212,23 +212,23 @@ func TestPendingStewardJobLeavesBaselineRecallObservablyDegraded(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 	putAndBindSteward(t, store, 1)
 	receipt, err := store.Remember(t.Context(), auth, v1alpha1.RememberRequest{
-		Text: "baseline survives provider outage", IdempotencyKey: "pending-degraded-recall",
+		Text: "baseline survives Worker outage", IdempotencyKey: "pending-degraded-recall",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	response, err := store.Recall(t.Context(), auth, testRecall("provider outage", receipt.ConsistencyToken))
+	response, err := store.Recall(t.Context(), auth, testRecall("Worker outage", receipt.ConsistencyToken))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !response.Degraded || len(response.Fragments) != 1 || response.Fragments[0].Text != "baseline survives provider outage" {
+	if !response.Degraded || len(response.Fragments) != 1 || response.Fragments[0].Text != "baseline survives Worker outage" {
 		t.Fatalf("pending baseline Recall = %+v", response)
 	}
 	inspection, err := store.Inspect(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if inspection.Steward.PendingJobs != 1 || inspection.Steward.ConfiguredWorkers != 0 || inspection.Steward.ConfiguredProviders != 0 {
+	if inspection.Steward.PendingJobs != 1 {
 		t.Fatalf("pending Steward diagnostics = %+v", inspection.Steward)
 	}
 	if _, err := store.DisableSteward(t.Context(), managementv1alpha1.DisableStewardRequest{
@@ -236,7 +236,7 @@ func TestPendingStewardJobLeavesBaselineRecallObservablyDegraded(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	disabled, err := store.Recall(t.Context(), auth, testRecall("provider outage", receipt.ConsistencyToken))
+	disabled, err := store.Recall(t.Context(), auth, testRecall("Worker outage", receipt.ConsistencyToken))
 	if err != nil {
 		t.Fatal(err)
 	}

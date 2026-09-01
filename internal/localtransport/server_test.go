@@ -11,6 +11,7 @@ import (
 	"time"
 
 	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
+	stewardv1alpha1 "github.com/caelis-labs/memory/api/memory/steward/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 	"github.com/caelis-labs/memory/internal/appliance"
 )
@@ -175,6 +176,53 @@ func TestManagementAuthorizationIsSeparateAndFailClosed(t *testing.T) {
 				t.Fatalf("wrong bearer status = %d, want 401", response.StatusCode)
 			}
 		})
+	}
+}
+
+func TestStewardWorkerAuthorizationIsSeparateAndFailClosed(t *testing.T) {
+	store, err := appliance.Open(t.Context(), appliance.Options{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	server := httptest.NewServer(Handler(store))
+	t.Cleanup(server.Close)
+	managementBytes, err := os.ReadFile(store.ManagementCredentialPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	workerBytes, err := os.ReadFile(store.StewardWorkerCredentialPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	managementCredential := strings.TrimSpace(string(managementBytes))
+	workerCredential := strings.TrimSpace(string(workerBytes))
+	claimBody := []byte(`{"lease_seconds":30}`)
+
+	call := func(path, credential string, body []byte) int {
+		t.Helper()
+		request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, server.URL+path, bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Authorization", "Bearer "+credential)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		return response.StatusCode
+	}
+
+	if got := call(stewardv1alpha1.LocalPathClaim, managementCredential, claimBody); got != http.StatusUnauthorized {
+		t.Fatalf("management bearer on Worker route = %d, want 401", got)
+	}
+	if got := call(stewardv1alpha1.LocalPathClaim, workerCredential, claimBody); got != http.StatusOK {
+		t.Fatalf("Worker bearer on Worker route = %d, want 200", got)
+	}
+	if got := call(managementv1alpha1.LocalPathBootstrap, workerCredential, []byte(`{}`)); got != http.StatusUnauthorized {
+		t.Fatalf("Worker bearer on management route = %d, want 401", got)
 	}
 }
 

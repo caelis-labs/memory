@@ -66,7 +66,7 @@ func TestOwnerLockRejectsSecondProcessOwner(t *testing.T) {
 }
 
 func TestCredentialAndDatabasePathsRejectSymlinks(t *testing.T) {
-	for _, filename := range []string{DatabaseFilename, ManagementCredentialFile, OwnerLockFilename} {
+	for _, filename := range []string{DatabaseFilename, ManagementCredentialFile, StewardWorkerCredentialFile, OwnerLockFilename} {
 		t.Run(filename, func(t *testing.T) {
 			dataDir := t.TempDir()
 			target := filepath.Join(t.TempDir(), "target")

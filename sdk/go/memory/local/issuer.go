@@ -18,6 +18,11 @@ func NewIssuerClient(socketPath, credential string) *IssuerClient {
 	return &IssuerClient{client: NewClient(socketPath), credential: credential}
 }
 
+// NewIssuerClientForEndpoint binds an issuer client to one OS-local endpoint.
+func NewIssuerClientForEndpoint(endpoint v1alpha1.LocalEndpoint, credential string) *IssuerClient {
+	return &IssuerClient{client: NewClientForEndpoint(endpoint), credential: credential}
+}
+
 // IssueCapability issues or renews temporary authority for one immutable
 // Runtime binding. Renewal is a fresh call with the same binding references.
 func (c *IssuerClient) IssueCapability(ctx context.Context, request v1alpha1.CapabilityIssueRequest) (v1alpha1.RuntimeCapability, error) {

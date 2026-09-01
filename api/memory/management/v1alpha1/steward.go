@@ -50,8 +50,8 @@ type StewardBinding struct {
 	BoundAt        time.Time                 `json:"bound_at"`
 }
 
-// StewardConfiguration is owner-visible profile and binding state. Provider
-// credentials remain process configuration and are never returned here.
+// StewardConfiguration is owner-visible prompt-policy and binding state. Model,
+// provider, endpoint, and credential configuration belong downstream.
 type StewardConfiguration struct {
 	Profiles []stewardv1alpha1.Profile `json:"profiles"`
 	Bindings []StewardBinding          `json:"bindings"`

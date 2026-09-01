@@ -54,8 +54,9 @@ references are unioned and sorted for deterministic provenance.
 
 ## Steward execution
 
-A logical Steward is a versioned profile plus durable jobs executed by a shared
-worker pool. It is not a permanent conversation or one process per identity.
+A logical Steward is a versioned prompt-policy profile plus durable jobs claimed
+by external Worker processes. It is not a permanent conversation, one process
+per identity, or a model-provider stack inside `memoryd`.
 
 The first proposal vocabulary is intentionally small:
 
@@ -87,30 +88,37 @@ and Evidence, updates the projection, completes the Job, and marks receipt
 processing organized together. Changed retries and stale Revisions mutate
 nothing.
 
-Profile policy is durable and versioned, while provider transport and
-credentials are immutable process configuration. Remember and correction read
-the current Space binding and append a deterministic Job in the same
-transaction as the new receipt. A later binding change cannot rewrite that Job
-snapshot. Disabling a Space removes its binding and moves pending or leased
-Jobs plus receipt processing to a stable failed state; existing Records and
-baseline receipt indexes are untouched.
+Profile policy is durable and versioned. Provider transport, model selection,
+credentials, billing, and provider-specific limits belong exclusively to the
+downstream Worker host. Remember and correction read the current Space binding
+and append a deterministic Job in the same transaction as the new receipt. A
+later binding change cannot rewrite that Job snapshot. Disabling a Space removes
+its binding and moves pending or leased Jobs plus receipt processing to a stable
+failed state; existing Records and baseline receipt indexes are untouched.
 
-The shared Worker pool atomically claims the oldest available Job, changes its
-receipt status to processing, and receives an opaque lease token. Only a digest
-is durable. An expired lease returns to pending and any prior worker loses
-application authority. Provider input is assembled from the receipt and active
-same-Space heads, then oldest context heads are removed until the exact JSON
-fits the profile budget. Job, Space, lease, access policy, SourceContext, and
-provider credential never enter that JSON.
+An authenticated external Worker atomically claims the oldest available Job,
+changes its receipt status to processing, and receives an opaque lease token
+beside a bounded model-facing request. Only a lease digest is durable. An expired
+lease returns to pending and any prior Worker loses application authority. The
+request is assembled from the receipt and active same-Space heads, then oldest
+context heads are removed until the exact JSON fits the profile budget. Job,
+Space, lease, access policy, SourceContext, model/provider configuration, and all
+bearers never enter that JSON.
 
-The initial process adapter uses a fixed HTTPS endpoint or explicit loopback
-HTTP endpoint. Configuration and credential files are owner-only, redirects
-are disabled, response bytes and schema are bounded, and response bodies are
-never placed in durable failure state or ordinary logs. Provider absence,
-timeout, panic, poisoned output, conflict, and application failure use bounded
-durable retry before a terminal non-sensitive code. Starting without provider
-configuration starts no Workers and leaves accepted receipts on the baseline
-path.
+The Go Worker SDK accepts a `Generator` callback supplied by the downstream
+host. It contains callback panics and classifies only stable non-sensitive
+failure codes before calling claim/apply/fail routes. `memoryd` owns lease
+expiry, retry ceilings, exponential delay, proposal validation, and atomic
+canonical application; it has no outbound provider adapter. Starting without a
+Worker leaves accepted receipts on the baseline path.
+
+Schema 4 never reads or exposes the RC1 `provider_ref` and `model` columns. New
+rows write empty compatibility values; upgraded rows retain their old bytes so
+a prepared rollback can restore the exact RC1 generation. The physical columns
+remain temporarily because rebuilding the referenced Job/Revision/Evidence
+audit graph would add migration risk with no runtime value. They are private
+rollback residue, not domain fields, and are removed once the minimum supported
+upgrade floor is schema 4 or newer.
 
 Later operations such as RELATE, PROMOTE, DEMOTE, ARCHIVE, and model-enhanced
 Recall require independent evidence and acceptance cases.
@@ -146,11 +154,13 @@ digests are stored in SQLite. The raw management credential is generated once
 in an owner-only local file. Management authorization, issuer authorization,
 and Runtime capabilities remain separate.
 
-The first local transport is HTTP over an owner-only Unix Socket. Health is
-process liveness; readiness additionally reaches SQLite. This is an M1 local
-implementation, not a promise that a future remote backend uses SQLite or the
-same physical index layout. Another backend must pass the same semantic and
-durable conformance appropriate to its milestone.
+The local application transport is HTTP over an owner-only Unix Domain Socket
+on Darwin/Linux and an owner-restricted named pipe on Windows. SDK callers bind
+the same `LocalEndpoint` abstraction and application routes. Health is process
+liveness; readiness additionally reaches SQLite. This is a local implementation,
+not a promise that a future remote backend uses SQLite or the same physical
+index layout. Another backend must pass the same semantic and durable
+conformance appropriate to its milestone.
 
 M3 governance keeps corrections and deletion separate from receipt mutation.
 A correction adds a normal immutable receipt plus a durable same-Space relation;

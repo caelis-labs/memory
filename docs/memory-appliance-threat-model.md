@@ -46,11 +46,11 @@ does not grant access.
 | Consistency token is used as authority | Reauthorize its Space on every Recall |
 | Steward invents or widens facts | Same-Space evidence and deterministic proposal validation |
 | Model deletes evidence | No model-accessible physical deletion operation |
-| Provider receives appliance authority | Omit Space, Job, lease, capability, View, Grant, actor, audience, and SourceContext from structured input |
-| Provider bearer leaks through body or redirect | Keep credentials in owner-only process files, use headers only, and refuse redirects |
-| Cleartext provider egress exposes private receipts | Permit plain HTTP only to explicit loopback; external endpoints require HTTPS and operator selection |
+| Worker/model receives appliance authority | Keep lease beside the model-facing request and omit Space, Job, capability, View, Grant, actor, audience, SourceContext, and all bearers |
+| Worker credential is confused with root or Runtime authority | Use a distinct owner-local bearer accepted only by claim/apply/fail routes |
+| Model-provider egress exposes private receipts | Keep all provider configuration and egress in the downstream Worker host and require an explicit operator deployment decision |
 | Prompt injection grants mutation authority | Treat receipt and Record text as untrusted data; accept only the closed proposal vocabulary and revalidate canonical state |
-| Provider outage or poisoned output blocks memory | Baseline receipt Recall is independent; durable attempts, byte limits, panic containment, and terminal codes bound work |
+| Worker outage or poisoned output blocks memory | Baseline receipt Recall is independent; durable leases, attempts, byte limits, panic containment, and terminal codes bound work |
 | Global index reveals private existence | Per-Space search or proven authorization pre-filter |
 | Error or metric exposes content | IDs, sizes, digests, and typed codes only |
 | Memory delete is mistaken for global erasure | Explicitly disclose separate Caelis Session copy boundary |
@@ -87,12 +87,18 @@ idempotent deletion tombstones, and restart/reindex deletion verification.
 The recoverability slice adds encrypted streaming backup, staged restore,
 generation rotation, and a no-write pending state for lossless rollback. M3
 also adds secret-free incident diagnostics, crash-recoverable management-token
-rotation, stopped-generation upgrade preparation, and an explicit
-`darwin/arm64` native support boundary. The local owner account and its data
-directory remain one trust domain; remote organization tenancy and hardware
-key custody are not provided. M4 adds explicit provider egress policy,
-structured prompt/data separation, profile byte and context budgets, durable
-bounded attempts, panic containment, closed proposal validation, and job
-poisoning controls. The configured provider still receives receipt content;
-endpoint trust, provider retention, billing, and jurisdiction remain operator
-responsibilities.
+rotation, stopped-generation upgrade preparation, and an initial
+`darwin/arm64` RC boundary. The local owner account and its data directory remain
+one trust domain; remote organization tenancy and hardware key custody are not
+provided. M4 and GA Closure add structured prompt/data separation, a distinct
+Worker bearer, profile byte and context budgets, durable bounded attempts, panic
+containment, closed proposal validation, and job poisoning controls. A deployed
+downstream Worker still sends receipt content to its selected model; endpoint
+trust, provider retention, billing, credentials, and jurisdiction remain that
+downstream operator's responsibility. Formal GA additionally requires native
+security and lifecycle evidence on all six RoadMap platforms. GA Closure adds a
+transport-neutral endpoint, Windows named pipe restricted to the current owner
+SID, Windows byte-range owner locking, and portable filesystem diagnostics.
+Cross-compilation of those paths does not close the residual risk: Windows file
+ACL inheritance, named-pipe attach/restart, service-account ownership, and every
+native upgrade/rollback path still require G5 execution evidence.

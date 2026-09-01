@@ -15,17 +15,17 @@ import (
 )
 
 const (
-	minStewardLease = time.Second
-	maxStewardLease = 10 * time.Minute
+	minStewardLease    = time.Second
+	maxStewardLease    = 10 * time.Minute
+	maxStewardAttempts = 5
+	stewardRetryBase   = time.Second
 )
 
-// StewardWork is one appliance-owned lease plus the provider routing metadata
-// that must stay outside the model-visible WorkRequest.
+// StewardWork is one appliance-owned lease beside the model-visible request.
 type StewardWork struct {
-	Lease       StewardLease
-	ProviderRef string
-	Attempt     int
-	Request     stewardv1alpha1.WorkRequest
+	Lease   StewardLease
+	Attempt int
+	Request stewardv1alpha1.WorkRequest
 }
 
 // StewardFailure transitions a leased Job either to a bounded retry or to a
@@ -39,6 +39,8 @@ type StewardFailure struct {
 // ClaimStewardJob reclaims expired leases and atomically leases the oldest
 // available Job. Space and lease identity never enter the returned WorkRequest.
 func (s *Store) ClaimStewardJob(ctx context.Context, leaseDuration time.Duration) (StewardWork, bool, error) {
+	s.stewardJobMu.Lock()
+	defer s.stewardJobMu.Unlock()
 	if err := s.requireMutableGeneration(); err != nil {
 		return StewardWork{}, false, err
 	}
@@ -88,6 +90,25 @@ func (s *Store) claimStewardJob(
 	formattedNow := formatTime(now)
 	if _, err := tx.ExecContext(ctx,
 		`UPDATE steward_jobs
+		 SET state = 'failed', lease_expires_at = NULL, lease_token_digest = '',
+		 terminal_error_code = 'attempts_exhausted', updated_at = ?
+		 WHERE attempts >= ? AND (
+		  (state = 'leased' AND lease_expires_at <= ?)
+		  OR (state = 'pending' AND available_at <= ?)
+		 )`, formattedNow, maxStewardAttempts, formattedNow, formattedNow); err != nil {
+		return rollback(fmt.Errorf("fail exhausted Steward jobs: %w", err))
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE receipt_processing
+		 SET state = 'failed', last_attempt_at = ?, terminal_error_code = 'attempts_exhausted'
+		 WHERE receipt_id IN (
+		  SELECT receipt_id FROM steward_jobs
+		  WHERE state = 'failed' AND terminal_error_code = 'attempts_exhausted' AND updated_at = ?
+		 )`, formattedNow, formattedNow); err != nil {
+		return rollback(fmt.Errorf("fail exhausted receipt processing: %w", err))
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE steward_jobs
 		 SET state = 'pending', lease_expires_at = NULL, lease_token_digest = '',
 		 terminal_error_code = '', available_at = ?, updated_at = ?
 		 WHERE state = 'leased' AND lease_expires_at <= ?`, formattedNow, formattedNow, formattedNow); err != nil {
@@ -108,8 +129,8 @@ func (s *Store) claimStewardJob(
 	err = tx.QueryRowContext(ctx,
 		`SELECT job_id, receipt_id, space_id, profile_id, profile_version, attempts
 		 FROM steward_jobs
-		 WHERE state = 'pending' AND available_at <= ?
-		 ORDER BY created_at, job_id LIMIT 1`, formattedNow).Scan(
+		 WHERE state = 'pending' AND available_at <= ? AND attempts < ?
+		 ORDER BY created_at, job_id LIMIT 1`, formattedNow, maxStewardAttempts).Scan(
 		&jobID, &receiptID, &spaceID, &profileID, &profileVersion, &attempts)
 	if errors.Is(err, sql.ErrNoRows) {
 		if err := tx.Commit(); err != nil {
@@ -176,8 +197,7 @@ func (s *Store) claimStewardJob(
 		return StewardWork{}, false, false, fmt.Errorf("commit Steward lease: %w", err)
 	}
 	return StewardWork{
-		Lease: StewardLease{JobID: jobID, Token: leaseToken}, ProviderRef: profile.ProviderRef,
-		Attempt: attempts + 1, Request: request,
+		Lease: StewardLease{JobID: jobID, Token: leaseToken}, Attempt: attempts + 1, Request: request,
 	}, true, false, nil
 }
 
@@ -251,6 +271,8 @@ func readStewardWorkRequest(
 
 // FailStewardJob releases a valid lease to a delayed retry or terminal state.
 func (s *Store) FailStewardJob(ctx context.Context, lease StewardLease, failure StewardFailure) error {
+	s.stewardJobMu.Lock()
+	defer s.stewardJobMu.Unlock()
 	if err := s.requireMutableGeneration(); err != nil {
 		return err
 	}
@@ -276,6 +298,13 @@ func (s *Store) FailStewardJob(ctx context.Context, lease StewardLease, failure 
 		return ErrStewardLeaseLost
 	}
 	now := s.now().UTC()
+	if !job.leaseExpiresAt.Valid {
+		return ErrStewardLeaseLost
+	}
+	leaseExpiry, err := parseTime(job.leaseExpiresAt.String)
+	if err != nil || !leaseExpiry.After(now) {
+		return ErrStewardLeaseLost
+	}
 	formattedNow := formatTime(now)
 	if failure.Terminal {
 		if err := failStewardJobTx(ctx, tx, lease.JobID, job.receiptID, formattedNow, failure.Code); err != nil {
@@ -298,6 +327,45 @@ func (s *Store) FailStewardJob(ctx context.Context, lease StewardLease, failure 
 		return fmt.Errorf("commit Steward failure: %w", err)
 	}
 	return nil
+}
+
+// ReportStewardFailure applies the appliance-owned retry ceiling and delay to a
+// classified external Worker failure.
+func (s *Store) ReportStewardFailure(ctx context.Context, request stewardv1alpha1.FailRequest) error {
+	if err := s.requireMutableGeneration(); err != nil {
+		return err
+	}
+	if request.Lease.JobID == "" || request.Lease.Token == "" || !validStewardFailureCode(request.Code) {
+		return s.serviceError(v1alpha1.ErrorCodeInvalidArgument, "invalid Steward failure", false)
+	}
+	var attempts int
+	if err := s.db.QueryRowContext(ctx, `SELECT attempts FROM steward_jobs WHERE job_id = ?`, request.Lease.JobID).Scan(&attempts); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrStewardLeaseLost
+		}
+		return fmt.Errorf("read Steward failure attempt: %w", err)
+	}
+	terminal := !request.Retryable || attempts >= maxStewardAttempts
+	failure := StewardFailure{Code: request.Code, Terminal: terminal}
+	if !terminal {
+		failure.RetryAfter = stewardRetryDelay(attempts)
+	}
+	return s.FailStewardJob(ctx, request.Lease, failure)
+}
+
+func stewardRetryDelay(attempt int) time.Duration {
+	shift := attempt - 1
+	if shift < 0 {
+		shift = 0
+	}
+	if shift > 11 {
+		shift = 11
+	}
+	delay := stewardRetryBase * time.Duration(1<<shift)
+	if delay > time.Hour {
+		return time.Hour
+	}
+	return delay
 }
 
 func failStewardJobTx(

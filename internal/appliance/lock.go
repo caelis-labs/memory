@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 )
 
 type ownerLock struct {
@@ -21,13 +20,13 @@ func acquireOwnerLock(dataDir string) (*ownerLock, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open owner lock: %w", err)
 	}
-	if err := file.Chmod(0o600); err != nil {
+	if err := secureOwnerPath(path, 0o600); err != nil {
 		_ = file.Close()
 		return nil, fmt.Errorf("secure owner lock: %w", err)
 	}
-	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := lockOwnerFile(file); err != nil {
 		_ = file.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+		if errors.Is(err, errOwnerLockContended) {
 			return nil, ErrOwnerLocked
 		}
 		return nil, fmt.Errorf("acquire owner lock: %w", err)
@@ -57,7 +56,7 @@ func (l *ownerLock) close() error {
 }
 
 func releaseOwnerLock(file *os.File) error {
-	unlockErr := syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+	unlockErr := unlockOwnerFile(file)
 	closeErr := file.Close()
 	return errors.Join(unlockErr, closeErr)
 }

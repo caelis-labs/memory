@@ -11,12 +11,13 @@ import (
 )
 
 const (
-	DatabaseFilename           = "memory.db"
-	OwnerLockFilename          = "memoryd.lock"
-	ManagementCredentialFile   = "management.token"
-	SocketFilename             = v1alpha1.LocalSocketFilename
-	CurrentSchemaVersion       = 3
-	defaultSQLiteBusyTimeoutMS = 2_000
+	DatabaseFilename            = "memory.db"
+	OwnerLockFilename           = "memoryd.lock"
+	ManagementCredentialFile    = "management.token"
+	StewardWorkerCredentialFile = "steward-worker.token"
+	SocketFilename              = v1alpha1.LocalSocketFilename
+	CurrentSchemaVersion        = 4
+	defaultSQLiteBusyTimeoutMS  = 2_000
 )
 
 // Options controls local durable storage. Faults are test-only failure points

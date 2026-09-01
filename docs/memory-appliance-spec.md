@@ -69,7 +69,7 @@ The Memory Appliance owns:
 - Realms, cognitive Identities, Spaces, View definitions, grants, and
   capabilities;
 - receipt payloads, processing state, consistency cursors, and retrieval;
-- classification, semantic organization, models, prompts, lifecycle, retention,
+- classification, semantic organization, prompt policies, lifecycle, retention,
   and forgetting;
 - all indexes and projections;
 - data-plane and management-plane authorization;
@@ -385,38 +385,41 @@ are disabled or unavailable.
 
 ## Semantic Steward extension
 
-The provider protocol is `memory.steward.v1alpha1`. A logical Steward is a
-versioned model/prompt-policy profile plus durable receipt jobs executed by a
-shared worker pool. It is not a permanent conversation, one Agent per Identity,
-or a second receipt authority. Profile identity and version are captured when a
-job is created; replacing a model or prompt affects only later jobs.
+The external Worker protocol is `memory.steward.v1alpha1`. A logical Steward is
+a versioned appliance prompt-policy profile plus durable receipt jobs claimed by
+downstream Workers. It is not a permanent conversation, one Agent per Identity,
+a built-in provider stack, or a second receipt authority. Profile identity and
+version are captured when a job is created; replacing a prompt policy affects
+only later jobs. A downstream host independently chooses its provider and model
+for each Worker deployment.
 
-Profiles contain a provider reference, model reference, prompt policy, context
-record limit, and exact input/output byte budgets. A version is immutable.
-Provider endpoint and credential configuration is process-owned and out of
-band: it is not stored in a profile, database row, Job, Session, or provider
-request. Binding a profile to a Space creates Jobs only for receipts accepted
-after that binding commits. Removing the binding cancels pending or leased work
-without deleting receipts or semantic history.
+Profiles contain a system prompt policy, context-record limit, and exact
+input/output byte budgets. A version is immutable. Provider endpoint, model,
+credentials, billing, and model-specific retry configuration are downstream
+configuration and never enter an appliance profile, database Job, Session, or
+Worker request. Binding a profile to a Space creates Jobs only for receipts
+accepted after that binding commits. Removing the binding cancels pending or
+leased work without deleting receipts or semantic history.
 
-One provider request contains the captured profile, one immutable receipt, and
-a bounded list of active same-Space Record heads with their Evidence. It
-deliberately omits Space, Job, lease, capability, View, Grant, actor, audience,
-and SourceContext. Receipt and Evidence IDs support proposal provenance but are
-not authority. The shared Worker pool reclaims expired durable leases, bounds
-attempts and exponential delay, contains provider panics, and classifies only
-stable non-sensitive failure codes. An unknown application response is retried
-with the identical lease and proposal.
+A separately authenticated Worker claims a bounded request containing the
+captured policy, one immutable receipt, and active same-Space Record heads with
+their Evidence. It deliberately omits Space, Job, lease, capability, View,
+Grant, actor, audience, and SourceContext. Receipt and Evidence IDs support
+proposal provenance but are not authority. Claim responses carry an opaque
+lease beside the model-facing request. The Worker SDK passes only the request
+to an injected `Generator` callback and uses the lease only to apply or fail the
+result. `memoryd` never makes an outbound model-provider call.
 
-The built-in HTTP adapter permits HTTPS or explicit loopback HTTP, refuses
-redirects, limits request and response bytes, requires the versioned response
-envelope, rejects unknown fields, and validates proposal shape before canonical
-application validates it again. Provider configuration and optional credential
-files must be owner-only regular files. Sending private receipt text to an
-external provider is an operator-selected egress decision, never an automatic
-cross-Space publication.
+The appliance reclaims expired durable leases, bounds attempts and exponential
+delay, and records only stable non-sensitive failure codes. Worker processes
+contain provider panics and enforce provider-specific response limits before
+submitting the already-bounded proposal. An unknown apply response is retried
+with the identical lease and proposal. Sending private receipt text to a model
+is an explicit downstream egress and retention decision; claiming work is
+therefore restricted by a distinct owner-local Worker bearer that is neither a
+Runtime capability nor the owner-management credential.
 
-Provider output is an untrusted proposal with exactly four operations:
+Worker output is an untrusted proposal with exactly four operations:
 
 ```text
 ADD         create an appliance-owned Record at Revision 1
@@ -564,10 +567,14 @@ diagnostic storage schema version. The host separately verifies the native
 binary SHA-256 from a pinned sidecar manifest before launch and compares the
 handshake build identity with that manifest after readiness.
 
-Buildability is not a support claim. A release line separately publishes its
-native support matrix; the first M5 candidate contains only `darwin/arm64`.
-Supported packaging rejects an artifact outside that matrix even when Go can
-cross-compile it.
+Buildability is not a support claim. `v0.5.0-rc.1` contains only native
+`darwin/arm64` evidence. Formal GA requires `darwin/amd64`, `darwin/arm64`,
+`linux/amd64`, `linux/arm64`, `windows/amd64`, and `windows/arm64`. Darwin and
+Linux use owner-only Unix Domain Sockets; Windows uses an owner-restricted named
+pipe. The endpoint representation is transport-neutral to callers and all six
+implementations expose identical application routes, authentication, and
+handshake semantics. Supported packaging rejects an artifact outside the
+native-evidence matrix even when Go can cross-compile it.
 
 Runtime capability issuance is a separate issuer-plane operation. Its request
 contains principal, Grant, actor, audience, operation, and TTL references while

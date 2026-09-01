@@ -43,7 +43,7 @@ func (s *Store) PutStewardProfile(
 		 profile_id, version, provider_ref, model, system_prompt, max_context_records,
 		 max_input_bytes, max_output_bytes, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		request.Profile.ProfileID, request.Profile.Version, request.Profile.ProviderRef, request.Profile.Model,
+		request.Profile.ProfileID, request.Profile.Version, "", "",
 		request.Profile.SystemPrompt, request.Profile.MaxContextRecords, request.Profile.MaxInputBytes,
 		request.Profile.MaxOutputBytes, formatTime(now)); err != nil {
 		return managementv1alpha1.PutStewardProfileResponse{}, s.databaseError("store Steward profile", err)
@@ -160,7 +160,7 @@ func (s *Store) DisableSteward(
 func (s *Store) GetStewardConfiguration(ctx context.Context) (managementv1alpha1.StewardConfiguration, error) {
 	var result managementv1alpha1.StewardConfiguration
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT profile_id, version, provider_ref, model, system_prompt, max_context_records,
+		`SELECT profile_id, version, system_prompt, max_context_records,
 		 max_input_bytes, max_output_bytes, created_at
 		 FROM steward_profiles ORDER BY profile_id, version`)
 	if err != nil {
@@ -169,8 +169,8 @@ func (s *Store) GetStewardConfiguration(ctx context.Context) (managementv1alpha1
 	for rows.Next() {
 		var profile stewardv1alpha1.Profile
 		var createdAt string
-		if err := rows.Scan(&profile.ProfileID, &profile.Version, &profile.ProviderRef, &profile.Model,
-			&profile.SystemPrompt, &profile.MaxContextRecords, &profile.MaxInputBytes, &profile.MaxOutputBytes, &createdAt); err != nil {
+		if err := rows.Scan(&profile.ProfileID, &profile.Version, &profile.SystemPrompt,
+			&profile.MaxContextRecords, &profile.MaxInputBytes, &profile.MaxOutputBytes, &createdAt); err != nil {
 			_ = rows.Close()
 			return managementv1alpha1.StewardConfiguration{}, s.databaseError("read Steward profile", err)
 		}
@@ -222,11 +222,10 @@ func readStewardProfile(
 	var profile stewardv1alpha1.Profile
 	var createdAt string
 	err := db.QueryRowContext(ctx,
-		`SELECT profile_id, version, provider_ref, model, system_prompt, max_context_records,
+		`SELECT profile_id, version, system_prompt, max_context_records,
 		 max_input_bytes, max_output_bytes, created_at
 		 FROM steward_profiles WHERE profile_id = ? AND version = ?`, profileID, version).Scan(
-		&profile.ProfileID, &profile.Version, &profile.ProviderRef, &profile.Model,
-		&profile.SystemPrompt, &profile.MaxContextRecords, &profile.MaxInputBytes,
+		&profile.ProfileID, &profile.Version, &profile.SystemPrompt, &profile.MaxContextRecords, &profile.MaxInputBytes,
 		&profile.MaxOutputBytes, &createdAt)
 	if err != nil {
 		return stewardv1alpha1.Profile{}, err

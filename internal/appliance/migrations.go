@@ -282,6 +282,16 @@ var migrations = []migration{
 		},
 		apply: migrateSemanticSpaceIndexes,
 	},
+	{
+		version: 4,
+		statements: []string{
+			// RC1 columns remain temporarily so schema-3 foreign keys do not require
+			// rebuilding the complete semantic audit graph. Schema 4 never reads or
+			// exposes them; preserving old bytes also keeps prepared RC1 rollback exact.
+			`INSERT INTO metadata(key, value) VALUES ('steward_execution_mode', 'external_worker')
+			 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		},
+	},
 }
 
 func migrate(ctx context.Context, db *sql.DB, now time.Time) error {

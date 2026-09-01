@@ -16,6 +16,7 @@ import (
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 	"github.com/caelis-labs/memory/internal/appliance"
 	"github.com/caelis-labs/memory/internal/backupfile"
+	"github.com/caelis-labs/memory/internal/buildinfo"
 	localclient "github.com/caelis-labs/memory/sdk/go/memory/local"
 	managementclient "github.com/caelis-labs/memory/sdk/go/memory/management"
 )
@@ -36,23 +37,38 @@ func main() {
 
 func run(arguments []string) error {
 	global := flag.NewFlagSet("memoryctl", flag.ContinueOnError)
-	var socketPath, credentialPath, issuerCredentialPath string
-	global.StringVar(&socketPath, "socket", "", "memoryd Unix socket (required)")
+	var socketPath, dataDir, credentialPath, issuerCredentialPath string
+	var showVersion bool
+	global.StringVar(&socketPath, "socket", "", "legacy memoryd Unix socket")
+	global.StringVar(&dataDir, "data-dir", "", "memoryd data directory used to derive the native local endpoint")
 	global.StringVar(&credentialPath, "management-credential", "", "management credential file")
 	global.StringVar(&issuerCredentialPath, "issuer-credential", "", "issuer credential file")
+	global.BoolVar(&showVersion, "version", false, "print tool version and build revision")
 	if err := global.Parse(arguments); err != nil {
 		return err
 	}
+	if showVersion {
+		fmt.Printf("memoryctl %s (%s)\n", buildinfo.ServiceVersion, buildinfo.BuildRevision)
+		return nil
+	}
 	if global.NArg() == 0 {
-		return fmt.Errorf("usage: memoryctl -socket PATH [-management-credential FILE] [-issuer-credential FILE] COMMAND")
+		return fmt.Errorf("usage: memoryctl (-data-dir DIR | -socket PATH) [-management-credential FILE] [-issuer-credential FILE] COMMAND")
 	}
 	command := global.Arg(0)
 	commandArgs := global.Args()[1:]
 	if command == "restore" || command == "restore-rollback" || command == "prepare-upgrade" {
 		return runOfflineRestore(command, commandArgs, credentialPath)
 	}
-	if socketPath == "" {
-		return fmt.Errorf("-socket is required for command %q", command)
+	if socketPath != "" && dataDir != "" {
+		return fmt.Errorf("-socket and -data-dir are mutually exclusive")
+	}
+	var endpoint v1alpha1.LocalEndpoint
+	if dataDir != "" {
+		endpoint = v1alpha1.DefaultLocalEndpoint(dataDir)
+	} else if socketPath != "" {
+		endpoint = v1alpha1.LocalEndpoint{Network: v1alpha1.LocalNetworkUnix, Address: socketPath}
+	} else {
+		return fmt.Errorf("-data-dir is required for command %q (-socket remains a Unix-only compatibility flag)", command)
 	}
 	timeout := 30 * time.Second
 	if command == "backup" || command == "export" {
@@ -61,7 +77,7 @@ func run(arguments []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	if command == "health" || command == "ready" || command == "compatibility" {
-		client := localclient.NewClient(socketPath)
+		client := localclient.NewClientForEndpoint(endpoint)
 		if command == "health" {
 			return client.Health(ctx)
 		}
@@ -90,7 +106,7 @@ func run(arguments []string) error {
 		return writeResult(response, err)
 	}
 	if command == "remember" || command == "recall" {
-		return runDataPlane(ctx, socketPath, command, commandArgs)
+		return runDataPlane(ctx, endpoint, command, commandArgs)
 	}
 	if command == "issue" {
 		var request v1alpha1.CapabilityIssueRequest
@@ -109,7 +125,7 @@ func run(arguments []string) error {
 		if err != nil {
 			return err
 		}
-		response, err := localclient.NewIssuerClient(socketPath, issuerCredential).IssueCapability(ctx, request)
+		response, err := localclient.NewIssuerClientForEndpoint(endpoint, issuerCredential).IssueCapability(ctx, request)
 		if err != nil {
 			_ = output.Close()
 			_ = os.Remove(outputPath)
@@ -133,7 +149,7 @@ func run(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	admin := managementclient.NewClient(socketPath, credential)
+	admin := managementclient.NewClientForEndpoint(endpoint, credential)
 	switch command {
 	case "bootstrap":
 		var request managementv1alpha1.BootstrapRequest
@@ -469,7 +485,7 @@ func runOfflineRestore(command string, arguments []string, credentialPath string
 	return writeResult(result, nil)
 }
 
-func runDataPlane(ctx context.Context, socketPath, command string, arguments []string) error {
+func runDataPlane(ctx context.Context, endpoint v1alpha1.LocalEndpoint, command string, arguments []string) error {
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	var authPath, value, key, token string
 	flags.StringVar(&authPath, "authorization", "", "Runtime authorization JSON file")
@@ -491,7 +507,7 @@ func runDataPlane(ctx context.Context, socketPath, command string, arguments []s
 		return err
 	}
 	auth := v1alpha1.CallAuthorization{Capability: file.Capability, ActorRef: file.ActorRef, Audience: file.Audience}
-	client := localclient.NewClient(socketPath)
+	client := localclient.NewClientForEndpoint(endpoint)
 	if command == "remember" {
 		if key == "" {
 			return fmt.Errorf("remember requires -idempotency-key")

@@ -1,10 +1,25 @@
+//go:build !windows
+
 package localtransport
 
 import (
 	"fmt"
 	"net"
 	"os"
+
+	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 )
+
+// Listen creates the owner-only local listener for this platform.
+func Listen(endpoint v1alpha1.LocalEndpoint) (net.Listener, error) {
+	if err := endpoint.Validate(); err != nil {
+		return nil, err
+	}
+	if endpoint.Network != v1alpha1.LocalNetworkUnix {
+		return nil, fmt.Errorf("local endpoint %q is unavailable on this platform", endpoint.Network)
+	}
+	return ListenUnix(endpoint.Address)
+}
 
 // ListenUnix replaces only a stale socket node, then creates an owner-only
 // local listener. A regular file is never removed.

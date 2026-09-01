@@ -3,12 +3,17 @@ SERVICE_VERSION := $(shell tr -d '\r\n' < VERSION)
 REVISION ?= $(shell git rev-parse HEAD)
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
+HOST_GOOS := $(shell go env GOHOSTOS)
+HOST_GOARCH := $(shell go env GOHOSTARCH)
 ARTIFACT_DIR ?= dist
-SIDECAR_NAME := memoryd-$(GOOS)-$(GOARCH)
-CHECKSUM_NAME := $(SIDECAR_NAME).sha256
+EXECUTABLE_SUFFIX := $(if $(filter windows,$(GOOS)),.exe,)
+SIDECAR_NAME := memoryd-$(GOOS)-$(GOARCH)$(EXECUTABLE_SUFFIX)
+MEMORYCTL_NAME := memoryctl-$(GOOS)-$(GOARCH)$(EXECUTABLE_SUFFIX)
+SIDECAR_CHECKSUM_NAME := $(SIDECAR_NAME).sha256
+MEMORYCTL_CHECKSUM_NAME := $(MEMORYCTL_NAME).sha256
 MANIFEST_SUPPORT_FLAG ?=
 
-.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported check m5-benchmark release-candidate
+.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported cross-build check m5-benchmark ga-soak release-candidate
 
 docs-links:
 	GOWORK=off go run ./scripts/markdown_links
@@ -42,19 +47,51 @@ sidecar:
 	GOWORK=off GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build -trimpath \
 		-ldflags "-s -w -X github.com/caelis-labs/memory/internal/buildinfo.ServiceVersion=$(SERVICE_VERSION) -X github.com/caelis-labs/memory/internal/buildinfo.BuildRevision=$(REVISION)" \
 		-o "$(ARTIFACT_DIR)/$(SIDECAR_NAME)" ./cmd/memoryd
-	GOWORK=off go run ./cmd/memorymanifest \
+	GOWORK=off GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build -trimpath \
+		-ldflags "-s -w -X github.com/caelis-labs/memory/internal/buildinfo.ServiceVersion=$(SERVICE_VERSION) -X github.com/caelis-labs/memory/internal/buildinfo.BuildRevision=$(REVISION)" \
+		-o "$(ARTIFACT_DIR)/$(MEMORYCTL_NAME)" ./cmd/memoryctl
+	GOWORK=off GOOS="$(HOST_GOOS)" GOARCH="$(HOST_GOARCH)" go run ./cmd/memorymanifest \
 		-binary "$(ARTIFACT_DIR)/$(SIDECAR_NAME)" \
 		-output "$(ARTIFACT_DIR)/$(SIDECAR_NAME).manifest.json" \
 		-service-version "$(SERVICE_VERSION)" -revision "$(REVISION)" \
 		-goos "$(GOOS)" -goarch "$(GOARCH)" $(MANIFEST_SUPPORT_FLAG)
-	@cd "$(ARTIFACT_DIR)" && shasum -a 256 "$(SIDECAR_NAME)" > "$(CHECKSUM_NAME)"
-	@cd "$(ARTIFACT_DIR)" && shasum -a 256 -c "$(CHECKSUM_NAME)"
+	GOWORK=off GOOS="$(HOST_GOOS)" GOARCH="$(HOST_GOARCH)" go run ./cmd/memorymanifest \
+		-binary "$(ARTIFACT_DIR)/$(MEMORYCTL_NAME)" \
+		-output "$(ARTIFACT_DIR)/$(MEMORYCTL_NAME).manifest.json" \
+		-service-version "$(SERVICE_VERSION)" -revision "$(REVISION)" \
+		-goos "$(GOOS)" -goarch "$(GOARCH)" $(MANIFEST_SUPPORT_FLAG)
+	GOWORK=off GOOS="$(HOST_GOOS)" GOARCH="$(HOST_GOARCH)" go run ./scripts/artifact_checksum -file "$(ARTIFACT_DIR)/$(SIDECAR_NAME)" -output "$(ARTIFACT_DIR)/$(SIDECAR_CHECKSUM_NAME)"
+	GOWORK=off GOOS="$(HOST_GOOS)" GOARCH="$(HOST_GOARCH)" go run ./scripts/artifact_checksum -file "$(ARTIFACT_DIR)/$(MEMORYCTL_NAME)" -output "$(ARTIFACT_DIR)/$(MEMORYCTL_CHECKSUM_NAME)"
+	GOWORK=off GOOS="$(HOST_GOOS)" GOARCH="$(HOST_GOARCH)" go run ./scripts/artifact_checksum -verify "$(ARTIFACT_DIR)/$(SIDECAR_CHECKSUM_NAME)"
+	GOWORK=off GOOS="$(HOST_GOOS)" GOARCH="$(HOST_GOARCH)" go run ./scripts/artifact_checksum -verify "$(ARTIFACT_DIR)/$(MEMORYCTL_CHECKSUM_NAME)"
 
 sidecar-supported:
 	$(MAKE) sidecar MANIFEST_SUPPORT_FLAG=-require-supported
 
+cross-build:
+	mkdir -p "$(ARTIFACT_DIR)"
+	GOWORK=off GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build -trimpath \
+		-ldflags "-s -w -X github.com/caelis-labs/memory/internal/buildinfo.ServiceVersion=$(SERVICE_VERSION) -X github.com/caelis-labs/memory/internal/buildinfo.BuildRevision=$(REVISION)" \
+		-o "$(ARTIFACT_DIR)/$(SIDECAR_NAME)" ./cmd/memoryd
+	GOWORK=off GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build -trimpath \
+		-ldflags "-s -w -X github.com/caelis-labs/memory/internal/buildinfo.ServiceVersion=$(SERVICE_VERSION) -X github.com/caelis-labs/memory/internal/buildinfo.BuildRevision=$(REVISION)" \
+		-o "$(ARTIFACT_DIR)/$(MEMORYCTL_NAME)" ./cmd/memoryctl
+	GOWORK=off GOOS="$(HOST_GOOS)" GOARCH="$(HOST_GOARCH)" go run ./cmd/memorymanifest -binary "$(ARTIFACT_DIR)/$(SIDECAR_NAME)" \
+		-output "$(ARTIFACT_DIR)/$(SIDECAR_NAME).manifest.json" -service-version "$(SERVICE_VERSION)" \
+		-revision "$(REVISION)" -goos "$(GOOS)" -goarch "$(GOARCH)"
+	GOWORK=off GOOS="$(HOST_GOOS)" GOARCH="$(HOST_GOARCH)" go run ./cmd/memorymanifest -binary "$(ARTIFACT_DIR)/$(MEMORYCTL_NAME)" \
+		-output "$(ARTIFACT_DIR)/$(MEMORYCTL_NAME).manifest.json" -service-version "$(SERVICE_VERSION)" \
+		-revision "$(REVISION)" -goos "$(GOOS)" -goarch "$(GOARCH)"
+	GOWORK=off GOOS="$(HOST_GOOS)" GOARCH="$(HOST_GOARCH)" go run ./scripts/artifact_checksum -file "$(ARTIFACT_DIR)/$(SIDECAR_NAME)" -output "$(ARTIFACT_DIR)/$(SIDECAR_CHECKSUM_NAME)"
+	GOWORK=off GOOS="$(HOST_GOOS)" GOARCH="$(HOST_GOARCH)" go run ./scripts/artifact_checksum -file "$(ARTIFACT_DIR)/$(MEMORYCTL_NAME)" -output "$(ARTIFACT_DIR)/$(MEMORYCTL_CHECKSUM_NAME)"
+	GOWORK=off GOOS="$(HOST_GOOS)" GOARCH="$(HOST_GOARCH)" go run ./scripts/artifact_checksum -verify "$(ARTIFACT_DIR)/$(SIDECAR_CHECKSUM_NAME)"
+	GOWORK=off GOOS="$(HOST_GOOS)" GOARCH="$(HOST_GOARCH)" go run ./scripts/artifact_checksum -verify "$(ARTIFACT_DIR)/$(MEMORYCTL_CHECKSUM_NAME)"
+
 m5-benchmark:
 	GOWORK=off go test ./internal/appliance -run '^$$' -bench '^BenchmarkM5' -benchtime=50x -benchmem
+
+ga-soak:
+	GOWORK=off go run ./scripts/ga_soak -output "$(if $(GA_SOAK_REPORT),$(GA_SOAK_REPORT),dist/ga-soak-report.json)"
 
 release-candidate: check durable race m5-benchmark sidecar-supported
 

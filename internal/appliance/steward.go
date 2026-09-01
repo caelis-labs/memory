@@ -30,11 +30,8 @@ var ErrStewardConflict = errors.New("steward proposal conflicts with canonical s
 var ErrStewardUnknownOutcome = errors.New("steward proposal commit outcome is unknown")
 
 // StewardLease is appliance-issued execution authority. Its token is never
-// sent to the model provider and is not part of a Proposal.
-type StewardLease struct {
-	JobID stewardv1alpha1.JobID
-	Token string
-}
+// passed to a model and is not part of a Proposal.
+type StewardLease = stewardv1alpha1.Lease
 
 type storedStewardJob struct {
 	receiptID      v1alpha1.ReceiptID
@@ -46,6 +43,7 @@ type storedStewardJob struct {
 	leaseDigest    string
 	proposalDigest string
 	resultJSON     string
+	attempts       int
 }
 
 // ApplyStewardProposal validates and atomically applies one untrusted model
@@ -55,6 +53,8 @@ func (s *Store) ApplyStewardProposal(
 	lease StewardLease,
 	proposal stewardv1alpha1.Proposal,
 ) (stewardv1alpha1.ApplyResult, error) {
+	s.stewardJobMu.Lock()
+	defer s.stewardJobMu.Unlock()
 	if err := s.requireMutableGeneration(); err != nil {
 		return stewardv1alpha1.ApplyResult{}, err
 	}
@@ -64,7 +64,7 @@ func (s *Store) ApplyStewardProposal(
 	if lease.JobID == "" || lease.Token == "" {
 		return stewardv1alpha1.ApplyResult{}, ErrStewardLeaseLost
 	}
-	canonical, digest, err := canonicalStewardProposal(proposal)
+	canonical, digest, encodedSize, err := canonicalStewardProposal(proposal)
 	if err != nil {
 		return stewardv1alpha1.ApplyResult{}, fmt.Errorf("%w: proposal normalization failed", ErrStewardProposalInvalid)
 	}
@@ -106,6 +106,13 @@ func (s *Store) ApplyStewardProposal(
 	leaseExpiry, err := parseTime(job.leaseExpiresAt.String)
 	if err != nil || !leaseExpiry.After(s.now()) {
 		return rollback(ErrStewardLeaseLost)
+	}
+	profile, err := readStewardProfile(ctx, tx, job.profileID, job.profileVersion)
+	if err != nil {
+		return rollback(fmt.Errorf("read Steward proposal profile: %w", err))
+	}
+	if encodedSize > profile.MaxOutputBytes {
+		return rollback(fmt.Errorf("%w: proposal exceeds profile output budget", ErrStewardProposalInvalid))
 	}
 
 	result := stewardv1alpha1.ApplyResult{Operation: canonical.Operation}
@@ -241,22 +248,22 @@ func readStewardJob(ctx context.Context, db databaseExecutor, jobID stewardv1alp
 	var job storedStewardJob
 	err := db.QueryRowContext(ctx,
 		`SELECT receipt_id, space_id, profile_id, profile_version, state, lease_expires_at,
-		 lease_token_digest, proposal_digest, result_json
+		 lease_token_digest, proposal_digest, result_json, attempts
 		 FROM steward_jobs WHERE job_id = ?`, jobID).Scan(
 		&job.receiptID, &job.spaceID, &job.profileID, &job.profileVersion, &job.state,
-		&job.leaseExpiresAt, &job.leaseDigest, &job.proposalDigest, &job.resultJSON)
+		&job.leaseExpiresAt, &job.leaseDigest, &job.proposalDigest, &job.resultJSON, &job.attempts)
 	return job, err
 }
 
-func canonicalStewardProposal(proposal stewardv1alpha1.Proposal) (stewardv1alpha1.Proposal, string, error) {
+func canonicalStewardProposal(proposal stewardv1alpha1.Proposal) (stewardv1alpha1.Proposal, string, int, error) {
 	canonical := proposal
 	canonical.EvidenceRefs = append([]v1alpha1.ReceiptID(nil), proposal.EvidenceRefs...)
 	sort.Slice(canonical.EvidenceRefs, func(i, j int) bool { return canonical.EvidenceRefs[i] < canonical.EvidenceRefs[j] })
 	encoded, err := json.Marshal(canonical)
 	if err != nil {
-		return stewardv1alpha1.Proposal{}, "", err
+		return stewardv1alpha1.Proposal{}, "", 0, err
 	}
-	return canonical, digestString(string(encoded)), nil
+	return canonical, digestString(string(encoded)), len(encoded), nil
 }
 
 func validateStewardEvidence(

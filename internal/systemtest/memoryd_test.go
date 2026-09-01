@@ -5,15 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -25,6 +21,7 @@ import (
 	localclient "github.com/caelis-labs/memory/sdk/go/memory/local"
 	managementclient "github.com/caelis-labs/memory/sdk/go/memory/management"
 	"github.com/caelis-labs/memory/sdk/go/memory/sidecar"
+	"github.com/caelis-labs/memory/sdk/go/memory/stewardworker"
 )
 
 func TestDurableConformanceSeparateProcess(t *testing.T) {
@@ -41,7 +38,7 @@ func TestGoldenPathPrivateAndSharedSurvivesProcessRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin := managementclient.NewClient(process.socket, strings.TrimSpace(string(credentialBytes)))
+	admin := managementclient.NewClientForEndpoint(process.endpoint, strings.TrimSpace(string(credentialBytes)))
 	now := time.Now().UTC()
 	operations := []v1alpha1.Operation{v1alpha1.OperationRemember, v1alpha1.OperationRecall, v1alpha1.OperationReceiptStatus}
 	grant := func(id, principal, actor string, view v1alpha1.ViewID, audience v1alpha1.Audience) appliance.Grant {
@@ -79,7 +76,7 @@ func TestGoldenPathPrivateAndSharedSurvivesProcessRestart(t *testing.T) {
 	}
 	issue := func(principal string, grantID v1alpha1.GrantID, actor string, audience v1alpha1.Audience) v1alpha1.CallAuthorization {
 		t.Helper()
-		capability, err := localclient.NewIssuerClient(process.socket, bootstrap.IssuerCredentials[principal]).IssueCapability(t.Context(), v1alpha1.CapabilityIssueRequest{
+		capability, err := localclient.NewIssuerClientForEndpoint(process.endpoint, bootstrap.IssuerCredentials[principal]).IssueCapability(t.Context(), v1alpha1.CapabilityIssueRequest{
 			PrincipalRef: principal, GrantRef: grantID, ActorRef: actor, Audience: audience,
 			Operations: operations, TTLSeconds: 1800,
 		})
@@ -91,7 +88,7 @@ func TestGoldenPathPrivateAndSharedSurvivesProcessRestart(t *testing.T) {
 	authA := issue("principal:a", "grant-a", "actor-a", v1alpha1.AudiencePrivate)
 	authB := issue("principal:b", "grant-b", "actor-b", v1alpha1.AudiencePrivate)
 	authShared := issue("principal:shared", "grant-shared", "actor-shared", v1alpha1.AudienceShared)
-	client := localclient.NewClient(process.socket)
+	client := localclient.NewClientForEndpoint(process.endpoint)
 	private, err := client.Remember(t.Context(), authA, v1alpha1.RememberRequest{
 		Text: "commit does not authorize push", IdempotencyKey: "golden-private",
 	})
@@ -106,7 +103,7 @@ func TestGoldenPathPrivateAndSharedSurvivesProcessRestart(t *testing.T) {
 	}
 	process.kill(t)
 	process = startMemoryd(t, binary, dataDir)
-	client = localclient.NewClient(process.socket)
+	client = localclient.NewClientForEndpoint(process.endpoint)
 	recall := func(auth v1alpha1.CallAuthorization, query string, token v1alpha1.ConsistencyToken) v1alpha1.RecallResponse {
 		t.Helper()
 		response, err := client.Recall(t.Context(), auth, v1alpha1.RecallRequest{
@@ -155,7 +152,7 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 	})
 	issuerPath := filepath.Join(root, "issuer.json")
 	runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"-management-credential", managementPath,
 		"bootstrap", "-file", bootstrapPath, "-issuer-output", issuerPath,
 	)
@@ -166,12 +163,12 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 	})
 	authorizationPath := filepath.Join(root, "authorization.json")
 	runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"-issuer-credential", issuerPath,
 		"issue", "-file", issuePath, "-authorization-output", authorizationPath,
 	)
 	rememberOutput := runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"remember", "-authorization", authorizationPath,
 		"-text", "memoryctl standalone fact", "-idempotency-key", "memoryctl-effect",
 	)
@@ -183,21 +180,21 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	recallOutput := runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"recall", "-authorization", authorizationPath, "-query", "standalone fact",
 	)
 	if !bytes.Contains(recallOutput, []byte("memoryctl standalone fact")) {
 		t.Fatalf("memoryctl Recall output = %s", recallOutput)
 	}
 	inspectOutput := runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"-management-credential", managementPath, "inspect",
 	)
 	if !bytes.Contains(inspectOutput, []byte(`"receipts": 1`)) {
 		t.Fatalf("memoryctl Inspect output = %s", inspectOutput)
 	}
 	searchOutput := runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"-management-credential", managementPath,
 		"search", "-query", "standalone fact",
 	)
@@ -205,7 +202,7 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 		t.Fatalf("memoryctl Search output = %s", searchOutput)
 	}
 	traceOutput := runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"-management-credential", managementPath,
 		"trace-receipt", "-id", string(remembered.ReceiptID),
 	)
@@ -213,7 +210,7 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 		t.Fatalf("memoryctl Trace output = %s", traceOutput)
 	}
 	correctOutput := runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"-management-credential", managementPath,
 		"correct-receipt", "-id", string(remembered.ReceiptID),
 		"-text", "memoryctl corrected fact", "-reason", "system test correction",
@@ -227,21 +224,21 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 		t.Fatalf("memoryctl Correct output = %s", correctOutput)
 	}
 	oldRecallOutput := runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"recall", "-authorization", authorizationPath, "-query", "standalone",
 	)
 	if bytes.Contains(oldRecallOutput, []byte("memoryctl standalone fact")) {
 		t.Fatalf("corrected original remained in Recall output = %s", oldRecallOutput)
 	}
 	correctedRecallOutput := runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"recall", "-authorization", authorizationPath, "-query", "corrected",
 	)
 	if !bytes.Contains(correctedRecallOutput, []byte("memoryctl corrected fact")) {
 		t.Fatalf("replacement missing from Recall output = %s", correctedRecallOutput)
 	}
 	deleteOutput := runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"-management-credential", managementPath,
 		"delete-receipt", "-id", string(corrected.ReplacementReceiptID),
 		"-reason", "system test erasure", "-idempotency-key", "memoryctl-deletion",
@@ -250,13 +247,13 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 		t.Fatalf("memoryctl Delete output = %s", deleteOutput)
 	}
 	runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"-management-credential", managementPath, "rebuild-fts",
 	)
 	process.kill(t)
 	process = startMemoryd(t, memoryd, dataDir)
 	afterRestart := runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"recall", "-authorization", authorizationPath, "-query", "corrected",
 	)
 	if bytes.Contains(afterRestart, []byte("memoryctl corrected fact")) {
@@ -268,7 +265,7 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 	}
 	oldCredential := strings.TrimSpace(string(oldCredentialBytes))
 	runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"-management-credential", managementPath, "rotate-management",
 	)
 	newCredentialBytes, err := os.ReadFile(managementPath)
@@ -279,18 +276,18 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 	if newCredential == "" || newCredential == oldCredential {
 		t.Fatal("memoryctl did not replace the management credential file")
 	}
-	if _, err := managementclient.NewClient(process.socket, oldCredential).Inspect(t.Context()); err == nil {
+	if _, err := managementclient.NewClientForEndpoint(process.endpoint, oldCredential).Inspect(t.Context()); err == nil {
 		t.Fatal("old management credential remained authorized after rotation")
 	}
 	rotatedInspection := runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"-management-credential", managementPath, "inspect",
 	)
 	if !bytes.Contains(rotatedInspection, []byte(`"protocol_version": "memory.management.v1alpha1"`)) {
 		t.Fatalf("rotated management credential could not inspect: %s", rotatedInspection)
 	}
 	runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"remember", "-authorization", authorizationPath,
 		"-text", "latest stopped upgrade snapshot fact", "-idempotency-key", "upgrade-snapshot-latest",
 	)
@@ -303,7 +300,7 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 		t.Fatalf("prepare-upgrade output = %s", preparedOutput)
 	}
 	process = startMemorydPendingRestore(t, memoryd, dataDir)
-	if _, err := localclient.NewClient(process.socket).Recall(t.Context(), v1alpha1.CallAuthorization{}, v1alpha1.RecallRequest{}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
+	if _, err := localclient.NewClientForEndpoint(process.endpoint).Recall(t.Context(), v1alpha1.CallAuthorization{}, v1alpha1.RecallRequest{}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
 		t.Fatalf("pending upgrade Recall error = %v, want unavailable", err)
 	}
 	process.stop(t)
@@ -313,7 +310,7 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 	)
 	process = startMemoryd(t, memoryd, dataDir)
 	afterUpgradeRollback := runCommand(t, memoryctl,
-		"-socket", process.socket,
+		"-data-dir", process.dataDir,
 		"recall", "-authorization", authorizationPath, "-query", "latest stopped upgrade snapshot",
 	)
 	if !bytes.Contains(afterUpgradeRollback, []byte("latest stopped upgrade snapshot fact")) {
@@ -325,57 +322,15 @@ func TestMemorydStewardWorkerAndMemoryctlConfiguration(t *testing.T) {
 	root := shortTempDir(t)
 	memoryd := buildCommand(t, root, "memoryd")
 	memoryctl := buildCommand(t, root, "memoryctl")
-	providerCredentialPath := filepath.Join(root, "provider.token")
-	if err := os.WriteFile(providerCredentialPath, []byte("provider-system-secret\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	providerRequests := make(chan []byte, 1)
-	provider := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.Header.Get("Authorization") != "Bearer provider-system-secret" {
-			t.Errorf("provider Authorization = %q", request.Header.Get("Authorization"))
-		}
-		body, err := io.ReadAll(request.Body)
-		if err != nil {
-			t.Error(err)
-			writer.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		select {
-		case providerRequests <- body:
-		default:
-		}
-		var work stewardv1alpha1.WorkRequest
-		if err := json.Unmarshal(body, &work); err != nil {
-			t.Error(err)
-			writer.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		_ = json.NewEncoder(writer).Encode(stewardv1alpha1.ProviderResponse{
-			Protocol: stewardv1alpha1.ProtocolVersion,
-			Proposal: stewardv1alpha1.Proposal{
-				Operation: stewardv1alpha1.OperationAdd, Kind: "claim", Text: "The project uses Go.",
-				EvidenceRefs: []v1alpha1.ReceiptID{work.Receipt.ReceiptID},
-			},
-		})
-	}))
-	defer provider.Close()
-	providerConfigPath := filepath.Join(root, "providers.json")
-	writeJSONFile(t, providerConfigPath, map[string]any{
-		"workers": 2, "lease_seconds": 30, "poll_ms": 20, "retry_base_ms": 50, "max_attempts": 3,
-		"providers": []map[string]any{{
-			"ref": "provider-system", "endpoint": provider.URL,
-			"credential_file": providerCredentialPath, "timeout_ms": 10000,
-		}},
-	})
 	dataDir := filepath.Join(root, "data")
-	process := startMemorydWithProviders(t, memoryd, dataDir, providerConfigPath)
+	process := startMemoryd(t, memoryd, dataDir)
 	t.Cleanup(func() { process.stop(t) })
 	managementPath := filepath.Join(dataDir, appliance.ManagementCredentialFile)
 	credentialBytes, err := os.ReadFile(managementPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin := managementclient.NewClient(process.socket, strings.TrimSpace(string(credentialBytes)))
+	admin := managementclient.NewClientForEndpoint(process.endpoint, strings.TrimSpace(string(credentialBytes)))
 	bootstrap, err := admin.Bootstrap(t.Context(), appliance.BootstrapRequest{
 		Realms:     []appliance.Realm{{ID: "realm-steward"}},
 		Identities: []appliance.Identity{{ID: "identity-steward", RealmID: "realm-steward"}},
@@ -398,12 +353,12 @@ func TestMemorydStewardWorkerAndMemoryctlConfiguration(t *testing.T) {
 	}
 	profilePath := filepath.Join(root, "profile.json")
 	writeJSONFile(t, profilePath, managementv1alpha1.PutStewardProfileRequest{Profile: stewardv1alpha1.ProfileSpec{
-		ProfileID: "profile-system", Version: 1, ProviderRef: "provider-system", Model: "model-system",
+		ProfileID: "profile-system", Version: 1,
 		SystemPrompt: "organize same-Space evidence", MaxContextRecords: 8,
 		MaxInputBytes: 128 << 10, MaxOutputBytes: 16 << 10,
 	}})
 	profileOutput := runCommand(t, memoryctl,
-		"-socket", process.socket, "-management-credential", managementPath,
+		"-data-dir", process.dataDir, "-management-credential", managementPath,
 		"put-steward-profile", "-file", profilePath,
 	)
 	if !bytes.Contains(profileOutput, []byte(`"created": true`)) {
@@ -414,17 +369,17 @@ func TestMemorydStewardWorkerAndMemoryctlConfiguration(t *testing.T) {
 		ProfileID: "profile-system", Version: 1, SpaceIDs: []v1alpha1.SpaceID{"space-steward"},
 	})
 	runCommand(t, memoryctl,
-		"-socket", process.socket, "-management-credential", managementPath,
+		"-data-dir", process.dataDir, "-management-credential", managementPath,
 		"bind-steward-profile", "-file", bindingPath,
 	)
 	configuration := runCommand(t, memoryctl,
-		"-socket", process.socket, "-management-credential", managementPath, "steward-configuration",
+		"-data-dir", process.dataDir, "-management-credential", managementPath, "steward-configuration",
 	)
 	if !bytes.Contains(configuration, []byte(`"profile_id": "profile-system"`)) ||
 		!bytes.Contains(configuration, []byte(`"space_id": "space-steward"`)) {
 		t.Fatalf("steward-configuration output = %s", configuration)
 	}
-	capability, err := localclient.NewIssuerClient(process.socket, bootstrap.IssuerCredentials["principal:steward"]).IssueCapability(t.Context(), v1alpha1.CapabilityIssueRequest{
+	capability, err := localclient.NewIssuerClientForEndpoint(process.endpoint, bootstrap.IssuerCredentials["principal:steward"]).IssueCapability(t.Context(), v1alpha1.CapabilityIssueRequest{
 		PrincipalRef: "principal:steward", GrantRef: "grant-steward", ActorRef: "actor-steward", Audience: v1alpha1.AudiencePrivate,
 		Operations: []v1alpha1.Operation{v1alpha1.OperationRemember, v1alpha1.OperationRecall, v1alpha1.OperationReceiptStatus}, TTLSeconds: 1800,
 	})
@@ -432,13 +387,30 @@ func TestMemorydStewardWorkerAndMemoryctlConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	auth := v1alpha1.CallAuthorization{Capability: capability.Token, ActorRef: "actor-steward", Audience: v1alpha1.AudiencePrivate}
-	client := localclient.NewClient(process.socket)
+	client := localclient.NewClientForEndpoint(process.endpoint)
 	remembered, err := client.Remember(t.Context(), auth, v1alpha1.RememberRequest{
 		Text: "the project uses Go", SourceContext: v1alpha1.SourceContext{ActorRef: "actor-steward"},
 		IdempotencyKey: "steward-system-job",
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	workerCredentialBytes, err := os.ReadFile(filepath.Join(dataDir, appliance.StewardWorkerCredentialFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	generator := &systemStewardGenerator{}
+	runner := stewardworker.Runner{
+		Client:    stewardworker.NewClientForEndpoint(process.endpoint, strings.TrimSpace(string(workerCredentialBytes))),
+		Generator: generator,
+		Options: stewardworker.RunnerOptions{
+			LeaseDuration: 30 * time.Second,
+			PollInterval:  20 * time.Millisecond,
+		},
+	}
+	found, err := runner.RunOnce(t.Context())
+	if err != nil || !found {
+		t.Fatalf("external Steward Worker RunOnce found=%v err=%v", found, err)
 	}
 	deadline := time.Now().Add(30 * time.Second)
 	for {
@@ -478,21 +450,31 @@ func TestMemorydStewardWorkerAndMemoryctlConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if inspection.Steward.ConfiguredProviders != 1 || inspection.Steward.ConfiguredWorkers != 2 ||
-		inspection.Steward.CompletedJobs != 1 || inspection.Steward.ActiveRecords != 1 ||
+	if inspection.Steward.CompletedJobs != 1 || inspection.Steward.ActiveRecords != 1 ||
 		!inspection.Steward.ProjectionHealthy {
 		t.Fatalf("system Steward diagnostics = %+v", inspection.Steward)
 	}
-	select {
-	case body := <-providerRequests:
-		for _, forbidden := range []string{"provider-system-secret", "space-steward", "actor-steward", "job-", "lease"} {
-			if bytes.Contains(body, []byte(forbidden)) {
-				t.Fatalf("provider body contains hidden value %q: %s", forbidden, body)
-			}
-		}
-	case <-time.After(time.Second):
-		t.Fatal("provider request was not captured")
+	requestJSON, err := json.Marshal(generator.request)
+	if err != nil {
+		t.Fatal(err)
 	}
+	for _, forbidden := range []string{"space-steward", "actor-steward", "job-", "lease", "provider", "model"} {
+		if bytes.Contains(requestJSON, []byte(forbidden)) {
+			t.Fatalf("Generator request contains hidden value %q: %s", forbidden, requestJSON)
+		}
+	}
+}
+
+type systemStewardGenerator struct {
+	request stewardv1alpha1.WorkRequest
+}
+
+func (g *systemStewardGenerator) Generate(_ context.Context, request stewardv1alpha1.WorkRequest) (stewardv1alpha1.Proposal, error) {
+	g.request = request
+	return stewardv1alpha1.Proposal{
+		Operation: stewardv1alpha1.OperationAdd, Kind: "claim", Text: "The project uses Go.",
+		EvidenceRefs: []v1alpha1.ReceiptID{request.Receipt.ReceiptID},
+	}, nil
 }
 
 func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {
@@ -507,7 +489,7 @@ func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin := managementclient.NewClient(process.socket, strings.TrimSpace(string(credentialBytes)))
+	admin := managementclient.NewClientForEndpoint(process.endpoint, strings.TrimSpace(string(credentialBytes)))
 	bootstrap, err := admin.Bootstrap(t.Context(), appliance.BootstrapRequest{
 		Realms:     []appliance.Realm{{ID: "realm-backup"}},
 		Identities: []appliance.Identity{{ID: "identity-backup", RealmID: "realm-backup"}},
@@ -528,7 +510,7 @@ func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	capability, err := localclient.NewIssuerClient(process.socket, bootstrap.IssuerCredentials["principal:backup"]).IssueCapability(t.Context(), v1alpha1.CapabilityIssueRequest{
+	capability, err := localclient.NewIssuerClientForEndpoint(process.endpoint, bootstrap.IssuerCredentials["principal:backup"]).IssueCapability(t.Context(), v1alpha1.CapabilityIssueRequest{
 		PrincipalRef: "principal:backup", GrantRef: "grant-backup", ActorRef: "actor-backup", Audience: v1alpha1.AudiencePrivate,
 		Operations: []v1alpha1.Operation{v1alpha1.OperationRemember, v1alpha1.OperationRecall}, TTLSeconds: 1800,
 	})
@@ -536,7 +518,7 @@ func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	auth := v1alpha1.CallAuthorization{Capability: capability.Token, ActorRef: "actor-backup", Audience: v1alpha1.AudiencePrivate}
-	client := localclient.NewClient(process.socket)
+	client := localclient.NewClientForEndpoint(process.endpoint)
 	before, err := client.Remember(t.Context(), auth, v1alpha1.RememberRequest{
 		Text: "encrypted backup private sentinel", IdempotencyKey: "backup-before",
 	})
@@ -545,7 +527,7 @@ func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {
 	}
 	exportPath := filepath.Join(root, "memory.ndjson")
 	runCommand(t, memoryctl,
-		"-socket", process.socket, "-management-credential", managementPath,
+		"-data-dir", process.dataDir, "-management-credential", managementPath,
 		"export", "-output", exportPath, "-include-deleted",
 	)
 	exported, err := os.ReadFile(exportPath)
@@ -558,7 +540,7 @@ func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {
 	backupPath := filepath.Join(root, "memory.backup")
 	keyPath := filepath.Join(root, "memory.backup.key")
 	runCommand(t, memoryctl,
-		"-socket", process.socket, "-management-credential", managementPath,
+		"-data-dir", process.dataDir, "-management-credential", managementPath,
 		"backup", "-output", backupPath, "-key-output", keyPath,
 	)
 	for _, path := range []string{exportPath, backupPath, keyPath} {
@@ -592,7 +574,7 @@ func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {
 		t.Fatalf("restore output = %s", restoreOutput)
 	}
 	process = startMemorydPendingRestore(t, memoryd, dataDir)
-	admin = managementclient.NewClient(process.socket, strings.TrimSpace(string(credentialBytes)))
+	admin = managementclient.NewClientForEndpoint(process.endpoint, strings.TrimSpace(string(credentialBytes)))
 	search, err := admin.SearchReceipts(t.Context(), managementv1alpha1.SearchReceiptsRequest{Query: "private sentinel", Limit: 10})
 	if err != nil {
 		t.Fatal(err)
@@ -607,7 +589,7 @@ func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {
 	if len(search.Receipts) != 0 {
 		t.Fatalf("post-backup receipt appeared in pending restore: %+v", search.Receipts)
 	}
-	client = localclient.NewClient(process.socket)
+	client = localclient.NewClientForEndpoint(process.endpoint)
 	if _, err := client.Recall(t.Context(), auth, v1alpha1.RecallRequest{
 		Query: "private", Budget: v1alpha1.RecallBudget{MaxFragments: 8, MaxBytes: 4096, DeadlineMS: 5000},
 	}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeUnavailable) {
@@ -619,7 +601,7 @@ func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {
 		"restore-rollback", "-data-dir", dataDir,
 	)
 	process = startMemoryd(t, memoryd, dataDir)
-	client = localclient.NewClient(process.socket)
+	client = localclient.NewClientForEndpoint(process.endpoint)
 	response, err := client.Recall(t.Context(), auth, v1alpha1.RecallRequest{
 		Query: "acknowledged", Budget: v1alpha1.RecallBudget{MaxFragments: 8, MaxBytes: 4096, DeadlineMS: 5000},
 	})
@@ -641,10 +623,10 @@ func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {
 	)
 	process = startMemorydPendingRestore(t, memoryd, dataDir)
 	runCommand(t, memoryctl,
-		"-socket", process.socket, "-management-credential", managementPath,
+		"-data-dir", process.dataDir, "-management-credential", managementPath,
 		"restore-commit",
 	)
-	client = localclient.NewClient(process.socket)
+	client = localclient.NewClientForEndpoint(process.endpoint)
 	if err := client.Ready(t.Context()); err != nil {
 		t.Fatalf("committed restored generation is not ready: %v", err)
 	}
@@ -676,7 +658,7 @@ func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {
 		t.Fatalf("corrupt restore = %v, output %s", err, output)
 	}
 	process = startMemoryd(t, memoryd, dataDir)
-	client = localclient.NewClient(process.socket)
+	client = localclient.NewClientForEndpoint(process.endpoint)
 	response, err = client.Recall(t.Context(), auth, v1alpha1.RecallRequest{
 		Query: "private sentinel", Budget: v1alpha1.RecallBudget{MaxFragments: 8, MaxBytes: 4096, DeadlineMS: 5000},
 	})
@@ -690,7 +672,11 @@ func TestPackagedSidecarIdentityHandshakeAndIssuerPlane(t *testing.T) {
 	root := shortTempDir(t)
 	const serviceVersion = "0.2.0-alpha.1-test"
 	const buildRevision = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	binary := filepath.Join(root, "memoryd-"+runtime.GOOS+"-"+runtime.GOARCH)
+	binaryName := "memoryd-" + runtime.GOOS + "-" + runtime.GOARCH
+	if runtime.GOOS == "windows" {
+		binaryName += ".exe"
+	}
+	binary := filepath.Join(root, binaryName)
 	build := exec.Command("go", "build", "-trimpath",
 		"-ldflags", "-X github.com/caelis-labs/memory/internal/buildinfo.ServiceVersion="+serviceVersion+
 			" -X github.com/caelis-labs/memory/internal/buildinfo.BuildRevision="+buildRevision,
@@ -714,7 +700,7 @@ func TestPackagedSidecarIdentityHandshakeAndIssuerPlane(t *testing.T) {
 	dataDir := filepath.Join(root, "data")
 	process := startMemoryd(t, verified, dataDir)
 	t.Cleanup(func() { process.stop(t) })
-	client := localclient.NewClient(process.socket)
+	client := localclient.NewClientForEndpoint(process.endpoint)
 	compatibility, err := client.CheckCompatibility(t.Context(), localclient.CompatibilityExpectation{
 		ServiceVersion: serviceVersion, BuildRevision: buildRevision,
 	})
@@ -734,7 +720,7 @@ func TestPackagedSidecarIdentityHandshakeAndIssuerPlane(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin := managementclient.NewClient(process.socket, strings.TrimSpace(string(credentialBytes)))
+	admin := managementclient.NewClientForEndpoint(process.endpoint, strings.TrimSpace(string(credentialBytes)))
 	bootstrap, err := admin.Bootstrap(t.Context(), appliance.BootstrapRequest{
 		Realms:     []appliance.Realm{{ID: "realm-m2"}},
 		Identities: []appliance.Identity{{ID: "identity-m2", RealmID: "realm-m2"}},
@@ -755,7 +741,7 @@ func TestPackagedSidecarIdentityHandshakeAndIssuerPlane(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	issuer := localclient.NewIssuerClient(process.socket, bootstrap.IssuerCredentials["principal:m2"])
+	issuer := localclient.NewIssuerClientForEndpoint(process.endpoint, bootstrap.IssuerCredentials["principal:m2"])
 	issueRequest := v1alpha1.CapabilityIssueRequest{
 		PrincipalRef: "principal:m2", GrantRef: "grant-m2", ActorRef: "actor-m2",
 		Audience:   v1alpha1.AudiencePrivate,
@@ -802,7 +788,7 @@ func newDurableProcessFixture(t *testing.T) conformance.DurableFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin := managementclient.NewClient(process.socket, strings.TrimSpace(string(credentialBytes)))
+	admin := managementclient.NewClientForEndpoint(process.endpoint, strings.TrimSpace(string(credentialBytes)))
 	now := time.Now().UTC()
 	bootstrap, err := admin.Bootstrap(t.Context(), appliance.BootstrapRequest{
 		Realms:     []appliance.Realm{{ID: "realm-system"}},
@@ -824,7 +810,7 @@ func newDurableProcessFixture(t *testing.T) conformance.DurableFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	capability, err := localclient.NewIssuerClient(process.socket, bootstrap.IssuerCredentials["principal:system"]).IssueCapability(t.Context(), v1alpha1.CapabilityIssueRequest{
+	capability, err := localclient.NewIssuerClientForEndpoint(process.endpoint, bootstrap.IssuerCredentials["principal:system"]).IssueCapability(t.Context(), v1alpha1.CapabilityIssueRequest{
 		PrincipalRef: "principal:system", GrantRef: "grant-system", ActorRef: "actor-system", Audience: v1alpha1.AudiencePrivate,
 		Operations: []v1alpha1.Operation{v1alpha1.OperationRemember, v1alpha1.OperationRecall, v1alpha1.OperationReceiptStatus},
 		TTLSeconds: 1800,
@@ -834,21 +820,22 @@ func newDurableProcessFixture(t *testing.T) conformance.DurableFixture {
 	}
 	auth := v1alpha1.CallAuthorization{Capability: capability.Token, ActorRef: "actor-system", Audience: v1alpha1.AudiencePrivate}
 	return conformance.DurableFixture{
-		Service:       localclient.NewClient(process.socket),
+		Service:       localclient.NewClientForEndpoint(process.endpoint),
 		Authorization: auth,
 		CrashAndRestart: func(t *testing.T) v1alpha1.DataPlane {
 			process.kill(t)
 			process = startMemoryd(t, binary, dataDir)
-			return localclient.NewClient(process.socket)
+			return localclient.NewClientForEndpoint(process.endpoint)
 		},
 	}
 }
 
 type memorydProcess struct {
-	command *exec.Cmd
-	socket  string
-	stderr  bytes.Buffer
-	waited  bool
+	command  *exec.Cmd
+	dataDir  string
+	endpoint v1alpha1.LocalEndpoint
+	stderr   bytes.Buffer
+	waited   bool
 }
 
 func startMemoryd(t *testing.T, binary, dataDir string) *memorydProcess {
@@ -857,10 +844,6 @@ func startMemoryd(t *testing.T, binary, dataDir string) *memorydProcess {
 
 func startMemorydPendingRestore(t *testing.T, binary, dataDir string) *memorydProcess {
 	return startMemorydWithState(t, binary, dataDir, false)
-}
-
-func startMemorydWithProviders(t *testing.T, binary, dataDir, providerConfigPath string) *memorydProcess {
-	return startMemorydCommand(t, binary, dataDir, true, "-steward-providers", providerConfigPath)
 }
 
 func startMemorydWithState(t *testing.T, binary, dataDir string, requireReady bool) *memorydProcess {
@@ -872,12 +855,12 @@ func startMemorydCommand(t *testing.T, binary, dataDir string, requireReady bool
 	arguments := []string{"-data-dir", dataDir}
 	arguments = append(arguments, extraArguments...)
 	command := exec.Command(binary, arguments...)
-	process := &memorydProcess{command: command, socket: filepath.Join(dataDir, appliance.SocketFilename)}
+	process := &memorydProcess{command: command, dataDir: dataDir, endpoint: v1alpha1.DefaultLocalEndpoint(dataDir)}
 	command.Stderr = &process.stderr
 	if err := command.Start(); err != nil {
 		t.Fatal(err)
 	}
-	client := localclient.NewClient(process.socket)
+	client := localclient.NewClientForEndpoint(process.endpoint)
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -916,20 +899,27 @@ func (p *memorydProcess) stop(t *testing.T) {
 	if p == nil || p.waited {
 		return
 	}
-	if err := p.command.Process.Signal(syscall.SIGTERM); err != nil && !errors.Is(err, os.ErrProcessDone) {
-		t.Errorf("stop memoryd: %v", err)
-		return
+	forced := false
+	if err := p.command.Process.Signal(os.Interrupt); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		if killErr := p.command.Process.Kill(); killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
+			t.Errorf("stop memoryd: interrupt=%v kill=%v", err, killErr)
+			return
+		}
+		forced = true
 	}
 	done := make(chan error, 1)
 	go func() { done <- p.command.Wait() }()
 	select {
 	case err := <-done:
 		p.waited = true
-		if err != nil {
+		if err != nil && !forced {
 			t.Errorf("memoryd graceful exit: %v\n%s", err, p.stderr.String())
 		}
-		if _, statErr := os.Lstat(p.socket); !os.IsNotExist(statErr) {
-			t.Errorf("memoryd graceful exit left socket behind: %v", statErr)
+		client := localclient.NewClientForEndpoint(p.endpoint)
+		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		defer cancel()
+		if healthErr := client.Health(ctx); healthErr == nil {
+			t.Errorf("memoryd local endpoint remained live after exit")
 		}
 	case <-time.After(10 * time.Second):
 		_ = p.command.Process.Kill()
@@ -958,8 +948,12 @@ func buildMemoryd(t *testing.T, root string) string {
 
 func buildCommand(t *testing.T, root, name string) string {
 	t.Helper()
+	packageName := name
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
 	binary := filepath.Join(root, name)
-	build := exec.Command("go", "build", "-o", binary, "../../cmd/"+name)
+	build := exec.Command("go", "build", "-o", binary, "../../cmd/"+packageName)
 	build.Env = append(os.Environ(), "GOWORK=off")
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build memoryd: %v\n%s", err, output)
@@ -1011,7 +1005,7 @@ func assertFragment(t *testing.T, response v1alpha1.RecallResponse, text string)
 
 func shortTempDir(t *testing.T) string {
 	t.Helper()
-	root, err := os.MkdirTemp("/tmp", "memoryd-systemtest-")
+	root, err := os.MkdirTemp("", "memoryd-systemtest-")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,23 +8,28 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"time"
 
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
+	"github.com/caelis-labs/memory/sdk/go/memory/internal/localhttp"
 )
 
 const maxResponseBytes = 1 << 20
 
-// Client carries memory.v1alpha1 over owner-local HTTP on a Unix socket.
+// Client carries memory.v1alpha1 over owner-local HTTP.
 type Client struct {
 	http *http.Client
 }
 
 // NewClient binds a client to one memoryd Unix socket.
 func NewClient(socketPath string) *Client {
-	return &Client{http: newHTTPClient(socketPath)}
+	return NewClientForEndpoint(v1alpha1.LocalEndpoint{Network: v1alpha1.LocalNetworkUnix, Address: socketPath})
+}
+
+// NewClientForEndpoint binds a client to an OS-local Unix socket or named pipe.
+func NewClientForEndpoint(endpoint v1alpha1.LocalEndpoint) *Client {
+	return &Client{http: localhttp.NewClient(endpoint)}
 }
 
 // CompatibilityExpectation pins the exact service artifact identity expected
@@ -205,14 +210,4 @@ func transportServiceError(err error) error {
 		Retryable: true,
 		RequestID: "local-transport-" + time.Now().UTC().Format("150405.000000000"),
 	}
-}
-
-func newHTTPClient(socketPath string) *http.Client {
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			var dialer net.Dialer
-			return dialer.DialContext(ctx, "unix", socketPath)
-		},
-	}
-	return &http.Client{Transport: transport}
 }

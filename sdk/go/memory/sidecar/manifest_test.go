@@ -11,7 +11,7 @@ import (
 
 func TestManifestVerifiesExactNativeExecutable(t *testing.T) {
 	directory := t.TempDir()
-	binaryPath := filepath.Join(directory, "memoryd-test")
+	binaryPath := filepath.Join(directory, nativeExecutableName("memoryd-test"))
 	if err := os.WriteFile(binaryPath, []byte("first executable bytes"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestSupportedPlatformRequiresNativeReleaseEvidence(t *testing.T) {
 
 func TestVerifySupportedNativeRejectsBuildablePreview(t *testing.T) {
 	directory := t.TempDir()
-	binaryPath := filepath.Join(directory, "memoryd-test")
+	binaryPath := filepath.Join(directory, nativeExecutableName("memoryd-test"))
 	if err := os.WriteFile(binaryPath, []byte("executable"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestVerifySupportedNativeRejectsBuildablePreview(t *testing.T) {
 
 func TestManifestRejectsPlatformTraversalAndSymlink(t *testing.T) {
 	directory := t.TempDir()
-	binaryPath := filepath.Join(directory, "memoryd-test")
+	binaryPath := filepath.Join(directory, nativeExecutableName("memoryd-test"))
 	if err := os.WriteFile(binaryPath, []byte("executable"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -94,8 +94,11 @@ func TestManifestRejectsPlatformTraversalAndSymlink(t *testing.T) {
 	if err := traversal.Validate(); err == nil {
 		t.Fatal("Validate() accepted executable traversal")
 	}
-	symlinkName := "memoryd-link"
+	symlinkName := nativeExecutableName("memoryd-link")
 	if err := os.Symlink(binaryPath, filepath.Join(directory, symlinkName)); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("Windows symlink privilege unavailable: %v", err)
+		}
 		t.Fatal(err)
 	}
 	symlinkManifest := manifest
@@ -107,7 +110,7 @@ func TestManifestRejectsPlatformTraversalAndSymlink(t *testing.T) {
 
 func TestLoadRejectsUnknownAndTrailingManifestData(t *testing.T) {
 	directory := t.TempDir()
-	binaryPath := filepath.Join(directory, "memoryd-test")
+	binaryPath := filepath.Join(directory, nativeExecutableName("memoryd-test"))
 	if err := os.WriteFile(binaryPath, []byte("executable"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -142,4 +145,11 @@ func TestLoadRejectsUnknownAndTrailingManifestData(t *testing.T) {
 	if _, err := Load(trailingPath); err == nil {
 		t.Fatal("Load() accepted trailing manifest data")
 	}
+}
+
+func nativeExecutableName(base string) string {
+	if runtime.GOOS == "windows" {
+		return base + ".exe"
+	}
+	return base
 }

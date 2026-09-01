@@ -1,6 +1,7 @@
 # Memory Appliance Acceptance
 
-Status: acceptance owner for the six-milestone roadmap.
+Status: acceptance owner for the original six milestones and the GA Closure
+line after `v0.5.0-rc.1`.
 
 ## Hard invariants
 
@@ -120,42 +121,50 @@ harness. `make durable` reruns the cross-process proof without cached results.
 | `G-010` | Diagnostics bound capacity, storage, receipt, projection, capability, restore, and rollback state without receipt text or credentials |
 | `G-011` | Management credential rotation revokes the old bearer immediately and across restart; either interrupted rename outcome recovers deterministically |
 | `G-012` | Offline upgrade preparation captures the exact stopped generation, gates all acknowledgements until commit, and permits old-version rollback without acknowledged loss |
-| `G-013` | A supported `darwin/arm64` sidecar binds exact version, revision, platform, and SHA-256; buildable previews are not accepted as supported artifacts |
+| `G-013` | The RC1 `darwin/arm64` sidecar binds exact version, revision, platform, and SHA-256 and is explicitly labeled as a candidate rather than the formal GA matrix |
 
 ## M4 Semantic Steward Extension matrix
 
 | ID | Behavior |
 | --- | --- |
-| `S-001` | Provider output accepts only `ADD`, `MERGE`, `SUPERSEDE`, or `IGNORE`; malformed, oversized, duplicate-evidence, and unsupported proposals mutate nothing |
+| `S-001` | Worker output accepts only `ADD`, `MERGE`, `SUPERSEDE`, or `IGNORE`; malformed, oversized, duplicate-evidence, and unsupported proposals mutate nothing |
 | `S-002` | A proposal contains no Space, Job, profile, ACL, publication, tombstone, or physical-deletion authority; the appliance generates new Record IDs |
 | `S-003` | Every applied Revision cites its Job receipt and only existing Evidence in that same Space |
 | `S-004` | Record heads are mutable only through application logic; Revision and Evidence rows reject update and delete |
 | `S-005` | `MERGE` retains current Evidence and all target operations require the exact current Revision; stale proposals conflict without mutation |
 | `S-006` | Job completion, semantic mutation, projection, and receipt status commit together; an unknown response retry returns exactly one effect |
 | `S-007` | Correcting or deleting cited evidence invalidates the active Record and removes its projection without rewriting immutable history |
-| `S-008` | A profile version is immutable and captured by each Job; model or prompt replacement changes only later Jobs |
-| `S-009` | Concurrent workers cannot own one Job; lease expiry, worker crash, retry, and terminal failure are durable and bounded |
-| `S-010` | Provider timeout, provider absence, disabled workers, and poisoned output leave baseline receipt Recall available and observably degraded |
+| `S-008` | A prompt-policy profile version is immutable and captured by each Job; profile replacement changes only later Jobs and contains no provider, model, endpoint, or credential configuration |
+| `S-009` | Concurrent Workers cannot own one Job; lease expiry, Worker crash, retry, and terminal failure are appliance-owned, durable, and bounded |
+| `S-010` | Worker timeout, Worker absence, disabled work, and poisoned output leave baseline receipt Recall available and observably degraded |
 | `S-011` | Recall enters only authorized per-Space semantic indexes, merges deterministically, deduplicates presentation, and retains complete receipt provenance |
 | `S-012` | Disabling Steward stops new semantic work without deleting receipts, Records, Revisions, Evidence, or baseline projections |
+| `S-013` | Worker claim/apply/fail uses a credential distinct from management, issuer, and Runtime capabilities; each other bearer fails closed on Worker routes |
+| `S-014` | The model-facing `Generator` receives only a bounded WorkRequest; Space, Job, lease, bearer, actor, audience, View, Grant, SourceContext, provider, and model configuration are absent |
+| `S-015` | `memoryd` starts and passes receipt Recall with no Worker and has no provider endpoint, provider credential, model name, or outbound model transport configuration |
 
-## M5 Release Candidate and GA matrix
+## M5 and GA Closure verification matrix
 
 | ID | Behavior |
 | --- | --- |
 | `V-001` | One clean exact commit passes documentation, format, whitespace, full test, vet, build, durable separate-process, and full race gates |
-| `V-002` | Portable Core gates pass on Linux and the complete candidate gate runs natively on the supported `darwin/arm64` platform |
-| `V-003` | The frozen 200-case receipt/semantic corpus has Recall@1 and precision 1.0 with complete provenance and no unsupported fragment |
+| `V-002` | Portable Core gates pass and the complete candidate lifecycle gate runs natively on `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `linux/arm64`, `windows/amd64`, and `windows/arm64` |
+| `V-003` | The frozen 200-case privacy-safe Chinese/mixed receipt/semantic corpus records Recall@k, precision, stale-current, abstention, and unsupported-claim metrics with complete provenance and zero private/shared leakage |
 | `V-004` | Remember, Recall, startup, reindex, backup, restore, and backlog measurements remain within the frozen same-hardware RC budgets |
 | `V-005` | The minimum supported schema-2 generation migrates transactionally with acknowledged receipt preservation and rollback remains lossless |
-| `V-006` | The packaged executable, manifest, and verified detached checksum bind exact service version, commit, platform, protocols, filename, and SHA-256 |
+| `V-006` | Packaged `memoryd` and public operator `memoryctl`, the manifest, and verified detached checksums bind exact service version, commit, platform, protocols, filename, and SHA-256 for all six platforms |
 | `V-007` | API module, SDK, service artifact, Caelis integration, and package consumers pin the same reviewed compatibility identity |
-| `V-008` | Storage, corruption, backup, provider, capability, Session-copy, upgrade, and release incidents have an accountable owner and safe first response |
+| `V-008` | Storage, corruption, backup, Worker, capability, Session-copy, upgrade, and release incidents have an accountable owner and safe first response |
 | `V-009` | Publication occurs only after explicit release authority and required exact-SHA CI succeeds |
 | `V-010` | A clean external consumer verifies the public artifact and passes Golden Path, crash/restart, disable, and zero-call Replay smoke |
+| `V-011` | `make ga-soak` creates 100 Spaces, 100,000 receipts, and 10,000 semantic Record heads and verifies restart, every receipt status, per-Space Recall provenance and isolation, reindex, backup/restore, then repeats those data-plane probes against the restored generation with bounded aggregate reporting |
+| `V-012` | Local source import sanitizes selected MEMORY text or Caelis Session JSONL into an aggregate report without committing or uploading raw private source text |
+| `V-013` | Darwin/Linux Unix sockets and Windows named pipes expose the same application routes, handshake, authorization failures, and shutdown semantics |
+| `V-014` | An external review maps findings to acceptance IDs and blocks the GA tag until every finding is resolved or recorded as an explicitly accepted risk |
 
-`V-001` through `V-008` produce a validated candidate. `V-009` and `V-010`
-are mandatory to call that candidate a completed GA release.
+`V-001` through `V-008` plus `V-011` through `V-013` produce a validated
+candidate. `V-009`, `V-010`, and `V-014` are mandatory to call that candidate a
+completed GA release.
 
 ## Failure injection by milestone
 
@@ -166,7 +175,10 @@ service loss during Recall, unknown Remember outcome, Session round trip, and
 zero-call Replay instrumentation. M3 adds restore generation changes, corrupted
 backup, partial migration rollback, delete/reindex/restart, and credential
 revocation. M4 adds malformed proposals, invalid evidence, stale revision,
-provider timeout, worker crash after model completion, and duplicate job claim.
+Worker timeout, Worker crash after model completion, wrong-bearer calls, and
+duplicate job claim. GA Closure adds sidecar orphan attachment, multi-process
+binding, named-pipe lifecycle, six native platform runs, and 100,000-receipt
+soak recovery.
 
 ## Empirical budgets
 

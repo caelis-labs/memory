@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
@@ -232,8 +231,6 @@ func (s *Store) inspectCapabilityDiagnostics(ctx context.Context, result *Inspec
 func (s *Store) inspectStewardDiagnostics(ctx context.Context, result *Inspection) error {
 	result.Steward.Profiles = result.Counts["steward_profiles"]
 	result.Steward.Bindings = result.Counts["space_steward_bindings"]
-	result.Steward.ConfiguredProviders = s.stewardProviders.Load()
-	result.Steward.ConfiguredWorkers = s.stewardWorkers.Load()
 	rows, err := s.db.QueryContext(ctx, `SELECT state, COUNT(*) FROM steward_jobs GROUP BY state`)
 	if err != nil {
 		return fmt.Errorf("count Steward job states: %w", err)
@@ -351,13 +348,12 @@ func inspectStorage(dataDir string) (managementv1alpha1.StorageDiagnostics, erro
 		item.set(uint64(info.Size()))
 	}
 	result.DataBytes = result.DatabaseBytes + result.WALBytes + result.SHMBytes + result.RollbackBytes
-	var filesystem syscall.Statfs_t
-	if err := syscall.Statfs(dataDir, &filesystem); err != nil {
+	filesystemBytes, availableBytes, err := storageCapacity(dataDir)
+	if err != nil {
 		return managementv1alpha1.StorageDiagnostics{}, fmt.Errorf("inspect storage capacity: %w", err)
 	}
-	blockSize := uint64(filesystem.Bsize)
-	result.FilesystemBytes = uint64(filesystem.Blocks) * blockSize
-	result.AvailableBytes = uint64(filesystem.Bavail) * blockSize
+	result.FilesystemBytes = filesystemBytes
+	result.AvailableBytes = availableBytes
 	return result, nil
 }
 

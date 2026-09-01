@@ -13,6 +13,7 @@ import (
 	"time"
 
 	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
+	stewardv1alpha1 "github.com/caelis-labs/memory/api/memory/steward/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 	"github.com/caelis-labs/memory/internal/appliance"
 )
@@ -269,6 +270,42 @@ func Handler(store *appliance.Store, serviceInfo ...ServiceInfo) http.Handler {
 		response, err := store.GetStewardConfiguration(request.Context())
 		writeManagement(writer, response, err)
 	}))
+	mux.HandleFunc(stewardv1alpha1.LocalPathClaim, worker(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input stewardv1alpha1.ClaimRequest
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		if input.LeaseSeconds < 1 || input.LeaseSeconds > 600 {
+			writeWorker(writer, nil, &v1alpha1.ServiceError{
+				Code: v1alpha1.ErrorCodeInvalidArgument, Message: "Worker lease must be 1..600 seconds", RequestID: "local-steward-worker",
+			})
+			return
+		}
+		work, found, err := store.ClaimStewardJob(request.Context(), time.Duration(input.LeaseSeconds)*time.Second)
+		response := stewardv1alpha1.ClaimResponse{Found: found}
+		if found {
+			response.Lease = &work.Lease
+			response.Attempt = work.Attempt
+			response.Work = &work.Request
+		}
+		writeWorker(writer, response, err)
+	}))
+	mux.HandleFunc(stewardv1alpha1.LocalPathApply, worker(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input stewardv1alpha1.ApplyRequest
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		result, err := store.ApplyStewardProposal(request.Context(), input.Lease, input.Proposal)
+		writeWorker(writer, stewardv1alpha1.ApplyResponse{Result: result}, err)
+	}))
+	mux.HandleFunc(stewardv1alpha1.LocalPathFail, worker(store, http.MethodPost, func(writer http.ResponseWriter, request *http.Request) {
+		var input stewardv1alpha1.FailRequest
+		if !decodeJSON(writer, request, &input) {
+			return
+		}
+		err := store.ReportStewardFailure(request.Context(), input)
+		writeWorker(writer, stewardv1alpha1.FailResponse{Accepted: err == nil}, err)
+	}))
 	return mux
 }
 
@@ -288,6 +325,18 @@ func admin(store *appliance.Store, expected string, handler http.HandlerFunc) ht
 		if !store.AuthenticateManagement(bearer(request.Header.Get("Authorization"))) {
 			writeDataPlane(writer, nil, &v1alpha1.ServiceError{
 				Code: v1alpha1.ErrorCodeUnauthorized, Message: "management authorization required", RequestID: "local-management",
+			})
+			return
+		}
+		handler(writer, request)
+	})
+}
+
+func worker(store *appliance.Store, expected string, handler http.HandlerFunc) http.HandlerFunc {
+	return method(expected, func(writer http.ResponseWriter, request *http.Request) {
+		if !store.AuthenticateStewardWorker(bearer(request.Header.Get("Authorization"))) {
+			writeDataPlane(writer, nil, &v1alpha1.ServiceError{
+				Code: v1alpha1.ErrorCodeUnauthorized, Message: "Steward Worker authorization required", RequestID: "local-steward-worker",
 			})
 			return
 		}
@@ -380,6 +429,29 @@ func writeManagement(writer http.ResponseWriter, response any, err error) {
 	if !errors.As(err, &serviceErr) {
 		serviceErr = &v1alpha1.ServiceError{
 			Code: v1alpha1.ErrorCodeInternal, Message: "memoryd failed to process the management request", RequestID: "local-management",
+		}
+	}
+	writeJSON(writer, statusForCode(serviceErr.Code), serviceErr)
+}
+
+func writeWorker(writer http.ResponseWriter, response any, err error) {
+	if err == nil {
+		writeJSON(writer, http.StatusOK, response)
+		return
+	}
+	var serviceErr *v1alpha1.ServiceError
+	if !errors.As(err, &serviceErr) {
+		serviceErr = &v1alpha1.ServiceError{Message: "memoryd failed to process Steward work", RequestID: "local-steward-worker"}
+		switch {
+		case errors.Is(err, appliance.ErrStewardProposalInvalid):
+			serviceErr.Code = v1alpha1.ErrorCodeInvalidArgument
+		case errors.Is(err, appliance.ErrStewardLeaseLost), errors.Is(err, appliance.ErrStewardConflict):
+			serviceErr.Code = v1alpha1.ErrorCodeConflict
+		case errors.Is(err, appliance.ErrStewardUnknownOutcome):
+			serviceErr.Code = v1alpha1.ErrorCodeUnknownOutcome
+			serviceErr.Retryable = true
+		default:
+			serviceErr.Code = v1alpha1.ErrorCodeInternal
 		}
 	}
 	writeJSON(writer, statusForCode(serviceErr.Code), serviceErr)

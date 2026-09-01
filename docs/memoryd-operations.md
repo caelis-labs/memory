@@ -4,9 +4,10 @@ Status: current operator guide for the standalone durable Core, versioned owner
 management plane, and packaged local sidecar.
 
 `memoryd` runs without Caelis and remains fully useful without a model. An
-optional Steward Worker pool can be configured independently. It exposes
-`memory.v1alpha1` over an
-owner-only Unix Socket and keeps all authority under one owner-only data
+optional downstream process may claim Steward Jobs through the external Worker
+SDK and inject its existing model stack. `memoryd` exposes `memory.v1alpha1`
+over an owner-only Unix Socket in the current RC and keeps all authority under
+one owner-only data
 directory. The versioned owner-management plane is independent from the data
 and issuer planes. Its search and trace output may contain receipt text and must
 be handled as sensitive operator data.
@@ -19,8 +20,9 @@ GOWORK=off go build -o ./memoryctl ./cmd/memoryctl
 ./memoryd -data-dir /tmp/caelis-memory
 ```
 
-Omit `-steward-providers` to run the durable receipt/FTS appliance with no model
-egress or semantic background work.
+`memoryd` has no model/provider flag, credential, or outbound model transport.
+Starting no downstream Worker runs the durable receipt/FTS appliance with no
+model egress or semantic background work.
 
 For a host-managed native sidecar on a supported platform, build only from a
 clean exact revision:
@@ -29,19 +31,20 @@ clean exact revision:
 make sidecar-supported
 ```
 
-The first M5 release-candidate support matrix contains macOS on Apple silicon
-(`darwin/arm64`) only. `make sidecar` can still create buildable preview
+The `v0.5.0-rc.1` support matrix contains macOS on Apple silicon
+(`darwin/arm64`) only. Formal GA requires all six RoadMap platforms and both
+`memoryd` and `memoryctl`; until that evidence exists, `make sidecar` can create buildable preview
 artifacts for development, but preview buildability is not native lifecycle or
 release support evidence.
 
-The target emits `dist/memoryd-$GOOS-$GOARCH`, a neighboring JSON manifest, and
-a detached `.sha256` checksum that packaging immediately verifies. The manifest
-binds service version, source revision, protocol, API, Core Profile, platform,
-executable name, and the same SHA-256. A host verifies the detached checksum and
-manifest against its pinned identity before launch; after readiness it performs
-the compatibility handshake and compares the reported service version and
-revision with that manifest. Packaging refuses a dirty worktree or a `REVISION`
-different from checked-out `HEAD`.
+The target emits `memoryd-$GOOS-$GOARCH` and
+`memoryctl-$GOOS-$GOARCH`, neighboring JSON manifests, and detached `.sha256`
+checksums that packaging immediately verifies. Each manifest binds release
+version, source revision, protocol, API, Core Profile, platform, executable
+name, and SHA-256. A host verifies the `memoryd` checksum and manifest against
+its pinned identity before launch; after readiness it compares the handshake
+build identity with that manifest. Packaging refuses a dirty worktree or a
+`REVISION` different from checked-out `HEAD`.
 
 `-data-dir` is required. On macOS, keep this path short enough for the platform
 Unix Socket path limit. `memoryd` refuses a second owner, refuses to replace a
@@ -55,20 +58,34 @@ memory.db             SQLite durable authority
 memory.db-wal         SQLite write-ahead log while active
 memory.db-shm         SQLite shared state while active
 memoryd.lock          advisory single-owner lock
-memoryd.sock          owner-only local transport while active
-management.token      owner-only management bearer
+memoryd.sock           owner-only local transport while active on Darwin/Linux
+management.token       owner-only management bearer
+steward-worker.token   owner-only external Worker bearer
 ```
 
-The directory is mode `0700`; the database, lock, Socket, and management token
+Windows derives an opaque `\\.\pipe\caelis-memory-*` name from the absolute data
+directory and applies an owner-only pipe security descriptor; no Socket node is
+created in the directory. The directory is mode `0700` on Unix; the database,
+lock, Socket, and both token files
 are protected by that boundary, with the credential, database, lock, and Socket
 also set to owner-only modes where applicable.
 
 Check liveness and durable readiness independently:
 
 ```sh
+./memoryctl -data-dir /tmp/caelis-memory health
+./memoryctl -data-dir /tmp/caelis-memory ready
+
+# Unix-only compatibility form:
 ./memoryctl -socket /tmp/caelis-memory/memoryd.sock health
 ./memoryctl -socket /tmp/caelis-memory/memoryd.sock ready
 ```
+
+`-data-dir` is the preferred cross-platform online selector. It derives a Unix
+Domain Socket on Darwin/Linux and a named pipe on Windows. `-socket` remains a
+Unix-only compatibility flag. Offline restore/rollback/upgrade commands keep
+their command-local `-data-dir` because no service endpoint exists while the
+owner lock is offline.
 
 Inspect or require an exact packaged identity through the same handshake used
 by a host:
@@ -201,48 +218,21 @@ SQLite transaction. If the transport fails around that boundary, the Go local
 client returns `unknown_outcome`; retry the exact request with the same
 idempotency key.
 
-## Optional Steward profiles and Workers
+## Optional Steward profiles and external Workers
 
-Steward is an appliance-internal enhancement. The Agent surface remains only
-Remember and Recall. Enabling it requires two separate owner decisions:
+Steward is an appliance-internal organization policy with externally injected
+generation. The Agent surface remains only Remember and Recall. Enabling it
+requires two separate owner decisions:
 
-1. process configuration chooses trusted provider endpoints and credentials;
-2. the management plane binds an immutable model/prompt profile to selected
-   Spaces for future receipts.
+1. the management plane binds an immutable prompt-policy profile to selected
+   Spaces for future receipts;
+2. a downstream host starts a Worker using `sdk/go/memory/stewardworker` and its
+   own provider, model, credentials, budgets, and egress policy.
 
-Create an owner-only `providers.json`:
-
-```json
-{
-  "workers": 2,
-  "lease_seconds": 60,
-  "poll_ms": 100,
-  "retry_base_ms": 1000,
-  "max_attempts": 5,
-  "providers": [
-    {
-      "ref": "local-steward",
-      "endpoint": "http://127.0.0.1:8090/memory/steward",
-      "credential_file": "/secure/provider.token",
-      "timeout_ms": 30000
-    }
-  ]
-}
-```
-
-```sh
-chmod 600 providers.json /secure/provider.token
-./memoryd -data-dir /tmp/caelis-memory \
-  -steward-providers /secure/providers.json
-```
-
-External endpoints require HTTPS; plain HTTP is accepted only for `localhost`
-or a loopback IP. Redirects are refused. The provider receives bounded receipt
-text, receipt/Evidence identifiers, active same-Space Record heads, model
-reference, and prompt policy. It does not receive Space, Job, lease,
-SourceContext, actor, audience, capability, management bearer, or provider
-credential in the JSON body. Selecting an external endpoint is therefore an
-explicit data-egress and provider-retention decision.
+The Worker authenticates with `steward-worker.token`. That bearer can call only
+claim/apply/fail routes; it cannot call management, issuer, or Runtime routes.
+Conversely those other bearers cannot claim work. To rotate it, stop `memoryd`,
+replace the file atomically with a new owner-only random token, and restart.
 
 Create an immutable profile request as `profile.json`:
 
@@ -251,8 +241,6 @@ Create an immutable profile request as `profile.json`:
   "profile": {
     "profile_id": "default-steward",
     "version": 1,
-    "provider_ref": "local-steward",
-    "model": "configured-model",
     "system_prompt": "Organize the receipt using only supplied evidence.",
     "max_context_records": 16,
     "max_input_bytes": 262144,
@@ -291,6 +279,28 @@ first binding have no retroactive Job. Receipt status reports accepted,
 processing, organized, or a bounded terminal code independently from baseline
 Recall.
 
+A downstream process implements only the callback:
+
+```go
+type Generator interface {
+    Generate(context.Context, stewardv1alpha1.WorkRequest) (stewardv1alpha1.Proposal, error)
+}
+```
+
+It then constructs `stewardworker.Runner` with a local Worker client, its
+Generator, a whole-second lease within 1s..10m, and a 10ms..10s polling
+interval. The callback receives the captured prompt policy, bounded receipt,
+and bounded active same-Space Record context. It does not receive Space, Job,
+lease, SourceContext, actor, audience, View, Grant, capability, management
+bearer, Worker bearer, provider, model, endpoint, or provider credentials.
+
+`memoryd` owns lease expiry, five-attempt retry ceilings, exponential retry
+delay, proposal and evidence validation, revision conflict handling, and atomic
+canonical application. A Worker must retry an `unknown_outcome` apply with the
+identical lease and proposal; the SDK runner does this once before leaving
+recovery to lease expiry. Model egress, provider retention, billing, and
+jurisdiction remain explicit downstream decisions.
+
 To stop semantic work without deleting any receipt, Record, Revision,
 Evidence, or baseline projection, create `disable.json`:
 
@@ -305,8 +315,8 @@ Evidence, or baseline projection, create `disable.json`:
 ```
 
 This removes future-Job bindings and terminally cancels pending or leased Jobs.
-Stopping `memoryd` during a provider call is also safe: its lease expires and a
-later configured Worker may reclaim it.
+Stopping either process during generation is safe: the durable lease expires
+and a later Worker may reclaim the Job.
 
 ## Inspect, search, correct, delete, rebuild, revoke, and stop
 
@@ -353,10 +363,10 @@ later configured Worker may reclaim it.
 Inspect reports management protocol, schema and storage generations, pending
 restore and rollback state, topology, filesystem and database capacity,
 receipt and processing counts, projection drift and last rebuild, and bounded
-capability counts. Steward diagnostics add profile/binding counts, configured
-provider/Worker counts, durable Job states, active/invalidated Record counts,
+capability counts. Steward diagnostics add profile/binding counts, durable Job
+states, active/invalidated Record counts,
 oldest outstanding work, and semantic projection health. They omit prompts,
-provider references, receipt text, paths derived from content, and all bearer
+receipt text, paths derived from content, and all bearer
 values. Search returns active receipt content by default;
 `-include-corrected` exposes shadowed originals for audit. Trace connects a
 Recall evidence ID to active evidence, correction links, or a content-free

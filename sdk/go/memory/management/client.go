@@ -9,11 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 
 	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
 	memoryv1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
+	"github.com/caelis-labs/memory/sdk/go/memory/internal/localhttp"
 )
 
 const maxResponseBytes = 8 << 20
@@ -25,11 +25,12 @@ type Client struct {
 }
 
 func NewClient(socketPath, credential string) *Client {
-	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-		var dialer net.Dialer
-		return dialer.DialContext(ctx, "unix", socketPath)
-	}}
-	return &Client{http: &http.Client{Transport: transport}, credential: credential}
+	return NewClientForEndpoint(memoryv1alpha1.LocalEndpoint{Network: memoryv1alpha1.LocalNetworkUnix, Address: socketPath}, credential)
+}
+
+// NewClientForEndpoint binds a management bearer to one OS-local endpoint.
+func NewClientForEndpoint(endpoint memoryv1alpha1.LocalEndpoint, credential string) *Client {
+	return &Client{http: localhttp.NewClient(endpoint), credential: credential}
 }
 
 func (c *Client) Bootstrap(ctx context.Context, request managementv1alpha1.BootstrapRequest) (managementv1alpha1.BootstrapResponse, error) {

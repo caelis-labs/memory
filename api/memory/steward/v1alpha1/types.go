@@ -1,6 +1,6 @@
-// Package v1alpha1 defines the versioned proposal and semantic-record contract
-// between the Memory Appliance and a replaceable Steward provider. Provider
-// output is untrusted input; only the appliance may apply it.
+// Package v1alpha1 defines the versioned external Worker, proposal, and
+// semantic-record contract. Worker output is untrusted input; only the
+// appliance may apply it.
 package v1alpha1
 
 import (
@@ -26,16 +26,14 @@ type RecordID string
 // JobID identifies one durable receipt-organization effect.
 type JobID string
 
-// ProfileID identifies a versioned model and prompt-policy profile.
+// ProfileID identifies a versioned appliance prompt-policy profile.
 type ProfileID string
 
-// ProfileSpec is immutable model and prompt-policy configuration stored by the
-// appliance. Provider credentials remain out-of-band process configuration.
+// ProfileSpec is immutable prompt-policy configuration stored by the appliance.
+// Provider, model, endpoint, and credential configuration belong downstream.
 type ProfileSpec struct {
 	ProfileID         ProfileID `json:"profile_id"`
 	Version           uint64    `json:"version"`
-	ProviderRef       string    `json:"provider_ref"`
-	Model             string    `json:"model"`
 	SystemPrompt      string    `json:"system_prompt"`
 	MaxContextRecords int       `json:"max_context_records"`
 	MaxInputBytes     int       `json:"max_input_bytes"`
@@ -46,9 +44,6 @@ type ProfileSpec struct {
 func (p ProfileSpec) Validate() error {
 	if !boundedReference(string(p.ProfileID), 128) || p.Version == 0 {
 		return fmt.Errorf("profile ID and non-zero version are required")
-	}
-	if !boundedReference(p.ProviderRef, 256) || !boundedReference(p.Model, 256) {
-		return fmt.Errorf("provider and model references must be bounded")
 	}
 	if !utf8.ValidString(p.SystemPrompt) || strings.TrimSpace(p.SystemPrompt) == "" || len(p.SystemPrompt) > 32<<10 {
 		return fmt.Errorf("system prompt must be 1..32768 UTF-8 bytes")
@@ -79,7 +74,7 @@ type ReceiptInput struct {
 	ReceivedAt time.Time                `json:"received_at"`
 }
 
-// RecordContext is one active same-Space head the provider may target. Space
+// RecordContext is one active same-Space head the Worker may target. Space
 // identity is intentionally absent.
 type RecordContext struct {
 	RecordID     RecordID                   `json:"record_id"`
@@ -89,8 +84,8 @@ type RecordContext struct {
 	EvidenceRefs []memoryv1alpha1.ReceiptID `json:"evidence_refs"`
 }
 
-// WorkRequest is the bounded structured provider input. SystemPrompt is data
-// for the dedicated provider adapter, not text concatenated with a receipt.
+// WorkRequest is the bounded structured input passed to a downstream Generator.
+// It deliberately contains no Job, Space, lease, bearer, or provider config.
 type WorkRequest struct {
 	Protocol string          `json:"protocol"`
 	Profile  ProfileSpec     `json:"profile"`
@@ -103,13 +98,6 @@ type WorkRequest struct {
 func (r WorkRequest) EncodedSize() (int, error) {
 	value, err := json.Marshal(r)
 	return len(value), err
-}
-
-// ProviderResponse is the strict response envelope for a dedicated Steward
-// model endpoint.
-type ProviderResponse struct {
-	Protocol string   `json:"protocol"`
-	Proposal Proposal `json:"proposal"`
 }
 
 // Operation is the complete M4 proposal vocabulary.
@@ -227,4 +215,48 @@ type ApplyResult struct {
 	RecordID          RecordID  `json:"record_id,omitempty"`
 	Revision          uint64    `json:"revision,omitempty"`
 	DeduplicatedRetry bool      `json:"deduplicated_retry"`
+}
+
+// Lease is opaque Worker authority for exactly one claimed Job. It must never
+// be passed to a model or included in a Proposal.
+type Lease struct {
+	JobID JobID  `json:"job_id"`
+	Token string `json:"token"`
+}
+
+// ClaimRequest asks for at most one currently available Job.
+type ClaimRequest struct {
+	LeaseSeconds int64 `json:"lease_seconds"`
+}
+
+// ClaimResponse carries lease authority beside, not inside, model-facing work.
+type ClaimResponse struct {
+	Found   bool         `json:"found"`
+	Lease   *Lease       `json:"lease,omitempty"`
+	Attempt int          `json:"attempt,omitempty"`
+	Work    *WorkRequest `json:"work,omitempty"`
+}
+
+// ApplyRequest submits one untrusted proposal under its opaque lease.
+type ApplyRequest struct {
+	Lease    Lease    `json:"lease"`
+	Proposal Proposal `json:"proposal"`
+}
+
+// ApplyResponse reports the canonical, durably stored application result.
+type ApplyResponse struct {
+	Result ApplyResult `json:"result"`
+}
+
+// FailRequest reports a stable, non-sensitive Generator failure. The appliance
+// owns retry delay and the terminal-attempt ceiling.
+type FailRequest struct {
+	Lease     Lease  `json:"lease"`
+	Code      string `json:"code"`
+	Retryable bool   `json:"retryable"`
+}
+
+// FailResponse confirms that failure disposition was durably recorded.
+type FailResponse struct {
+	Accepted bool `json:"accepted"`
 }

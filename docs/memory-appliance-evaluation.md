@@ -1,8 +1,8 @@
 # Memory Appliance Corpus Evaluation
 
-Status: current M5 procedure for local, privacy-preserving multi-round receipt
-evaluation. It measures the model-free durable baseline; it is not a substitute
-for Steward provider or semantic-quality evaluation.
+Status: current privacy-preserving multi-round receipt evaluation plus the G4
+input boundary. It measures the model-free durable baseline; it is not a
+substitute for external-Worker model or semantic-quality evaluation.
 
 ## Input boundary
 
@@ -36,8 +36,33 @@ The evaluator derives one rare lexical token per eligible source chunk, then:
 This exercises realistic corpus shape, accumulation, restart, consistency, and
 authorization behavior while keeping evaluation deterministic. Queries are
 lexical and evidence-bound. Paraphrase quality, model proposals, consolidation,
-and semantic ranking require a separately frozen Steward profile, provider,
-prompt, and labeled corpus.
+and semantic ranking require a separately frozen appliance prompt-policy
+profile, downstream Generator/model, and labeled corpus.
+
+The checked-in realistic Chinese/mixed suite supplements the marker corpus with
+24 product-shaped receipt and semantic cases accumulated across three restarts.
+It proves deterministic retrieval and provenance only. G4 acceptance still
+requires at least 200 reviewed labeled cases and the fixed 100-Space,
+100,000-receipt, 10,000-Record soak; neither a private local source nor a
+synthetic marker corpus may be presented as sufficient semantic-quality
+evidence.
+
+The fixed synthetic scale and durability gate is executable now:
+
+```sh
+make ga-soak
+```
+
+It creates exactly 100 isolated private Spaces, acknowledges 100,000 receipts,
+organizes 10,000 semantic Record heads through the external-Worker contract,
+restarts the Store, reads every receipt status, samples every Space, rebuilds
+indexes, and verifies backup/restore. The restored generation repeats the full
+receipt-status scan, lexical and semantic Recall provenance probes, and
+cross-Space leakage probes rather than accepting aggregate counts alone. The default report is
+`dist/ga-soak-report.json`; it contains only counts, environment identity,
+durations, byte sizes, and health flags. Synthetic scale evidence and the
+separate reviewed 200-case quality corpus are both required because neither can
+substitute for the other.
 
 ## Local commands
 
