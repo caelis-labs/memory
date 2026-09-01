@@ -14,7 +14,7 @@ import (
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 )
 
-func TestSchemaOneMigratesTransactionallyToGovernanceSchema(t *testing.T) {
+func TestSchemaOneMigratesTransactionallyToCurrentSchema(t *testing.T) {
 	dataDir := t.TempDir()
 	database, err := sql.Open("sqlite", filepath.Join(dataDir, DatabaseFilename))
 	if err != nil {
@@ -35,10 +35,13 @@ func TestSchemaOneMigratesTransactionallyToGovernanceSchema(t *testing.T) {
 	if err := store.db.QueryRowContext(t.Context(), `SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 2 {
-		t.Fatalf("schema version = %d, want 2", version)
+	if version != CurrentSchemaVersion {
+		t.Fatalf("schema version = %d, want %d", version, CurrentSchemaVersion)
 	}
-	for _, table := range []string{"receipt_tombstones", "receipt_corrections", "management_effects"} {
+	for _, table := range []string{
+		"receipt_tombstones", "receipt_corrections", "management_effects",
+		"steward_profiles", "steward_jobs", "semantic_records", "semantic_revisions", "semantic_evidence",
+	} {
 		var exists bool
 		if err := store.db.QueryRowContext(t.Context(),
 			`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?)`, table).Scan(&exists); err != nil {
@@ -47,6 +50,81 @@ func TestSchemaOneMigratesTransactionallyToGovernanceSchema(t *testing.T) {
 		if !exists {
 			t.Fatalf("migration did not create %s", table)
 		}
+	}
+}
+
+func TestSemanticMigrationCreatesPerSpaceIndexesTransactionally(t *testing.T) {
+	database, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "semantic-migration.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	now := time.Now().UTC()
+	if err := migrateTo(t.Context(), database, now, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.ExecContext(t.Context(),
+		`INSERT INTO realms(id, created_at) VALUES ('realm-semantic', ?)`, formatTime(now)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.ExecContext(t.Context(),
+		`INSERT INTO spaces(id, realm_id, identity_id, class, created_at)
+		 VALUES ('space-semantic', 'realm-semantic', NULL, 'shared', ?)`, formatTime(now)); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateTo(t.Context(), database, now, 3); err != nil {
+		t.Fatal(err)
+	}
+	var tableName string
+	if err := database.QueryRowContext(t.Context(),
+		`SELECT table_name FROM semantic_space_indexes WHERE space_id = 'space-semantic'`).Scan(&tableName); err != nil {
+		t.Fatal(err)
+	}
+	if tableName != semanticSpaceIndexTable("space-semantic") {
+		t.Fatalf("semantic table = %q", tableName)
+	}
+	var exists bool
+	if err := database.QueryRowContext(t.Context(),
+		`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?)`, tableName).Scan(&exists); err != nil {
+		t.Fatal(err)
+	}
+	if !exists {
+		t.Fatal("semantic migration did not create the per-Space FTS table")
+	}
+}
+
+func TestSemanticMigrationFailureRollsBackSchemaAndDynamicIndexes(t *testing.T) {
+	database, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "semantic-migration-failure.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	now := time.Now().UTC()
+	if err := migrateTo(t.Context(), database, now, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.ExecContext(t.Context(), `CREATE TABLE semantic_records(conflict TEXT) STRICT`); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateTo(t.Context(), database, now, 3); err == nil {
+		t.Fatal("semantic migration succeeded despite a conflicting table")
+	}
+	for _, table := range []string{"steward_profiles", "steward_jobs", "semantic_space_indexes"} {
+		var exists bool
+		if err := database.QueryRowContext(t.Context(),
+			`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?)`, table).Scan(&exists); err != nil {
+			t.Fatal(err)
+		}
+		if exists {
+			t.Fatalf("failed semantic migration left %s behind", table)
+		}
+	}
+	var version int
+	if err := database.QueryRowContext(t.Context(), `SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != 2 {
+		t.Fatalf("failed semantic migration recorded schema version %d, want 2", version)
 	}
 }
 

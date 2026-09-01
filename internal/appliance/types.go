@@ -15,7 +15,7 @@ const (
 	OwnerLockFilename          = "memoryd.lock"
 	ManagementCredentialFile   = "management.token"
 	SocketFilename             = v1alpha1.LocalSocketFilename
-	CurrentSchemaVersion       = 2
+	CurrentSchemaVersion       = 3
 	defaultSQLiteBusyTimeoutMS = 2_000
 )
 
@@ -30,10 +30,11 @@ type Options struct {
 	CandidateRead func(v1alpha1.SpaceID)
 }
 
-// Faults injects failures around the Remember commit boundary.
+// Faults injects test-only failures around durable effect boundaries.
 type Faults struct {
 	BeforeRememberCommit func() error
 	AfterRememberCommit  func() error
+	AfterStewardCommit   func() error
 }
 
 // ErrOwnerLocked means another memoryd owns the data directory.

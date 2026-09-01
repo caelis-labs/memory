@@ -122,6 +122,23 @@ harness. `make durable` reruns the cross-process proof without cached results.
 | `G-012` | Offline upgrade preparation captures the exact stopped generation, gates all acknowledgements until commit, and permits old-version rollback without acknowledged loss |
 | `G-013` | A supported `darwin/arm64` sidecar binds exact version, revision, platform, and SHA-256; buildable previews are not accepted as supported artifacts |
 
+## M4 Semantic Steward Extension matrix
+
+| ID | Behavior |
+| --- | --- |
+| `S-001` | Provider output accepts only `ADD`, `MERGE`, `SUPERSEDE`, or `IGNORE`; malformed, oversized, duplicate-evidence, and unsupported proposals mutate nothing |
+| `S-002` | A proposal contains no Space, Job, profile, ACL, publication, tombstone, or physical-deletion authority; the appliance generates new Record IDs |
+| `S-003` | Every applied Revision cites its Job receipt and only existing Evidence in that same Space |
+| `S-004` | Record heads are mutable only through application logic; Revision and Evidence rows reject update and delete |
+| `S-005` | `MERGE` retains current Evidence and all target operations require the exact current Revision; stale proposals conflict without mutation |
+| `S-006` | Job completion, semantic mutation, projection, and receipt status commit together; an unknown response retry returns exactly one effect |
+| `S-007` | Correcting or deleting cited evidence invalidates the active Record and removes its projection without rewriting immutable history |
+| `S-008` | A profile version is immutable and captured by each Job; model or prompt replacement changes only later Jobs |
+| `S-009` | Concurrent workers cannot own one Job; lease expiry, worker crash, retry, and terminal failure are durable and bounded |
+| `S-010` | Provider timeout, provider absence, disabled workers, and poisoned output leave baseline receipt Recall available and observably degraded |
+| `S-011` | Recall enters only authorized per-Space semantic indexes, merges deterministically, deduplicates presentation, and retains complete receipt provenance |
+| `S-012` | Disabling Steward stops new semantic work without deleting receipts, Records, Revisions, Evidence, or baseline projections |
+
 ## Failure injection by milestone
 
 M1 adds process kill after commit, database lock, disk-full simulation,

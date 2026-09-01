@@ -62,6 +62,22 @@ evidence, operation bounds, base revision, size limits, and visibility before
 committing. A model cannot edit receipt payloads, change ACL/View/Grant state,
 publish private data, tombstone, or hard-delete.
 
+The current semantic schema stores immutable `(Record, Revision)` rows and
+ordered Evidence identifiers separately from mutable Record heads. Evidence
+intentionally is not delete-cascaded from receipt storage: an approved receipt
+deletion first invalidates every active head that cites it and removes its
+semantic FTS entry, while the historical Revision retains only the now-
+tombstoned receipt identifier for audit. Per-Space semantic FTS tables follow
+the same authorization-before-candidate boundary as receipt FTS.
+
+Job application retains the digest of the opaque lease after completion so an
+unknown response outcome can replay only to the same worker authority. The
+transaction verifies the proposal digest, same-Space evidence, mandatory job
+receipt, active Record head, and optimistic Revision; then it appends Revision
+and Evidence, updates the projection, completes the Job, and marks receipt
+processing organized together. Changed retries and stale Revisions mutate
+nothing.
+
 Later operations such as RELATE, PROMOTE, DEMOTE, ARCHIVE, and model-enhanced
 Recall require independent evidence and acceptance cases.
 

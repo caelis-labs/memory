@@ -334,7 +334,7 @@ func createSpaceIndex(ctx context.Context, tx *sql.Tx, spaceID v1alpha1.SpaceID)
 		)`); err != nil {
 		return fmt.Errorf("create Space %q index: %w", spaceID, err)
 	}
-	return nil
+	return createSemanticSpaceIndex(ctx, tx, spaceID)
 }
 
 func spaceIndexTable(spaceID v1alpha1.SpaceID) string {

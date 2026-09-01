@@ -186,6 +186,9 @@ func (s *Store) CorrectReceipt(
 	if alreadyCorrected {
 		return rollback(s.serviceError(v1alpha1.ErrorCodeConflict, "receipt already has a replacement", false))
 	}
+	if err := s.invalidateSemanticRecordsForReceipt(ctx, tx, request.ReceiptID, "receipt_corrected"); err != nil {
+		return rollback(s.databaseError("invalidate corrected semantic Records", err))
+	}
 	receiptSuffix, err := s.randomHex(16)
 	if err != nil {
 		return rollback(s.serviceError(v1alpha1.ErrorCodeInternal, "failed to create replacement receipt identity", false))
@@ -326,6 +329,9 @@ func (s *Store) DeleteReceipt(
 	}
 	tombstoneID := "tombstone-" + tombstoneSuffix
 	now := s.now().UTC()
+	if err := s.invalidateSemanticRecordsForReceipt(ctx, tx, request.ReceiptID, "receipt_deleted"); err != nil {
+		return rollback(s.databaseError("invalidate deleted semantic Records", err))
+	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO receipt_tombstones(tombstone_id, receipt_id, space_id, idempotency_key, request_digest, deleted_at, reason)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,

@@ -363,6 +363,43 @@ Semantic records and Steward output are optional enhancement candidates. Recall
 must remain useful and read-your-writes must remain correct when those systems
 are disabled or unavailable.
 
+## Semantic Steward extension
+
+The provider protocol is `memory.steward.v1alpha1`. A logical Steward is a
+versioned model/prompt-policy profile plus durable receipt jobs executed by a
+shared worker pool. It is not a permanent conversation, one Agent per Identity,
+or a second receipt authority. Profile identity and version are captured when a
+job is created; replacing a model or prompt affects only later jobs.
+
+Provider output is an untrusted proposal with exactly four operations:
+
+```text
+ADD         create an appliance-owned Record at Revision 1
+MERGE       append a Revision while retaining all current Evidence
+SUPERSEDE   append a replacement Revision without deleting history
+IGNORE      complete the job without creating or changing a Record
+```
+
+A proposal cannot contain Space, Job, profile, visibility, ACL, tombstone,
+publication, or physical-deletion authority. The appliance supplies the Job
+and Space from a durable opaque lease, generates new Record IDs, and validates
+operation shape, size, expected Revision, current status, job receipt, and
+every Evidence reference before mutation.
+
+Each active Record has one mutable head pointing to immutable Revisions. Every
+Revision has one or more Evidence references that were proven to be existing
+receipts in the same Space at application time. `MERGE` must retain all
+Evidence from the prior current Revision. Applying a proposal, completing its
+Job, and updating receipt processing state is one transaction. A lost response
+is retried with the same lease and proposal; the stored result produces one
+semantic effect, while changed input conflicts.
+
+Deleting or correcting a cited receipt invalidates any current Record that
+depends on it and removes only that Record's disposable retrieval projection.
+Historical Revisions and Evidence identifiers remain immutable audit; they do
+not remain Recall candidates after invalidation. A model cannot invoke this
+governance path.
+
 ## Owner-management plane
 
 The local management protocol is `memory.management.v1alpha1`. Its bearer is
@@ -494,9 +531,11 @@ identity.
 
 Additive v1alpha1 fields must be optional and ignored safely by compatible
 readers. Effect-bearing changes require a new request digest rule and protocol
-version. Public memory, mixed audiences, new Space classes, semantic records,
-and publication require explicit profile negotiation; they cannot silently
-appear in the Core Profile.
+version. Public memory, mixed audiences, new Space classes, direct management
+of semantic objects, and publication require explicit versioned protocols;
+they cannot silently widen the Core Profile. Internal semantic candidates may
+use the already-reserved `record_refs` and `degraded` response fields without
+adding an Agent operation or changing authorization.
 
 The API may become stable `v1` only after a durable standalone service and the
 Caelis Golden Path pass end to end. M0 semantic compatibility is demonstrated

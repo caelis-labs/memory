@@ -59,6 +59,13 @@ records, and semantic retrieval remain M4 work. Caelis integration is
 independently owned and pins an exact published Memory revision and sidecar
 digest.
 
+The first M4 construction slice defines the versioned Steward proposal
+vocabulary and migrated Record/Revision/Evidence/Job authority. Its
+deterministic application transaction enforces same-Space evidence, optimistic
+Revisions, immutable history, idempotent unknown-outcome recovery, and
+governance invalidation. Provider execution and Recall enhancement are the
+remaining M4 slices.
+
 Read [the specification](docs/memory-appliance-spec.md),
 [roadmap](docs/memory-appliance-roadmap.md), and
 [acceptance plan](docs/memory-appliance-acceptance.md) before extending the API.
