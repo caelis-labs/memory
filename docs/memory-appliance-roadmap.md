@@ -4,15 +4,44 @@ Status: authoritative implementation and GA plan.
 
 The primary product is the Go package `github.com/caelis-labs/memory`. Caelis
 imports it and runs one Memory runtime as part of the Caelis Host. The package,
-not Caelis Control, owns Memory schema, data, authorization, retrieval, Steward
-policy, and every derived-memory mutation. Classification, lifecycle, and
-forgetting remain Memory-owned concepts when implemented; they are not first
-release claims.
+not Caelis Control, owns Memory schema, data, authorization, retrieval, and
+validation of every derived-memory mutation. Downstream products decide when to
+invoke promotion, refinement, or later lifecycle interfaces. Memory never owns
+their product scheduler or model provider.
 
 The repository retains `cmd/memoryd`, local transport, `memoryctl`, and packaging
 code as a future standalone distribution framework. Building, publishing,
 installing, supervising, or version-matching those binaries is not part of the
 current Caelis integration or GA critical path.
+
+## Current delivery slice: LabelSet and flat organization foundation
+
+This slice is intentionally limited to the Memory repository.
+
+In scope:
+
+- one canonical exact `LabelSet` bound during Runtime capability issuance;
+- automatic LabelSet persistence on Remember and exact LabelSet filtering on
+  Recall, receipt status, and consistency-token use;
+- LabelSet columns and indexes built directly into one current development
+  schema baseline; older unreleased local data is rebuilt, not migrated;
+- propagation through durable Steward Jobs, same-LabelSet evidence validation,
+  flat Records, immutable Revisions, management inspection, and export;
+- conformance proving that two LabelSets in one Space cannot recall, inspect, or
+  semantically merge each other's evidence;
+- documentation freezing the flat Receipt -> Record -> Revision structure.
+
+Out of scope:
+
+- Caelis workspace-label construction or Runtime integration;
+- Session corpus import, automatic briefing, retention, decay, and forgetting;
+- user-visible label configuration or Agent tool arguments;
+- a memory tree, general relation graph, embedding, or hierarchical traversal;
+- another scheduler, automatic organization trigger, or model-provider stack.
+
+The slice is accepted when the default empty LabelSet works without caller
+configuration, a non-empty LabelSet survives restart, model-facing inputs expose no
+labels, and the full package and race suites pass.
 
 ## Product boundary
 
@@ -22,11 +51,12 @@ The irreversible boundary is source-level, not process-level:
 Caelis Host
   -> appliance.Open(data directory)
   -> sdk Client(DataPlane)
+  -> Host issues a capability with one hidden exact LabelSet
   -> remember(text) / recall(query)
   -> optional Steward Generator callback
 
 Memory package
-  -> SQLite, migrations, receipts, indexes, topology, authorization
+  -> SQLite schema baseline, receipts, indexes, topology, authorization
   -> static zero-token retrieval
   -> time-aware ranking and bounded task briefing (planned foundation)
   -> durable Steward jobs and deterministic proposal application
@@ -34,13 +64,13 @@ Memory package
 
 Caelis may import public `api`, `sdk`, and `appliance` packages. It never imports
 `internal/*`, opens `memory.db`, mirrors Memory state, or selects Memory
-classification and lifecycle policy. Memory never imports Caelis product types
+derived mutation rules. Memory never imports Caelis product types
 or owns a model provider, model credential, or provider configuration.
 
 Successful Caelis Host construction means the embedded Memory database is open
-and migrated. There is no independent download, install, probe, handshake,
+at the current schema baseline. There is no independent download, install, probe, handshake,
 readiness, degraded-start, or dynamic tool-injection state. A Memory open or
-migration error is an ordinary Host startup error. Host shutdown closes Memory
+schema initialization error is an ordinary Host startup error. Host shutdown closes Memory
 after Runtime work drains.
 
 ## Product vision
@@ -68,15 +98,12 @@ ranking inputs, and response budgets have executable acceptance tests.
 
 ### Stateful identity profile
 
-A future Bot-like product may bind an opaque product identity to one stable
-`MemoryIdentity`. Its memory may form a bounded hierarchy whose root represents
-identity continuity and whose branches represent personality, relationships,
-work style, and learned context. New evidence attaches to or merges with nearby
-nodes; depth, fan-out, and evidence value bound compaction and leaf pruning.
-
-Memory owns that hierarchy. The downstream product owns the meaning of “Bot”
-and maps it to an opaque binding; no Bot type enters the Memory package. This
-profile is a post-foundation milestone and is not a first-release requirement.
+A future Bot-like product may map its opaque identity and workspace concepts to
+one or more exact LabelSets while retaining a stable `MemoryIdentity` for hard
+continuity. Memory does not gain a Bot type. The canonical derived structure
+remains flat Records with immutable Revisions and evidence links; any personality,
+relationship, or work-style hierarchy is a downstream projection until measured
+evidence justifies promoting another structure.
 
 ### Corpus ingestion
 
@@ -96,16 +123,11 @@ evaluation utility but is not a production ingestion path.
 ### Time and authority
 
 Receipt occurrence, receipt arrival, later reinforcement, correction, and
-supersession are separate signals. Recall remains able to locate old evidence,
-but generic ranking applies an explicit deterministic decay prior so an old
-keyword match cannot silently outrank a recent supported fact. Exact lookup,
-repeated reinforcement, and authoritative correction may counter decay; decay
-never deletes evidence by itself.
-
-The curve and weights are frozen only after a labeled multi-age corpus measures
-ranking quality. The report records the curve, parameters, age cohorts, and
-quality trajectory so “time-aware” is auditable behavior rather than a hidden
-constant.
+supersession remain separate signals. No year-scale decay curve is a foundation
+requirement. A later forgetting milestone starts with immediately testable,
+bounded active windows per LabelSet; overflow may become dormant without
+deleting evidence. Explicit Remember and evidence-backed promoted Records do not
+expire merely because wall-clock time passed.
 
 ### Model-cost contract
 
@@ -225,26 +247,29 @@ Standalone Distribution (deferred, independent of P0-P5)
 | SDLC stage | Milestone | Independently reviewable result |
 | --- | --- | --- |
 | Architecture | P0 | Public embedded facade over the durable authority |
+| Context partition | P0.1 | Capability-bound LabelSet and flat derived-memory structure |
 | Construction and integration | P1 | Default Caelis Remember/Recall works without a sidecar |
 | Product foundation | P2 | Sanitized Session corpus, time-aware ranking, and bounded task briefing make Memory useful without exact tool keywords |
 | Optional enhancement | P3 | Memory-owned Steward policy adds measured value without becoming a cost or availability dependency |
 | Release acceptance | P4 | Caelis release matrix and external review accept the feature |
-| Future identity | P5 | A bounded evidence-backed hierarchy supports stateful identities without polluting the stateless path |
+| Future identity | P5 | Downstream identity composition uses LabelSets and measured projections without polluting the stateless path |
 
 ## Implementation status — 2026-09-02
 
 | Milestone | State | Remaining independent review slice |
 | --- | --- | --- |
 | P0 | Complete at package scope | Public facade, SDK conformance, default-path lexicon retirement, close concurrency, and CI package checks are implemented; external review remains part of P4 |
+| P0.1 | Complete in Memory | LabelSet baseline, exact data-plane and Steward partitioning, flat-structure contract, and the 224-case multilingual package gate are complete; Caelis workspace injection is the next slice |
 | P1 | Technical integration complete | Default embedded tools, persistence, replay, and system-managed Steward binding exist; product usefulness is not yet accepted |
 | P2 | Planned, now GA-critical | Implement canonical Session corpus projection, deterministic time-aware ranking, and a bounded model-free task briefing |
 | P3 | In progress, non-blocking for static operation | Memory-owned prompt/parser and an initial 64-case low-cost study exist; Caelis adapter cutover and at least 200 reviewed cases remain |
 | P4 | Not accepted | Product-foundation gates, native Windows acceptance, exact-revision cross-platform gates, and external review remain |
-| P5 | Vision only | Define the stateful hierarchy only after P2/P3 establish evidence, pruning, and cost behavior |
+| P5 | Vision only | Define downstream identity composition only after P2/P3 establish evidence, pruning, and cost behavior |
 
-The retained evidence reports describe pre-convergence experiments, not current
-product claims. See [Local Memory Registry Corpus Evidence](evidence/memory-registry-corpus-2026-09-02.md)
-and [Memory Steward Evaluation](evidence/memory-steward-evaluation-2026-09-02.md).
+The retained evidence reports remain bounded experiments, not GA product
+claims. See [Local Memory Registry Corpus Evidence](evidence/memory-registry-corpus-2026-09-02.md),
+[Memory Steward Evaluation](evidence/memory-steward-evaluation-2026-09-02.md),
+and [Real Corpus and Local Gemma Steward Evidence](evidence/memory-real-corpus-gemma4-2026-09-02.md).
 
 ## P0: Package Boundary
 
@@ -265,7 +290,7 @@ storage implementation details.
   SQLite;
 - `cmd/memoryd` remains a thin optional composition over the same core;
 - adaptive lexicon code is internal, explicitly experimental, and absent from
-  public Open, default migration, and production data paths.
+  public Open, default schema initialization, and production data paths.
 
 ### Explicit non-goals
 
@@ -283,6 +308,8 @@ storage implementation details.
   suite;
 - default paths produce no adaptive terms or related Steward inputs;
 - `go test ./...`, race tests, formatting, and diff checks pass.
+- the digest-frozen multilingual corpus gates durable retrieval, provenance,
+  user-perceived latency, Space isolation, and exact LabelSet isolation.
 
 ## P1: Embedded Caelis Feature
 
@@ -345,21 +372,17 @@ introducing a background token bill.
    Session events through the Session Service, applies a reviewed sanitizer,
    and submits stable idempotent inputs. Restart resumes from a durable cursor;
    no production code reads physical Session JSONL.
-2. **Time-aware retrieval and admission.** Memory combines the fixed analyzer
-   with bounded corpus-derived phrase/association candidates, then applies
-   deterministic occurrence, reinforcement, correction, supersession, and
-   source-intent signals. Explicit Recall keeps historical search possible and
-   qualifies non-current evidence in the model-visible result; automatic
-   briefing uses a stricter current-evidence gate and may abstain. Evaluation
-   publishes the exact expansion limits, temporal functions, and decision
-   rules.
+2. **Bounded active-memory admission.** Memory combines the fixed analyzer with
+   deterministic correction, supersession, reinforcement, and per-LabelSet
+   active-window rules. Evaluation varies small count-based bounds on real
+   Session corpora; no multi-year curve blocks the first useful slice.
 3. **Task briefing.** A package-owned bounded request/response produces a short
    advisory context for a new stateless Session from task text and authorized
    evidence. It has provenance and a byte budget, carries no authority, and
    makes no model call.
 4. **Corpus evaluation.** Frozen Chinese, English, and mixed-language tuning
    and blind holdout cases cover similar historical tasks, durable preferences,
-   changed decisions, stale facts, contradictory evidence, sparse/non-literal
+   changed decisions, older facts, contradictory evidence, sparse/non-literal
    task wording, correct abstention, and harmful irrelevant context. Every
    report compares the empty-context, exact-lexical, best model-free, and any
    model-assisted variants and preserves the parameter trajectory rather than
@@ -379,8 +402,8 @@ contract.
 - re-import and crash recovery create no duplicate facts;
 - excluded content and one identity's private evidence never appear in another
   authorized result;
-- multi-age ranking meets its frozen cohort thresholds and reports all decay
-  parameters;
+- bounded active-window ranking meets its frozen corpus thresholds and reports
+  all tested count parameters;
 - the frozen non-literal set improves over exact lexical retrieval without an
   embedding model or unacceptable false-positive growth;
 - a historical Recall result is visibly qualified, while an unqualified stale
@@ -410,9 +433,9 @@ or non-literal retrieval without weakening the static path.
   Markdown and canonical Session projections;
 - fixed `gse` base dictionary plus two- and three-rune Han fallback projection,
   with the same analyzer used for write, Recall, correction, semantic records,
-  migration, and rebuild;
+  schema initialization, and rebuild;
 - adaptive lexicon learning retained only behind an internal evaluation option;
-  default Open, migration, Remember, Recall, correction, deletion, and Steward
+  default Open, schema initialization, Remember, Recall, correction, deletion, and Steward
   paths neither learn nor consume local terms;
 - deterministic Chinese, English, and mixed-language cases covering repeated
   Remember/Recall, contradiction, supersession, unrelated noise, restart,
@@ -425,8 +448,8 @@ or non-literal retrieval without weakening the static path.
 ### Exit criteria
 
 - every accepted receipt remains reachable in static mode;
-- malformed, cross-Space, stale-revision, or unsupported proposals mutate
-  nothing;
+- malformed, cross-Space, cross-LabelSet, stale-revision, or unsupported
+  proposals mutate nothing;
 - binding a model affects only later jobs and never changes provider ownership;
 - realistic corpus metrics and known limitations are frozen for the candidate;
 - dictionary growth is never treated as retrieval-quality evidence; adaptive
@@ -453,7 +476,7 @@ Accept the embedded feature as part of the Caelis product release.
 - read-your-writes and Host restart failures: zero;
 - canonical Session corpus projection is resumable, idempotent, sanitized, and
   model-free;
-- documented time-decay and reinforcement behavior passes the frozen multi-age
+- documented bounded active-window and reinforcement behavior passes the frozen
   corpus;
 - bounded task briefing beats the empty-context control without authority or
   privacy violations;
@@ -477,42 +500,47 @@ configuration, exposes the two tools, passes both Golden Paths, and can enable
 or disable model-backed Steward behavior solely by changing its system-agent
 model binding.
 
-## P5: Stateful Identity Hierarchy
+## P5: Stateful Identity Composition
 
 ### Goal
 
 Support a product with persistent identity, personality, relationships, and
-work style without changing the stateless Session contract.
+work style through LabelSets and a bounded capsule without changing the
+stateless Session contract or replacing the flat Memory authority.
 
 ### Entry criteria
 
 - P2 evidence and time semantics are accepted;
 - a concrete downstream identity consumer defines lifecycle and privacy needs;
-- offline experiments justify hierarchy over flat evidence plus summaries;
-- node merge, depth, fan-out, pruning, provenance, and recovery policies have
+- the flat Record-head-plus-search control has accepted longitudinal evidence;
+- capsule admission, refinement, provenance, and recovery policies have
   deterministic tests and a zero-token default implementation.
 
 ### Independently reviewable slices
 
-1. **Identity capsule.** Start with fixed, byte-bounded identity, personality,
+1. **Identity mapping.** The downstream product maps its own identity and work
+   context to opaque LabelSets. Memory does not acquire Bot, workspace, or
+   social-relationship product types.
+2. **Identity capsule.** Start with fixed, byte-bounded identity, personality,
    relationship, and work-style blocks backed by active evidence. The capsule
    is assembled at Session start, is inspectable, and rejects overflow rather
    than silently truncating identity.
-2. **Hierarchy experiment.** Compare flat capsule plus evidence search against
+3. **Optional structure experiment.** Compare the flat capsule plus evidence
+   search against
    bounded branches on a longitudinal identity corpus. Introduce parent/child
    structure only if it improves retrieval or update quality after accounting
    for merge and recovery complexity.
-3. **Organization action.** A model may propose a bounded consolidation during
+4. **Organization action.** A model may propose a bounded consolidation during
    an explicit organization action. Memory validates an inspectable diff;
    destructive or lossy projection changes require the product's confirmation
    policy, and immutable receipt evidence remains recoverable.
-4. **Pruning and rebuild.** Fan-out, depth, and inactive leaf budgets apply to
-   derived nodes only. Pruning never serves as receipt deletion, and the
-   capsule and hierarchy rebuild without a model.
+5. **Bounded lifecycle and rebuild.** Active-record and capsule budgets affect
+   derived state only. Dormancy or projection pruning never serves as receipt
+   deletion, and the flat record set and capsule rebuild without a model.
 
 Model-assisted consolidation may be an explicit bounded organization action.
 It cannot run continuously, erase receipt evidence, or become the only way to
-rebuild the hierarchy.
+rebuild identity context.
 
 ## Deferred standalone distribution
 

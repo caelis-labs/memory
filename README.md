@@ -18,7 +18,7 @@ implements them.
 Caelis imports Memory and runs it as part of the Caelis Host. There is no
 separate Memory download, installation, process, endpoint, readiness state, or
 user configuration. A Host that starts successfully has already opened and
-migrated its Memory database.
+initialized its Memory database.
 
 ## Packages
 
@@ -26,7 +26,7 @@ migrated its Memory database.
   management, capability, and Steward planes;
 - `api/memory/*` owns versioned public contracts;
 - `sdk/go/memory` binds hidden host context to Remember and Recall;
-- `internal/appliance` owns SQLite, migrations, authorization, retrieval,
+- `internal/appliance` owns the SQLite schema baseline, authorization, retrieval,
   governance, and semantic application;
 - `conformance` owns reusable semantic and durable behavior suites.
 
@@ -38,7 +38,9 @@ or lifecycle.
 
 - immutable durable receipts with separate processing state;
 - Realm, Identity, private/shared Space, View, Grant, issuer, capability, and
-  idempotency state in migrated SQLite;
+  idempotency state in SQLite;
+- exact capability-bound LabelSet partitions for downstream workspaces or
+  future identities, without exposing labels to model tools;
 - authorization-first per-Space receipt and semantic FTS;
 - immediate read-your-writes and restart durability;
 - receipt search, provenance, correction, deletion, backup/restore, and
@@ -70,16 +72,19 @@ One immutable evidence authority serves three deliberately different
 projections: explicit Recall, the stricter stateless briefing, and a future
 bounded identity capsule. Session observations do not silently become explicit
 user preferences, and old historical evidence is not presented as current just
-because a keyword matches. Embeddings, graphs, and hierarchies remain
-evaluation-gated internal choices rather than required providers or public API
-concepts.
+because a keyword matches. The current derived-memory baseline is deliberately
+flat: a Record has one active head, immutable numbered Revisions, and receipt
+Evidence. `ADD` promotes evidence into a Record; `MERGE` and `SUPERSEDE` refine
+it. Downstream products decide when to request that work. Embeddings, trees,
+graphs, and hierarchies remain evaluation-gated experiments rather than public
+API concepts.
 
 A later stateful identity profile may maintain personality, relationships, and
-working style through a bounded hierarchical memory. That profile remains
-separate from the first useful stateless-Session path. Background ingestion,
-indexing, decay, and deterministic organization are algorithm-first; no idle
-model billing is acceptable. See the [roadmap](docs/memory-appliance-roadmap.md)
-for the staged product and acceptance boundary.
+working style through a bounded capsule assembled from the same labeled flat
+records. Background ingestion, indexing, bounded time ranking, and deterministic
+organization are algorithm-first; no idle model billing is acceptable. See the
+[roadmap](docs/memory-appliance-roadmap.md) for the staged product and acceptance
+boundary.
 
 ## Embedded use
 
@@ -94,8 +99,11 @@ client := memory.NewClient(runtime.DataPlane(), capabilities, source, budget)
 ```
 
 The embedding remains responsible for product configuration, model selection,
-tool projection, Session ToolResult persistence, and replay. Memory remains
-responsible for every memory-domain mutation and authorization decision.
+tool projection, Session ToolResult persistence, replay, and selecting an opaque
+LabelSet when it issues a Runtime capability. The model-facing Remember and
+Recall requests do not contain labels. Memory remains responsible for LabelSet
+validation, exact partition enforcement, every memory-domain mutation, and
+authorization decisions.
 
 ## Standalone framework
 

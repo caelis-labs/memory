@@ -7,7 +7,7 @@ retained but deferred adapter and is not a Caelis runtime dependency.
 
 - private receipt text and source context;
 - shared receipt integrity;
-- Realm, Identity, Space, View, and Grant configuration;
+- Realm, Identity, Space, View, Grant, and LabelSet capability configuration;
 - issuer credentials and Runtime capabilities;
 - consistency and idempotency semantics;
 - Recall provenance and separately persisted Caelis Session copies;
@@ -32,7 +32,7 @@ Memory tables or import `internal/*`. Direct Go calls remove process discovery,
 download, manifest, endpoint, and sidecar-impersonation threats from the Caelis
 path; they do not weaken Memory's logical authorization boundary.
 
-Successful embedded `appliance.Open` means the database is migrated, queryable,
+Successful embedded `appliance.Open` means the database is at the current baseline, queryable,
 and not awaiting restore commit. Failure is an ordinary Host construction
 error. There is no partially ready embedded Memory state.
 
@@ -40,16 +40,16 @@ error. There is no partially ready embedded Memory state.
 
 | Threat | Required control |
 | --- | --- |
-| Agent chooses another identity or Space | Agent schemas omit authority fields; the Host-selected capability fixes one View |
+| Agent chooses another identity, Space, or LabelSet | Agent schemas omit authority fields; the Host-selected capability fixes one View and one canonical LabelSet |
 | Shared query leaks private candidates | Authorize and select per-Space indexes before candidate generation |
 | Private context flows to shared output | Caelis binds one immutable audience and rejects incompatible sinks |
 | Stolen or stale capability is reused | Short lifetime, stored digest, explicit revoke, and fail-closed validation |
 | Grant reference is treated as a credential | Authenticate the issuer principal separately before capability issuance |
 | Capability or issuer credential enters history | Keep bearer bytes outside request bodies, ToolResults, AppConfig, and logs |
 | SourceContext forges authority | Treat it as bounded audit metadata only |
-| Retry duplicates a receipt | Bind a stable Space/idempotency key to one request digest |
-| Consistency token grants access | Reauthorize the token's Space on every Recall |
-| Steward invents or widens facts | Require same-Space evidence, closed operations, byte bounds, and deterministic proposal validation |
+| Retry duplicates a receipt | Bind a stable Space/idempotency key to one request digest, including the selected LabelSet |
+| Consistency token grants access | Reauthorize the token's Space and exact LabelSet on every Recall |
+| Steward invents or widens facts | Require same-Space and same-LabelSet evidence, closed operations, byte bounds, and deterministic proposal validation |
 | ModelGenerator receives Memory authority | Pass only bounded model-facing work; keep lease, Space, View, Grant, actor, audience, and bearers outside the callback |
 | Provider egress exposes private receipts | Provider selection and egress belong to an explicitly bound downstream Host model; zero-token static mode is the default |
 | Worker outage blocks Memory | Durable receipt and lexical Recall remain independent from Steward Jobs |

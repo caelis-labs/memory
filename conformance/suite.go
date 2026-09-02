@@ -18,6 +18,8 @@ type Fixture struct {
 
 	BotAPrivate        v1alpha1.CallAuthorization
 	BotAPrivateRenewed v1alpha1.CallAuthorization
+	BotAPrivateLabeled v1alpha1.CallAuthorization
+	BotAPrivateOther   v1alpha1.CallAuthorization
 	BotBPrivate        v1alpha1.CallAuthorization
 	SharedA            v1alpha1.CallAuthorization
 	SharedB            v1alpha1.CallAuthorization
@@ -157,6 +159,40 @@ func RunSemantic(t *testing.T, factory Factory) {
 		if first.ReceiptID != second.ReceiptID || !second.DeduplicatedRetry {
 			t.Fatalf("renewed retry = %+v, first = %+v", second, first)
 		}
+	})
+
+	t.Run("LabelSetPartitionsOneSpace", func(t *testing.T) {
+		fixture := factory(t)
+		ctx := context.Background()
+		remembered, err := fixture.Service.Remember(ctx, fixture.BotAPrivateLabeled, rememberRequest(
+			"demo workspace uses React",
+			"label-partition",
+		))
+		if err != nil {
+			t.Fatal(err)
+		}
+		own, err := fixture.Service.Recall(ctx, fixture.BotAPrivateLabeled, recallRequest("React", remembered.ConsistencyToken))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertFragmentText(t, own, "demo workspace uses React")
+
+		other, err := fixture.Service.Recall(ctx, fixture.BotAPrivateOther, recallRequest("React", ""))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(other.Fragments) != 0 {
+			t.Fatalf("other LabelSet recalled partitioned memory: %+v", other.Fragments)
+		}
+		_, err = fixture.Service.GetReceiptStatus(ctx, fixture.BotAPrivateOther, v1alpha1.GetReceiptStatusRequest{ReceiptID: remembered.ReceiptID})
+		assertCode(t, err, v1alpha1.ErrorCodeNotFound)
+		_, err = fixture.Service.Recall(ctx, fixture.BotAPrivateOther, recallRequest("React", remembered.ConsistencyToken))
+		assertCode(t, err, v1alpha1.ErrorCodeUnauthorized)
+		_, err = fixture.Service.Remember(ctx, fixture.BotAPrivateOther, rememberRequest(
+			"demo workspace uses React",
+			"label-partition",
+		))
+		assertCode(t, err, v1alpha1.ErrorCodeConflict)
 	})
 
 	t.Run("IdempotencyConflict", func(t *testing.T) {

@@ -46,7 +46,7 @@ type Store struct {
 	experimentalLexicon bool
 }
 
-// Open acquires the data-directory owner lock, migrates SQLite, and initializes
+// Open acquires the data-directory owner lock, initializes SQLite, and creates
 // owner-only local management authentication.
 func Open(ctx context.Context, options Options) (*Store, error) {
 	if options.DataDir == "" {
@@ -124,7 +124,7 @@ func (s *Store) initialize(ctx context.Context) error {
 	if err := s.db.PingContext(ctx); err != nil {
 		return fmt.Errorf("ping SQLite: %w", err)
 	}
-	if err := migrate(ctx, s.db, s.now().UTC()); err != nil {
+	if err := initializeSchema(ctx, s.db, s.now().UTC()); err != nil {
 		return err
 	}
 	generation, err := s.metadata(ctx, "storage_generation")

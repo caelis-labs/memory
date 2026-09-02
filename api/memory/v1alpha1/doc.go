@@ -2,5 +2,5 @@
 //
 // Authority-bearing call metadata is deliberately separate from request
 // payloads so model-visible arguments cannot select an identity, Space, View,
-// or output audience.
+// LabelSet, or output audience.
 package v1alpha1

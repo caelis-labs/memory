@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,33 +15,32 @@ import (
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 )
 
-func TestSchemaOneMigratesTransactionallyToCurrentSchema(t *testing.T) {
-	dataDir := t.TempDir()
-	database, err := sql.Open("sqlite", filepath.Join(dataDir, DatabaseFilename))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := migrateTo(t.Context(), database, time.Now(), 1); err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Close(); err != nil {
-		t.Fatal(err)
-	}
-	store, err := Open(t.Context(), Options{DataDir: dataDir})
+func TestFreshSchemaUsesOneCurrentBaseline(t *testing.T) {
+	store, err := Open(t.Context(), Options{DataDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	var version int
-	if err := store.db.QueryRowContext(t.Context(), `SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
+	var count, version int
+	if err := store.db.QueryRowContext(t.Context(),
+		`SELECT COUNT(*), MAX(version) FROM schema_migrations`).Scan(&count, &version); err != nil {
 		t.Fatal(err)
 	}
-	if version != CurrentSchemaVersion {
-		t.Fatalf("schema version = %d, want %d", version, CurrentSchemaVersion)
+	if count != 1 || version != CurrentSchemaVersion {
+		t.Fatalf("schema ledger = count:%d version:%d", count, version)
+	}
+	var baseline string
+	if err := store.db.QueryRowContext(t.Context(),
+		`SELECT value FROM metadata WHERE key = 'schema_baseline'`).Scan(&baseline); err != nil {
+		t.Fatal(err)
+	}
+	if baseline != schemaBaselineID {
+		t.Fatalf("schema baseline = %q, want %q", baseline, schemaBaselineID)
 	}
 	for _, table := range []string{
 		"receipt_tombstones", "receipt_corrections", "management_effects",
-		"steward_profiles", "steward_jobs", "semantic_records", "semantic_revisions", "semantic_evidence",
+		"steward_profiles", "steward_jobs", "semantic_records", "semantic_revisions",
+		"semantic_evidence", "space_lexicons", "lexicon_terms",
 	} {
 		var exists bool
 		if err := store.db.QueryRowContext(t.Context(),
@@ -48,193 +48,92 @@ func TestSchemaOneMigratesTransactionallyToCurrentSchema(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !exists {
-			t.Fatalf("migration did not create %s", table)
+			t.Fatalf("schema baseline omitted %s", table)
+		}
+	}
+	for table, columns := range map[string][]string{
+		"capabilities":     {"label_set", "label_set_digest"},
+		"receipts":         {"label_set", "label_set_digest"},
+		"steward_jobs":     {"label_set", "label_set_digest"},
+		"semantic_records": {"label_set", "label_set_digest"},
+		"steward_profiles": {"system_prompt"},
+	} {
+		for _, column := range columns {
+			var present bool
+			if err := store.db.QueryRowContext(t.Context(),
+				`SELECT EXISTS(SELECT 1 FROM pragma_table_info(?) WHERE name = ?)`, table, column).Scan(&present); err != nil {
+				t.Fatal(err)
+			}
+			if !present {
+				t.Fatalf("schema baseline omitted %s.%s", table, column)
+			}
+		}
+	}
+	for _, obsolete := range []string{"provider_ref", "model"} {
+		var present bool
+		if err := store.db.QueryRowContext(t.Context(),
+			`SELECT EXISTS(SELECT 1 FROM pragma_table_info('steward_profiles') WHERE name = ?)`, obsolete).Scan(&present); err != nil {
+			t.Fatal(err)
+		}
+		if present {
+			t.Fatalf("unreleased compatibility column steward_profiles.%s remains", obsolete)
 		}
 	}
 }
 
-func TestSemanticMigrationCreatesPerSpaceIndexesTransactionally(t *testing.T) {
-	database, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "semantic-migration.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer database.Close()
-	now := time.Now().UTC()
-	if err := migrateTo(t.Context(), database, now, 2); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := database.ExecContext(t.Context(),
-		`INSERT INTO realms(id, created_at) VALUES ('realm-semantic', ?)`, formatTime(now)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := database.ExecContext(t.Context(),
-		`INSERT INTO spaces(id, realm_id, identity_id, class, created_at)
-		 VALUES ('space-semantic', 'realm-semantic', NULL, 'shared', ?)`, formatTime(now)); err != nil {
-		t.Fatal(err)
-	}
-	if err := migrateTo(t.Context(), database, now, 3); err != nil {
-		t.Fatal(err)
-	}
-	var tableName string
-	if err := database.QueryRowContext(t.Context(),
-		`SELECT table_name FROM semantic_space_indexes WHERE space_id = 'space-semantic'`).Scan(&tableName); err != nil {
-		t.Fatal(err)
-	}
-	if tableName != semanticSpaceIndexTable("space-semantic") {
-		t.Fatalf("semantic table = %q", tableName)
-	}
-	var exists bool
-	if err := database.QueryRowContext(t.Context(),
-		`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?)`, tableName).Scan(&exists); err != nil {
-		t.Fatal(err)
-	}
-	if !exists {
-		t.Fatal("semantic migration did not create the per-Space FTS table")
-	}
-}
-
-func TestMinimumSupportedSchemaTwoUpgradePreservesAcknowledgedReceipt(t *testing.T) {
+func TestHistoricalUnreleasedSchemaRequiresDevelopmentDatabaseRebuild(t *testing.T) {
 	dataDir := t.TempDir()
 	database, err := sql.Open("sqlite", filepath.Join(dataDir, DatabaseFilename))
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	if err := migrateTo(t.Context(), database, now, 2); err != nil {
-		t.Fatal(err)
-	}
-	statements := []string{
-		`INSERT INTO realms(id, created_at) VALUES ('realm-upgrade', '` + formatTime(now) + `')`,
-		`INSERT INTO identities(id, realm_id, created_at) VALUES ('identity-upgrade', 'realm-upgrade', '` + formatTime(now) + `')`,
-		`INSERT INTO spaces(id, realm_id, identity_id, class, created_at)
-		 VALUES ('space-upgrade', 'realm-upgrade', 'identity-upgrade', 'private', '` + formatTime(now) + `')`,
-		`INSERT INTO receipts(receipt_id, space_id, text, source_context, occurred_at, received_at,
-		 idempotency_key, request_digest, consistency_token)
-		 VALUES ('receipt-upgrade', 'space-upgrade', 'minimum supported upgrade sentinel', '{}', NULL,
-		 '` + formatTime(now) + `', 'upgrade-effect', 'upgrade-digest', 'upgrade-cursor')`,
-		`INSERT INTO receipt_processing(receipt_id, state) VALUES ('receipt-upgrade', 'accepted')`,
-		`INSERT INTO consistency_cursors(token, generation, space_id, commit_sequence)
-		 SELECT 'upgrade-cursor', 'generation-upgrade', 'space-upgrade', commit_sequence
-		 FROM receipts WHERE receipt_id = 'receipt-upgrade'`,
-	}
-	for _, statement := range statements {
-		if _, err := database.ExecContext(t.Context(), statement); err != nil {
-			_ = database.Close()
-			t.Fatal(err)
-		}
-	}
-	tableName := spaceIndexTable("space-upgrade")
-	if _, err := database.ExecContext(t.Context(),
-		`INSERT INTO space_indexes(space_id, table_name) VALUES ('space-upgrade', ?)`, tableName); err != nil {
-		_ = database.Close()
+	if _, err := database.ExecContext(t.Context(), `CREATE TABLE schema_migrations (
+		version INTEGER PRIMARY KEY,
+		applied_at TEXT NOT NULL
+	) STRICT`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := database.ExecContext(t.Context(),
-		`CREATE VIRTUAL TABLE `+tableName+` USING fts5(receipt_id UNINDEXED, text, tokenize = 'unicode61')`); err != nil {
-		_ = database.Close()
-		t.Fatal(err)
-	}
-	if _, err := database.ExecContext(t.Context(),
-		`INSERT INTO `+tableName+`(receipt_id, text) VALUES ('receipt-upgrade', 'minimum supported upgrade sentinel')`); err != nil {
-		_ = database.Close()
+		`INSERT INTO schema_migrations(version, applied_at) VALUES (8, ?)`, formatTime(time.Now())); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := Open(t.Context(), Options{DataDir: dataDir, Clock: func() time.Time { return now }})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
-	result, err := store.SearchReceipts(t.Context(), managementv1alpha1.SearchReceiptsRequest{
-		Query: "upgrade sentinel", SpaceID: "space-upgrade", Limit: 10,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.Receipts) != 1 || result.Receipts[0].Text != "minimum supported upgrade sentinel" {
-		t.Fatalf("upgraded receipt search = %+v", result.Receipts)
-	}
-	if _, err := readSemanticSpaceIndex(t.Context(), store.db, "space-upgrade"); err != nil {
-		t.Fatalf("upgraded semantic Space index: %v", err)
+	_, err = Open(t.Context(), Options{DataDir: dataDir})
+	if err == nil || !strings.Contains(err.Error(), "unsupported unreleased schema") {
+		t.Fatalf("Open historical development schema error = %v", err)
 	}
 }
 
-func TestSemanticMigrationFailureRollsBackSchemaAndDynamicIndexes(t *testing.T) {
-	database, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "semantic-migration-failure.db"))
+func TestSchemaBaselineFailureRollsBackAllDomainTables(t *testing.T) {
+	database, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "baseline-failure.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer database.Close()
-	now := time.Now().UTC()
-	if err := migrateTo(t.Context(), database, now, 2); err != nil {
+	if _, err := database.ExecContext(t.Context(), `CREATE TABLE metadata(conflict TEXT) STRICT`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.ExecContext(t.Context(), `CREATE TABLE semantic_records(conflict TEXT) STRICT`); err != nil {
-		t.Fatal(err)
+	if err := initializeSchema(t.Context(), database, time.Now()); err == nil {
+		t.Fatal("schema baseline succeeded despite a conflicting table")
 	}
-	if err := migrateTo(t.Context(), database, now, 3); err == nil {
-		t.Fatal("semantic migration succeeded despite a conflicting table")
-	}
-	for _, table := range []string{"steward_profiles", "steward_jobs", "semantic_space_indexes"} {
+	for _, table := range []string{"realms", "receipts", "steward_profiles", "semantic_records"} {
 		var exists bool
 		if err := database.QueryRowContext(t.Context(),
 			`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?)`, table).Scan(&exists); err != nil {
 			t.Fatal(err)
 		}
 		if exists {
-			t.Fatalf("failed semantic migration left %s behind", table)
+			t.Fatalf("failed baseline left %s behind", table)
 		}
 	}
-	var version int
-	if err := database.QueryRowContext(t.Context(), `SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
+	var recorded int
+	if err := database.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM schema_migrations`).Scan(&recorded); err != nil {
 		t.Fatal(err)
 	}
-	if version != 2 {
-		t.Fatalf("failed semantic migration recorded schema version %d, want 2", version)
-	}
-}
-
-func TestGovernanceMigrationFailureRollsBackPartialDDL(t *testing.T) {
-	database, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "migration.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer database.Close()
-	if err := migrateTo(t.Context(), database, time.Now(), 1); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := database.ExecContext(t.Context(), `CREATE TABLE management_effects(conflict TEXT) STRICT`); err != nil {
-		t.Fatal(err)
-	}
-	if err := migrateTo(t.Context(), database, time.Now(), 2); err == nil {
-		t.Fatal("governance migration succeeded despite a conflicting later table")
-	}
-	for _, table := range []string{"receipt_tombstones", "receipt_corrections"} {
-		var exists bool
-		if err := database.QueryRowContext(t.Context(),
-			`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?)`, table).Scan(&exists); err != nil {
-			t.Fatal(err)
-		}
-		if exists {
-			t.Fatalf("failed governance migration left %s behind", table)
-		}
-	}
-	var version int
-	if err := database.QueryRowContext(t.Context(), `SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
-		t.Fatal(err)
-	}
-	if version != 1 {
-		t.Fatalf("failed migration recorded schema version %d, want 1", version)
-	}
-	var immutableDeleteExists bool
-	if err := database.QueryRowContext(t.Context(),
-		`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'trigger' AND name = 'receipts_immutable_delete')`).Scan(&immutableDeleteExists); err != nil {
-		t.Fatal(err)
-	}
-	if !immutableDeleteExists {
-		t.Fatal("failed governance migration removed the v1 delete guard")
+	if recorded != 0 {
+		t.Fatalf("failed baseline recorded %d schema rows", recorded)
 	}
 }
 

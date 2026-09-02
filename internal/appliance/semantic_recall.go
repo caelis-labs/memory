@@ -19,6 +19,7 @@ func (s *Store) semanticRecallCandidates(
 	ctx context.Context,
 	db databaseExecutor,
 	spaceID v1alpha1.SpaceID,
+	labelSetDigest string,
 	class v1alpha1.SpaceClass,
 	query string,
 	ftsQuery string,
@@ -32,11 +33,11 @@ func (s *Store) semanticRecallCandidates(
 	if err := db.QueryRowContext(ctx,
 		`SELECT EXISTS(
 		 SELECT 1 FROM steward_jobs
-		 WHERE space_id = ? AND (
+		 WHERE space_id = ? AND label_set_digest = ? AND (
 		  state IN ('pending', 'leased') OR
 		  (state = 'failed' AND terminal_error_code NOT IN ('steward_disabled', 'receipt_corrected', 'receipt_deleted'))
 		 )
-		)`, spaceID).Scan(&outstanding); err != nil {
+		)`, spaceID, labelSetDigest).Scan(&outstanding); err != nil {
 		if contextError(ctx) != nil {
 			return nil, false, ctx.Err()
 		}
@@ -53,14 +54,19 @@ func (s *Store) semanticRecallCandidates(
 	}
 	var expected, projected, usable int64
 	if err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM semantic_records WHERE space_id = ? AND status = 'active'`, spaceID).Scan(&expected); err != nil {
-		degraded = true
-	} else if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+tableName).Scan(&projected); err != nil {
+		`SELECT COUNT(*) FROM semantic_records
+		 WHERE space_id = ? AND label_set_digest = ? AND status = 'active'`, spaceID, labelSetDigest).Scan(&expected); err != nil {
 		degraded = true
 	} else if err := db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM `+tableName+` f
 		 JOIN semantic_records r ON r.record_id = f.record_id AND r.space_id = ?
-		 WHERE r.status = 'active' AND r.current_revision = f.revision`, spaceID).Scan(&usable); err != nil {
+		 WHERE r.label_set_digest = ?`, spaceID, labelSetDigest).Scan(&projected); err != nil {
+		degraded = true
+	} else if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM `+tableName+` f
+		 JOIN semantic_records r ON r.record_id = f.record_id AND r.space_id = ?
+		 WHERE r.label_set_digest = ? AND r.status = 'active' AND r.current_revision = f.revision`,
+		spaceID, labelSetDigest).Scan(&usable); err != nil {
 		degraded = true
 	} else if expected != projected || expected != usable {
 		degraded = true
@@ -74,9 +80,10 @@ func (s *Store) semanticRecallCandidates(
 		 FROM `+tableName+` f
 		 JOIN semantic_records r ON r.record_id = f.record_id AND r.space_id = ?
 		 JOIN semantic_revisions v ON v.record_id = r.record_id AND v.revision = r.current_revision
-		 WHERE `+tableName+` MATCH ? AND r.status = 'active' AND r.current_revision = f.revision
+		 WHERE `+tableName+` MATCH ? AND r.label_set_digest = ?
+		 AND r.status = 'active' AND r.current_revision = f.revision
 		 ORDER BY bm25(`+tableName+`, 0.0, 0.0, 4.0, 2.0, 0.25), r.updated_at DESC, r.record_id
-		 LIMIT 512`, spaceID, ftsQuery)
+		 LIMIT 512`, spaceID, ftsQuery, labelSetDigest)
 	if err != nil {
 		if contextError(ctx) != nil {
 			return nil, false, ctx.Err()
@@ -124,7 +131,9 @@ func (s *Store) semanticRecallCandidates(
 	validCandidates := candidates[:0]
 	for _, candidate := range candidates {
 		recordID := stewardv1alpha1.RecordID(candidate.recordRefs[0])
-		evidence, valid, err := readRecallSemanticEvidence(ctx, db, recordID, candidate.recordRevision, spaceID)
+		evidence, valid, err := readRecallSemanticEvidence(
+			ctx, db, recordID, candidate.recordRevision, spaceID, labelSetDigest,
+		)
 		if err != nil {
 			if contextError(ctx) != nil {
 				return nil, false, ctx.Err()
@@ -148,9 +157,10 @@ func readRecallSemanticEvidence(
 	recordID stewardv1alpha1.RecordID,
 	revision uint64,
 	spaceID v1alpha1.SpaceID,
+	labelSetDigest string,
 ) ([]v1alpha1.ReceiptID, bool, error) {
 	rows, err := db.QueryContext(ctx,
-		`SELECT e.receipt_id, r.space_id, c.original_receipt_id
+		`SELECT e.receipt_id, r.space_id, r.label_set_digest, c.original_receipt_id
 		 FROM semantic_evidence e
 		 LEFT JOIN receipts r ON r.receipt_id = e.receipt_id
 		 LEFT JOIN receipt_corrections c ON c.original_receipt_id = e.receipt_id
@@ -163,12 +173,13 @@ func readRecallSemanticEvidence(
 	valid := true
 	for rows.Next() {
 		var receiptID v1alpha1.ReceiptID
-		var receiptSpace, corrected sql.NullString
-		if err := rows.Scan(&receiptID, &receiptSpace, &corrected); err != nil {
+		var receiptSpace, receiptLabels, corrected sql.NullString
+		if err := rows.Scan(&receiptID, &receiptSpace, &receiptLabels, &corrected); err != nil {
 			_ = rows.Close()
 			return nil, false, err
 		}
-		if !receiptSpace.Valid || v1alpha1.SpaceID(receiptSpace.String) != spaceID || corrected.Valid {
+		if !receiptSpace.Valid || v1alpha1.SpaceID(receiptSpace.String) != spaceID ||
+			!receiptLabels.Valid || receiptLabels.String != labelSetDigest || corrected.Valid {
 			valid = false
 		}
 		evidence = append(evidence, receiptID)

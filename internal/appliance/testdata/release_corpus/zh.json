@@ -1,0 +1,22 @@
+{
+  "format_version": 1,
+  "cohort": "zh",
+  "source": "authored_deidentified_v1",
+  "sanitization": "no_private_source_text_no_personal_identifiers_no_credentials",
+  "series": [
+    {
+      "language": "zh-Hans",
+      "subjects": ["苍穹", "星河", "远山", "青岚", "微光", "云桥", "松涛", "流萤"],
+      "facts": [
+        {"text": "{subject}项目的构建流水线在每次合并前执行竞态检测。", "query": "{subject} 合并 竞态检测"},
+        {"text": "{subject}服务保留七天可以恢复的数据库快照。", "query": "{subject} 七天 恢复 快照"},
+        {"text": "{subject}产品的正式发布窗口固定在周三下午。", "query": "{subject} 周三 发布窗口"},
+        {"text": "{subject}前端使用 React 和 TypeScript，并部署到 Vercel。", "query": "{subject} React TypeScript Vercel"},
+        {"text": "{subject}安全变更合并前必须由两名成员完成中文评审。", "query": "{subject} 中文评审 两名成员"},
+        {"text": "{subject}关系数据存放在 PostgreSQL，恢复链路依赖 WAL。", "query": "{subject} PostgreSQL WAL"},
+        {"text": "{subject}值班人员必须在十五分钟内确认严重故障。", "query": "{subject} 十五分钟 严重故障"},
+        {"text": "{subject}没有绑定 Steward 模型时使用零调用的静态记忆检索。", "query": "{subject} Steward 静态记忆 零调用"}
+      ]
+    }
+  ]
+}

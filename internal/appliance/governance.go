@@ -67,7 +67,8 @@ func (s *Store) SearchReceipts(
 			)`
 		}
 		rows, err := tx.QueryContext(ctx,
-			`SELECT r.receipt_id, r.space_id, r.text, r.source_context, r.occurred_at,
+			`SELECT r.receipt_id, r.space_id, r.label_set, r.label_set_digest,
+			 r.text, r.source_context, r.occurred_at,
 			 r.received_at, r.commit_sequence, p.state,
 			 COALESCE((SELECT replacement_receipt_id FROM receipt_corrections WHERE original_receipt_id = r.receipt_id), ''),
 			 COALESCE((SELECT original_receipt_id FROM receipt_corrections WHERE replacement_receipt_id = r.receipt_id), ''),
@@ -190,7 +191,10 @@ func (s *Store) CorrectReceipt(
 		return replay, nil
 	}
 	var spaceID v1alpha1.SpaceID
-	if err := tx.QueryRowContext(ctx, `SELECT space_id FROM receipts WHERE receipt_id = ?`, request.ReceiptID).Scan(&spaceID); err != nil {
+	var labelSetEncoded, labelSetDigest string
+	if err := tx.QueryRowContext(ctx,
+		`SELECT space_id, label_set, label_set_digest FROM receipts WHERE receipt_id = ?`, request.ReceiptID).Scan(
+		&spaceID, &labelSetEncoded, &labelSetDigest); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return rollback(s.serviceError(v1alpha1.ErrorCodeNotFound, "receipt not found", false))
 		}
@@ -228,17 +232,21 @@ func (s *Store) CorrectReceipt(
 		Text: request.ReplacementText, SourceContext: sourceContext,
 		IdempotencyKey: "management:correction:" + digestString(request.IdempotencyKey)[:32],
 	}
-	receiptDigest, err := rememberRequestDigest(receiptRequest)
+	labels, err := decodeStoredLabelSet(labelSetEncoded, labelSetDigest)
+	if err != nil {
+		return rollback(s.serviceError(v1alpha1.ErrorCodeInternal, "stored receipt LabelSet is invalid", false))
+	}
+	receiptDigest, err := rememberRequestDigest(receiptRequest, labels.labels)
 	if err != nil {
 		return rollback(s.serviceError(v1alpha1.ErrorCodeInternal, "failed to normalize replacement receipt", false))
 	}
 	now := s.now().UTC()
 	result, err := tx.ExecContext(ctx,
 		`INSERT INTO receipts(receipt_id, space_id, text, source_context, occurred_at, received_at,
-		 idempotency_key, request_digest, consistency_token)
-		 VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+		 idempotency_key, request_digest, consistency_token, label_set, label_set_digest)
+		 VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
 		replacementID, spaceID, request.ReplacementText, string(sourceJSON), formatTime(now),
-		receiptRequest.IdempotencyKey, receiptDigest, consistencyToken)
+		receiptRequest.IdempotencyKey, receiptDigest, consistencyToken, labels.encoded, labels.digest)
 	if err != nil {
 		return rollback(s.databaseError("store replacement receipt", err))
 	}
@@ -249,12 +257,13 @@ func (s *Store) CorrectReceipt(
 	if _, err := tx.ExecContext(ctx, `INSERT INTO receipt_processing(receipt_id, state) VALUES (?, ?)`, replacementID, v1alpha1.ProcessingStateAccepted); err != nil {
 		return rollback(s.databaseError("store replacement processing state", err))
 	}
-	if err := s.enqueueStewardJob(ctx, tx, replacementID, spaceID, now); err != nil {
+	if err := s.enqueueStewardJob(ctx, tx, replacementID, spaceID, labels.encoded, labels.digest, now); err != nil {
 		return rollback(s.databaseError("enqueue correction Steward job", err))
 	}
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO consistency_cursors(token, generation, space_id, commit_sequence) VALUES (?, ?, ?, ?)`,
-		consistencyToken, s.generation, spaceID, commitSequence); err != nil {
+		`INSERT INTO consistency_cursors(token, generation, space_id, commit_sequence, label_set_digest)
+		 VALUES (?, ?, ?, ?, ?)`,
+		consistencyToken, s.generation, spaceID, commitSequence, labels.digest); err != nil {
 		return rollback(s.databaseError("store correction cursor", err))
 	}
 	tableName, err := readSpaceIndex(ctx, tx, spaceID)
@@ -446,10 +455,11 @@ type rowScanner interface {
 }
 
 func scanManagementReceipt(scanner rowScanner, receipt *managementv1alpha1.Receipt, trailing ...any) error {
-	var sourceJSON, receivedAt string
+	var labelSetEncoded, labelSetDigest, sourceJSON, receivedAt string
 	var occurred sql.NullString
 	values := []any{
-		&receipt.ReceiptID, &receipt.SpaceID, &receipt.Text, &sourceJSON, &occurred,
+		&receipt.ReceiptID, &receipt.SpaceID, &labelSetEncoded, &labelSetDigest,
+		&receipt.Text, &sourceJSON, &occurred,
 		&receivedAt, &receipt.CommitSequence, &receipt.ProcessingState,
 		&receipt.CorrectedBy, &receipt.CorrectionOf,
 	}
@@ -460,6 +470,11 @@ func scanManagementReceipt(scanner rowScanner, receipt *managementv1alpha1.Recei
 	if err := json.Unmarshal([]byte(sourceJSON), &receipt.SourceContext); err != nil {
 		return err
 	}
+	labels, err := decodeStoredLabelSet(labelSetEncoded, labelSetDigest)
+	if err != nil {
+		return err
+	}
+	receipt.Labels = labels.labels
 	parsed, err := parseTime(receivedAt)
 	if err != nil {
 		return err
@@ -478,7 +493,8 @@ func scanManagementReceipt(scanner rowScanner, receipt *managementv1alpha1.Recei
 func (s *Store) readManagementReceipt(ctx context.Context, receiptID v1alpha1.ReceiptID) (managementv1alpha1.Receipt, error) {
 	var receipt managementv1alpha1.Receipt
 	err := scanManagementReceipt(s.db.QueryRowContext(ctx,
-		`SELECT r.receipt_id, r.space_id, r.text, r.source_context, r.occurred_at,
+		`SELECT r.receipt_id, r.space_id, r.label_set, r.label_set_digest,
+		 r.text, r.source_context, r.occurred_at,
 		 r.received_at, r.commit_sequence, p.state,
 		 COALESCE((SELECT replacement_receipt_id FROM receipt_corrections WHERE original_receipt_id = r.receipt_id), ''),
 		 COALESCE((SELECT original_receipt_id FROM receipt_corrections WHERE replacement_receipt_id = r.receipt_id), '')

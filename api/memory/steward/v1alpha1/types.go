@@ -216,14 +216,15 @@ type Evidence struct {
 
 // Record is the mutable head pointer for immutable Revisions.
 type Record struct {
-	RecordID          RecordID               `json:"record_id"`
-	SpaceID           memoryv1alpha1.SpaceID `json:"space_id"`
-	Kind              string                 `json:"kind"`
-	Status            RecordStatus           `json:"status"`
-	CurrentRevision   uint64                 `json:"current_revision"`
-	InvalidatedReason string                 `json:"invalidated_reason,omitempty"`
-	CreatedAt         time.Time              `json:"created_at"`
-	UpdatedAt         time.Time              `json:"updated_at"`
+	RecordID          RecordID                `json:"record_id"`
+	SpaceID           memoryv1alpha1.SpaceID  `json:"space_id"`
+	Labels            memoryv1alpha1.LabelSet `json:"labels,omitempty"`
+	Kind              string                  `json:"kind"`
+	Status            RecordStatus            `json:"status"`
+	CurrentRevision   uint64                  `json:"current_revision"`
+	InvalidatedReason string                  `json:"invalidated_reason,omitempty"`
+	CreatedAt         time.Time               `json:"created_at"`
+	UpdatedAt         time.Time               `json:"updated_at"`
 }
 
 // Revision is immutable interpreted content with same-Space Evidence.

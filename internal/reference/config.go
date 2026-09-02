@@ -65,6 +65,7 @@ type IssueCapabilityRequest struct {
 	ActorRef   string
 	Audience   v1alpha1.Audience
 	Operations []v1alpha1.Operation
+	Labels     v1alpha1.LabelSet
 	TTL        time.Duration
 }
 
@@ -267,6 +268,10 @@ func (s *Server) IssueCapability(auth IssuerAuthorization, request IssueCapabili
 	if len(request.Operations) == 0 {
 		return RuntimeCapability{}, fmt.Errorf("at least one operation is required")
 	}
+	labels, err := v1alpha1.CanonicalLabelSet(request.Labels)
+	if err != nil {
+		return RuntimeCapability{}, err
+	}
 	for _, operation := range request.Operations {
 		if !containsOperation(grant.AllowedOperations, operation) {
 			return RuntimeCapability{}, fmt.Errorf("operation %q is not granted", operation)
@@ -288,6 +293,7 @@ func (s *Server) IssueCapability(auth IssuerAuthorization, request IssueCapabili
 		actorRef:     request.ActorRef,
 		audience:     request.Audience,
 		operations:   append([]v1alpha1.Operation(nil), request.Operations...),
+		labels:       labels,
 		expiresAt:    expiresAt,
 	}
 	return RuntimeCapability{Token: token, ExpiresAt: expiresAt}, nil

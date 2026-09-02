@@ -1,12 +1,14 @@
 # Memory Appliance Corpus Evaluation
 
-Status: current privacy-preserving multi-round receipt evaluation plus the G4
-input boundary. It measures the model-free durable baseline; it is not a
-substitute for downstream-Generator model or semantic-quality evaluation.
+Status: current privacy-preserving multi-round receipt evaluation plus an
+opt-in local Ollama Steward sample. The default measures the model-free durable
+baseline. The optional sample exercises the real `ModelGenerator` prompt,
+parser, jobs, and semantic projection on private local facts; it is descriptive
+evidence, not the reviewed semantic-quality gate.
 
 ## Input boundary
 
-`scripts/corpus_eval` report format 2 accepts a local Markdown memory file, a Codex rollout
+`scripts/corpus_eval` report format 3 accepts a local Markdown memory file, a Codex rollout
 JSONL, or a Caelis Session event JSONL. It is an offline evaluation reader, not
 the production Session ingestion path; production uses canonical Session
 Service events and a durable checkpoint. Markdown fenced code is excluded. Codex
@@ -19,7 +21,9 @@ Source text, generated queries, receipt IDs, and data-directory paths never
 enter the report. The report contains only source format, byte count, source
 SHA-256, extraction counts, selected-query collision shape, aggregate durability
 and retrieval rates, leakage counts, cohort ages, lexicon growth, retrieval
-parameters, and latency percentiles. With
+parameters, and latency percentiles. When explicitly enabled, it also records
+only Steward policy hashes, model name, job/operation/failure counts, token
+counts, generation latency, and evidence-based semantic retrieval aggregates. With
 no `-data-dir`, the appliance database is created in a fresh temporary directory
 and removed on exit. Raw source or a retained evaluation database must never be
 committed to this repository.
@@ -52,13 +56,32 @@ lexical and evidence-bound. Paraphrase quality, model proposals, consolidation,
 and semantic ranking require a separately frozen appliance prompt-policy
 profile, downstream Generator/model, and labeled corpus.
 
-The checked-in realistic Chinese/mixed suite supplements the marker corpus with
-24 product-shaped receipt and semantic cases accumulated across three restarts.
-It proves deterministic retrieval and provenance only. G4 acceptance still
-requires at least 200 reviewed labeled cases and the fixed 100-Space,
-100,000-receipt, 10,000-Record soak; neither a private local source nor a
-synthetic marker corpus may be presented as sufficient semantic-quality
-evidence.
+The checked-in release corpus is the reproducible static-path candidate gate.
+It expands three digest-frozen, de-identified fixture batches into 224 cases:
+64 Chinese, 64 English, and 96 spanning Spanish, French, German, Japanese,
+Korean, and Arabic. Four durable rounds with intervening restarts gate Recall
+quality, provenance, zero results, and a deliberately broad 750ms
+user-perceived p95 budget. Adversarial records prove that both Space and exact
+LabelSet partitions are enforced before retrieval, receipt-status lookup, and
+consistency-token use. Run it with:
+
+```sh
+make corpus-gate
+```
+
+The 24-case realistic Chinese/mixed suite continues to cover semantic Record
+provenance. Neither deterministic lexical suite is evidence of paraphrase or
+model quality. G4 acceptance still requires at least 200 reviewed semantic
+cases and the fixed 100-Space, 100,000-receipt, 10,000-Record soak; neither a
+private local source nor a template-expanded corpus may be presented as
+sufficient semantic-quality evidence.
+
+The optional Steward adapter accepts only an HTTP loopback Ollama origin. It
+ignores `GenerationRequest.JSONSchema`, uses only Ollama's schema-free JSON
+object envelope, and sends the complete Memory-owned field contract as the
+system prompt followed by the bounded structured input. This
+keeps Provider ownership out of the package core and prevents an evaluator
+configuration mistake from sending a private corpus to a remote endpoint.
 
 The fixed synthetic scale and durability gate is executable now:
 
@@ -87,6 +110,24 @@ GOWORK=off go run ./scripts/corpus_eval \
   -format markdown -rounds 8 -limit 2000 \
   -output /private/path/memory-corpus-report.json
 ```
+
+Run a bounded local-model sample against the same real corpus. The static
+2,000-case path still runs unchanged; only the first selected 24 facts are sent
+through Steward:
+
+```sh
+GOWORK=off go run ./scripts/corpus_eval \
+  -source /absolute/path/to/MEMORY.md \
+  -format markdown -rounds 8 -limit 2000 \
+  -steward-model gemma4:12b-mlx -steward-limit 24 \
+  -output /private/path/memory-corpus-gemma4.json
+```
+
+The local-model sample answers protocol and real-corpus behavior questions:
+whether jobs complete, which operations are proposed, how many Record heads
+remain, whether prompt instructions drift, and whether each selected fact is
+still reachable through a semantic fragment. It does not create non-literal
+ground-truth queries, so it cannot by itself establish semantic Recall lift.
 
 For an A/B parameter sweep, keep every input argument fixed and vary only the
 private lexicon policy. Ordinary evaluation is the product control and leaves
@@ -156,6 +197,8 @@ The first retained privacy-preserving result for the package path is
 [Local Memory Registry Corpus Evidence](evidence/memory-registry-corpus-2026-09-02.md).
 The separate downstream-model parameter and replication evidence is
 [Memory Steward Evaluation](evidence/memory-steward-evaluation-2026-09-02.md).
+The current prompt/parser path and local Gemma real-corpus sample is
+[Real Corpus and Local Gemma Steward Evidence](evidence/memory-real-corpus-gemma4-2026-09-02.md).
 
 ## Product-quality evaluation ladder
 

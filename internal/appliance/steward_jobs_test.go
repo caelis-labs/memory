@@ -3,6 +3,7 @@ package appliance
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -236,6 +237,145 @@ func TestStewardProposalOutputBudgetIsEnforcedBeforeMutation(t *testing.T) {
 	}
 	if records != 0 {
 		t.Fatalf("oversized proposal created %d Records", records)
+	}
+}
+
+func TestStewardRefinementStaysWithinExactLabelSet(t *testing.T) {
+	store, credentials := bootstrapFixture(t, Options{DataDir: t.TempDir(), Clock: time.Now})
+	t.Cleanup(func() { _ = store.Close() })
+	putAndBindSteward(t, store, 1)
+	operations := []v1alpha1.Operation{
+		v1alpha1.OperationRemember,
+		v1alpha1.OperationRecall,
+		v1alpha1.OperationReceiptStatus,
+	}
+	issue := func(label string) v1alpha1.CallAuthorization {
+		request := issueRequest("grant-bot-a", "actor-bot-a", v1alpha1.AudiencePrivate, operations)
+		request.Labels = v1alpha1.LabelSet{v1alpha1.Label(label)}
+		capability := mustIssue(t, store, credentials["principal:actor-bot-a"], request)
+		return callAuth(capability, "actor-bot-a", v1alpha1.AudiencePrivate)
+	}
+	demoAuth := issue("workspace:demo")
+	caelisAuth := issue("workspace:caelis")
+
+	demo, err := store.Remember(t.Context(), demoAuth, v1alpha1.RememberRequest{
+		Text: "demo uses React", IdempotencyKey: "labels-demo-record",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	demoWork, found, err := store.ClaimStewardJob(t.Context(), time.Minute)
+	if err != nil || !found || len(demoWork.Request.Records) != 0 {
+		t.Fatalf("demo Work = %+v, found=%v, error=%v", demoWork, found, err)
+	}
+	encodedWork, err := json.Marshal(demoWork.Request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encodedWork), "workspace:demo") {
+		t.Fatalf("model-facing Steward Work exposed LabelSet: %s", encodedWork)
+	}
+	demoRecord, err := store.ApplyStewardProposal(t.Context(), demoWork.Lease, stewardv1alpha1.Proposal{
+		Operation: stewardv1alpha1.OperationAdd, Kind: "fact", Text: "The demo uses React.",
+		EvidenceRefs: []v1alpha1.ReceiptID{demo.ReceiptID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, _, err := store.GetSemanticRecord(t.Context(), demoRecord.RecordID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(record.Labels, v1alpha1.LabelSet{"workspace:demo"}) {
+		t.Fatalf("promoted Record Labels = %v", record.Labels)
+	}
+
+	caelis, err := store.Remember(t.Context(), caelisAuth, v1alpha1.RememberRequest{
+		Text: "Caelis uses Go", IdempotencyKey: "labels-caelis-record",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	caelisWork, found, err := store.ClaimStewardJob(t.Context(), time.Minute)
+	if err != nil || !found {
+		t.Fatalf("Caelis Work found=%v error=%v", found, err)
+	}
+	if len(caelisWork.Request.Records) != 0 {
+		t.Fatalf("Caelis Work saw another LabelSet: %+v", caelisWork.Request.Records)
+	}
+	if _, err := store.ApplyStewardProposal(t.Context(), caelisWork.Lease, stewardv1alpha1.Proposal{
+		Operation: stewardv1alpha1.OperationAdd, Kind: "fact", Text: "Caelis uses Go.",
+		EvidenceRefs: []v1alpha1.ReceiptID{caelis.ReceiptID, demo.ReceiptID},
+	}); !errors.Is(err, ErrStewardProposalInvalid) {
+		t.Fatalf("cross-LabelSet proposal error = %v", err)
+	}
+	caelisRecord, err := store.ApplyStewardProposal(t.Context(), caelisWork.Lease, stewardv1alpha1.Proposal{
+		Operation: stewardv1alpha1.OperationAdd, Kind: "fact", Text: "Caelis uses Go.",
+		EvidenceRefs: []v1alpha1.ReceiptID{caelis.ReceiptID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	caelisNext, err := store.Remember(t.Context(), caelisAuth, v1alpha1.RememberRequest{
+		Text: "Caelis ships an embedded Memory package", IdempotencyKey: "labels-caelis-refine",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	caelisNextWork, found, err := store.ClaimStewardJob(t.Context(), time.Minute)
+	if err != nil || !found {
+		t.Fatalf("next Caelis Work found=%v error=%v", found, err)
+	}
+	if len(caelisNextWork.Request.Records) != 1 || caelisNextWork.Request.Records[0].RecordID != caelisRecord.RecordID {
+		t.Fatalf("next Caelis Work Records = %+v", caelisNextWork.Request.Records)
+	}
+	if _, err := store.ApplyStewardProposal(t.Context(), caelisNextWork.Lease, stewardv1alpha1.Proposal{
+		Operation: stewardv1alpha1.OperationMerge, TargetRecordID: demoRecord.RecordID, ExpectedRevision: 1,
+		Kind: "fact", Text: "invalid cross-label refinement",
+		EvidenceRefs: []v1alpha1.ReceiptID{caelis.ReceiptID, caelisNext.ReceiptID},
+	}); !errors.Is(err, ErrStewardConflict) {
+		t.Fatalf("cross-LabelSet refinement error = %v", err)
+	}
+	merged, err := store.ApplyStewardProposal(t.Context(), caelisNextWork.Lease, stewardv1alpha1.Proposal{
+		Operation: stewardv1alpha1.OperationMerge, TargetRecordID: caelisRecord.RecordID, ExpectedRevision: 1,
+		Kind: "fact", Text: "Caelis uses Go and ships an embedded Memory package.",
+		EvidenceRefs: []v1alpha1.ReceiptID{caelis.ReceiptID, caelisNext.ReceiptID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mergedRecord, _, err := store.GetSemanticRecord(t.Context(), merged.RecordID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mergedRecord.CurrentRevision != 2 || !slices.Equal(mergedRecord.Labels, v1alpha1.LabelSet{"workspace:caelis"}) {
+		t.Fatalf("refined Record = %+v", mergedRecord)
+	}
+	recalled, err := store.Recall(t.Context(), demoAuth, testRecall("uses", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range recalled.Fragments {
+		if strings.Contains(fragment.Text, "Caelis") {
+			t.Fatalf("demo Recall crossed LabelSet: %+v", recalled.Fragments)
+		}
+	}
+
+	demoNext, err := store.Remember(t.Context(), demoAuth, v1alpha1.RememberRequest{
+		Text: "demo deploys to Vercel", IdempotencyKey: "labels-demo-refine",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	demoNextWork, found, err := store.ClaimStewardJob(t.Context(), time.Minute)
+	if err != nil || !found {
+		t.Fatalf("next demo Work found=%v error=%v", found, err)
+	}
+	if len(demoNextWork.Request.Records) != 1 || demoNextWork.Request.Records[0].RecordID != demoRecord.RecordID {
+		t.Fatalf("next demo Work Records = %+v", demoNextWork.Request.Records)
+	}
+	if !slices.Contains(demoNextWork.Request.Records[0].EvidenceRefs, demo.ReceiptID) || demoNext.ReceiptID == "" {
+		t.Fatalf("next demo Work = %+v", demoNextWork)
 	}
 }
 

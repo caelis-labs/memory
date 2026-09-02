@@ -302,9 +302,9 @@ func leaseStewardReceipt(
 	now := store.now().UTC()
 	if _, err := store.db.ExecContext(t.Context(),
 		`INSERT INTO steward_profiles(
-		 profile_id, version, provider_ref, model, system_prompt, max_context_records,
+		 profile_id, version, system_prompt, max_context_records,
 		 max_input_bytes, max_output_bytes, created_at)
-		 VALUES ('profile-test', 1, '', '', 'organize evidence', 8, 65536, 16384, ?)
+		 VALUES ('profile-test', 1, 'organize evidence', 8, 65536, 16384, ?)
 		 ON CONFLICT(profile_id, version) DO NOTHING`, formatTime(now)); err != nil {
 		t.Fatal(err)
 	}

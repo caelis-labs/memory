@@ -25,17 +25,35 @@ A candidate revision must be clean and pass:
 make check
 make race
 make durable
+make corpus-gate
 ```
 
-The gate covers public API shape, embedded facade behavior, SQLite migrations,
-durable Remember/Recall, authorization, governance, Steward application,
-realistic corpus checks, command buildability, formatting, documentation links,
-and whitespace. A package candidate additionally runs the Caelis embedded
-Golden Path against the exact selected module revision.
+The gate covers public API shape, embedded facade behavior, the current SQLite
+schema baseline, durable Remember/Recall, authorization, governance, Steward
+application, command buildability, formatting, documentation links, and
+whitespace. `corpus-gate` separately names the checked-in release baseline: 64
+Chinese cases, 64 English cases, and 96 cases spanning Spanish, French, German,
+Japanese, Korean, and Arabic. It writes four durable batches, restarts between
+batches, and gates per-cohort Recall@1/5, zero-result count, provenance, and a
+750ms user-perceived Recall p95 budget. The same run requires zero crossover
+through Recall, ReceiptStatus, or consistency tokens for both same-Space
+different-LabelSet and different-Space same-LabelSet adversarial records.
+
+The corpus source files and thresholds are frozen by
+`internal/appliance/testdata/release_corpus/manifest.json`. They contain only
+authored, de-identified product-shaped facts; private source text is never a
+release input or repository artifact. A package candidate additionally runs
+the Caelis embedded Golden Path against the exact selected module revision.
 
 Long-running corpus and soak evidence remains separate from ordinary per-change
 tests. Run it for a GA candidate with the RoadMap's frozen dataset and retain
 the aggregate result beside the external review evidence.
+
+After the candidate commit is pushed, wait for the GitHub `quality` workflow at
+that exact revision. Create an annotated prerelease tag only for the approved
+revision, then create a GitHub prerelease containing source archives and the
+reviewed release notes. The Memory package publishes no standalone binaries in
+this release line.
 
 ## Version coordination
 
@@ -75,7 +93,7 @@ files to those archives beyond the code already linked into the Caelis binary.
 | Incident | Accountable owner | First response |
 | --- | --- | --- |
 | storage exhaustion or projection drift | Memory package owner | preserve receipts, inspect capacity, rebuild disposable projections |
-| SQLite corruption or migration failure | Memory package owner | stop Host startup, preserve files, verify backup or migration repair |
+| SQLite corruption or schema initialization failure | Memory package owner | stop Host startup, preserve files, verify backup or rebuild the unreleased development data |
 | Steward Worker or model outage | Caelis integration owner | remove the Steward binding; retain static receipt Recall |
 | capability or Space-boundary defect | Memory security owner | revoke affected Grant and block the candidate |
 | Session projection or Replay leak | Caelis product owner | preserve canonical history and block the candidate |

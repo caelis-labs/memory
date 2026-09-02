@@ -1,0 +1,8 @@
+{
+  "format_version": 1,
+  "corpora": [
+    {"file": "zh.json", "sha256": "52c0b5778ab4863c5f7275757f261e45d4d95dfa6f5b724c3644d62b542a77b5", "expected_cases": 64, "min_recall_at_1": 0.95, "min_recall_at_5": 0.99, "max_recall_p95_ms": 750},
+    {"file": "en.json", "sha256": "e07da7b0017eb73b8cd36cdd4c2c9de71ae361564a3083c05a9d8e4f2f074b16", "expected_cases": 64, "min_recall_at_1": 0.95, "min_recall_at_5": 0.99, "max_recall_p95_ms": 750},
+    {"file": "other.json", "sha256": "f13791d8546f056b1e10711fd7babac75ec58de5f7e47e90d6ba1fe33ab595f9", "expected_cases": 96, "min_recall_at_1": 0.90, "min_recall_at_5": 0.98, "max_recall_p95_ms": 750}
+  ]
+}

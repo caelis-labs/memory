@@ -15,6 +15,9 @@ that produced it.
 | `AUTH-001` | Authorization completes before a Space index is queried |
 | `AUTH-002` | Private/shared Views cannot query or mutate an unauthorized Space |
 | `AUTH-003` | Model arguments cannot choose Identity, Space, View, Grant, actor, audience, or capability |
+| `LABEL-001` | A Host-issued capability fixes one canonical LabelSet; labels are absent from model tool arguments, results, and Steward model work |
+| `LABEL-002` | Remember, Recall, ReceiptStatus, consistency tokens, correction, and derived Recall match the capability LabelSet exactly, including after restart |
+| `LABEL-003` | Steward promotion and refinement inherit one LabelSet and reject records or receipt evidence from every other LabelSet |
 | `PROV-001` | Every Recall fragment contains complete receipt and/or Record provenance |
 | `REPLAY-001` | Canonical Session Replay uses stored ToolResults and performs zero Memory effects |
 | `STATIC-001` | With no Steward model binding, Remember/Recall remains useful and consumes zero model tokens |
@@ -26,19 +29,20 @@ that produced it.
 | ID | Acceptance |
 | --- | --- |
 | `PKG-001` | An external Go consumer imports public `appliance`, `api`, and `sdk` packages without importing `internal/*` |
-| `PKG-002` | `appliance.Open` synchronously opens and migrates a fresh or existing database |
+| `PKG-002` | `appliance.Open` synchronously initializes a fresh database, reopens the exact current baseline, and explicitly rejects older unreleased development schemas |
 | `PKG-003` | Direct `DataPlane` Remember/Recall passes the shared semantic and durable suites |
 | `PKG-004` | Embedded and retained local-transport adapters execute the same Memory authority and contracts |
 | `PKG-005` | The public facade exposes no SQL handle, concrete Store, index, schema mutation, or model-provider configuration |
 | `PKG-006` | `Close` releases SQLite and the data-directory owner lock after work drains |
 | `PKG-007` | Runtime access and shutdown are race-free and repeated concurrent `Close` calls return one stable result |
+| `PKG-008` | The single pre-release schema baseline persists empty and non-empty LabelSets without a second authority store; compatibility migrations become a release requirement only after a published schema floor exists |
 
 ## Caelis integration acceptance
 
 | ID | Acceptance |
 | --- | --- |
 | `INT-001` | A fresh offline Caelis Store starts with Memory enabled and no Memory setup input |
-| `INT-002` | Successful Host construction implies the embedded Memory runtime is already open and migrated |
+| `INT-002` | Successful Host construction implies the embedded Memory runtime is already open at its current schema baseline |
 | `INT-003` | The integration contains no downloader, installer, manifest, digest pin, endpoint, supervisor, readiness probe, or runtime compatibility handshake |
 | `INT-004` | An activated admitted Runtime sees exactly one `remember(text)` and one `recall(query)` tool |
 | `INT-005` | Tool inputs contain only the fact text or query; all authority, source, budget, and consistency fields remain hidden |
@@ -46,6 +50,7 @@ that produced it.
 | `INT-007` | Restarting Caelis preserves Memory data and hidden consistency state |
 | `INT-008` | The only ordinary Memory choice is the system-managed Steward model binding |
 | `INT-009` | Future product concepts may select an opaque binding without adding Bot, tenant, user, or workspace types to Memory |
+| `INT-010` | Runtime assembly may map product context to an opaque LabelSet, but the projected Remember/Recall schemas remain text-only |
 
 ## Steward acceptance
 
@@ -56,7 +61,7 @@ that produced it.
 | `STW-003` | Memory owns the prompt-policy profile, bounded evidence, leases, retry ceiling, validation, and canonical apply |
 | `STW-004` | Memory stores no provider endpoint, model name, token, billing, or provider retry configuration |
 | `STW-005` | Removing the binding stops later model calls without deleting receipts or semantic history |
-| `STW-006` | Malformed, cross-Space, stale-revision, duplicate-evidence, and unsupported proposals produce no mutation |
+| `STW-006` | Malformed, cross-Space, cross-LabelSet, stale-revision, duplicate-evidence, and unsupported proposals produce no mutation |
 | `STW-007` | Memory, not Caelis, renders the complete proposal shapes and strictly parses one proposal; correctness does not require provider-native JSON Schema output |
 | `STW-008` | With no eligible new evidence or explicit organization action, Steward makes zero model calls regardless of elapsed wall-clock time |
 | `COST-002` | Automatic Steward work has a frozen per-receipt model-call budget; any additional model retry waits for an active task or explicit bounded organization action |
@@ -69,8 +74,8 @@ that produced it.
 | `CORPUS-002` | Projection is resumable and idempotent and preserves bounded source provenance without duplicating facts after restart |
 | `CORPUS-003` | System/developer prompts, hidden reasoning, credentials, approvals, transient progress, and unsanitized tool payloads are excluded with aggregate reason counts |
 | `CORPUS-004` | Explicit Remember and observational Session evidence are distinguishable through a trusted model-hidden ingestion boundary; untrusted `SourceContext` labels cannot establish source authority |
-| `TIME-001` | Evaluation records the exact deterministic temporal functions, source-intent rules, reinforcement behavior, admission thresholds, and age cohorts used by each product projection |
-| `TIME-002` | On the frozen multi-age corpus, recent supported facts outrank stale keyword-only facts while explicit historical lookup can still return old evidence |
+| `TIME-001` | Evaluation records the exact bounded active-window, source-intent, reinforcement, admission, and result-budget parameters used by each product projection |
+| `TIME-002` | On a frozen corpus whose age range can be exercised in a bounded test, recent supported facts outrank stale keyword-only facts while explicit historical lookup can still return old evidence |
 | `TIME-003` | When explicit Recall returns non-current evidence, the model-visible result qualifies its temporal status; automatic briefing omits stale or unresolved evidence unless the task explicitly requests history |
 | `RETR-001` | A bounded model-free keyphrase/association projection improves the frozen non-literal task set over exact lexical retrieval without violating result budgets or private isolation |
 | `RETR-002` | Explicit Recall and automatic briefing use separately frozen ranking and abstention policies rather than one universal score |
@@ -79,7 +84,7 @@ that produced it.
 | `BRIEF-003` | The frozen task-context benchmark improves over an empty-context control for similar tasks, stable preferences, and prior decisions without increasing private leakage |
 | `BRIEF-004` | Empty briefing is a valid result, and the candidate does not increase frozen harmful-context or false-memory errors over the empty-context control |
 | `COST-001` | Ingestion, sanitization, indexing, time ranking, retrieval, deduplication, and default briefing generation consume zero model tokens |
-| `EXP-LEX-001` | Default runtime and schema migration do not learn, read, rebuild for, or expose adaptive lexicon terms; focused experiments require an explicit internal option |
+| `EXP-LEX-001` | Default runtime and schema initialization do not learn, read, rebuild for, or expose adaptive lexicon terms; focused experiments require an explicit internal option |
 | `EXP-RET-001` | Embedding, graph, hierarchy, or adaptive retrieval can enter a default path only after a same-corpus blind holdout shows material end-to-end gain and records dependency, latency, storage, rebuild, privacy, and rollback cost |
 
 ## Future identity acceptance
@@ -90,9 +95,9 @@ when a downstream product ships persistent identity behavior.
 | ID | Acceptance |
 | --- | --- |
 | `IDENT-001` | A fixed byte-bounded identity capsule is evidence-backed, inspectable, and separate from an ordinary stateless Session briefing |
-| `IDENT-002` | A product maps its identity to an opaque Memory binding without introducing Bot, tenant, user, or workspace types into Memory |
-| `IDENT-003` | Hierarchical memory must beat a flat capsule-plus-search control on a frozen longitudinal corpus before becoming default |
-| `IDENT-004` | Merge, compaction, and leaf pruning affect only derived projections; immutable evidence remains attributable and supports deterministic model-free rebuild |
+| `IDENT-002` | A product maps identity and work context to opaque LabelSets without introducing Bot, tenant, user, or workspace types into Memory |
+| `IDENT-003` | Tree or graph memory must beat the flat Record-head-plus-search control on a frozen longitudinal corpus before becoming default |
+| `IDENT-004` | Refinement and promotion affect only derived flat projections; immutable evidence and Revision history remain attributable and support deterministic model-free rebuild |
 
 ## Realistic corpus acceptance
 
@@ -102,16 +107,25 @@ It satisfies durability, bounded lexical reachability, restart, and private
 isolation evidence for that source digest; it does not close semantic-model
 quality acceptance.
 
+Every package prerelease also runs the public release corpus in
+`internal/appliance/testdata/release_corpus`. Its 224 fixed cases separately
+gate Chinese, English, and six other languages across four durable rounds. The
+manifest freezes source digests, case counts, Recall@1/5 thresholds, and a
+750ms p95 interaction budget. Same-Space/different-LabelSet and
+different-Space/same-LabelSet adversarial records must remain searchable in
+their own partition and invisible from the target partition.
+
 ## Product-experience performance
 
 Performance acceptance uses user-perceived behavior, not workstation
-microsecond targets. The exact candidate records p50/p95/p99 for embedded Open,
-Remember, Recall, and briefing across 200 fixed samples on a representative
-user machine. The candidate fails only when Memory introduces an observable
+microsecond targets. The reproducible package corpus applies a broad 750ms p95
+Recall ceiling; the exact candidate also records p50/p95/p99 for embedded Open,
+Remember, Recall, and briefing on a representative user machine. The candidate
+fails when Memory crosses the interaction ceiling, introduces an observable
 startup stall, blocks interaction past the Host's existing deadline, or shows a
 material unexplained regression against the previous accepted candidate.
-Numeric observations remain in the evidence report rather than becoming
-machine-specific API guarantees.
+Finer numeric observations remain evidence rather than machine-specific API
+guarantees.
 
 Index rebuild, backup, restore, and Steward backlog metrics are retained as
 descriptive operational evidence. Their correctness, bounded completion, and

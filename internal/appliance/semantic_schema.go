@@ -8,35 +8,6 @@ import (
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 )
 
-func migrateSemanticSpaceIndexes(ctx context.Context, tx *sql.Tx) error {
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM spaces ORDER BY id`)
-	if err != nil {
-		return fmt.Errorf("list existing semantic Spaces: %w", err)
-	}
-	var spaceIDs []v1alpha1.SpaceID
-	for rows.Next() {
-		var spaceID v1alpha1.SpaceID
-		if err := rows.Scan(&spaceID); err != nil {
-			_ = rows.Close()
-			return fmt.Errorf("read existing semantic Space: %w", err)
-		}
-		spaceIDs = append(spaceIDs, spaceID)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return fmt.Errorf("list existing semantic Spaces: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return fmt.Errorf("close existing semantic Spaces: %w", err)
-	}
-	for _, spaceID := range spaceIDs {
-		if err := createSemanticSpaceIndex(ctx, tx, spaceID); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func createSemanticSpaceIndex(ctx context.Context, tx *sql.Tx, spaceID v1alpha1.SpaceID) error {
 	tableName := semanticSpaceIndexTable(spaceID)
 	if _, err := tx.ExecContext(ctx,

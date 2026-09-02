@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ type evaluationReport struct {
 	Configuration configurationReport `json:"configuration"`
 	Rounds        []roundReport       `json:"rounds"`
 	Final         finalSnapshotReport `json:"final_snapshot"`
+	Steward       *stewardReport      `json:"steward,omitempty"`
 	DataRetained  bool                `json:"data_retained"`
 }
 
@@ -193,7 +195,7 @@ func evaluate(ctx context.Context, source sourceData, opts options) (evaluationR
 	defer func() { _ = store.Close() }()
 	uniqueQueries, collidingQueries, maxQueryDocumentFrequency := queryShape(cases)
 	report := evaluationReport{
-		FormatVersion: 2,
+		FormatVersion: 3,
 		Mode:          "durable_private_receipt_lexical",
 		Source: sourceReport{
 			Kind: source.kind, SHA256: source.digest, Bytes: source.bytes,
@@ -327,6 +329,12 @@ func evaluate(ctx context.Context, source sourceData, opts options) (evaluationR
 	}
 	report.Final.RecallAt1Lift = report.Final.RecallAt1 - report.Final.LegacyUnicode61.RecallAt1
 	report.Final.RecallAt5Lift = report.Final.RecallAt5 - report.Final.LegacyUnicode61.RecallAt5
+	if opts.stewardModel != "" {
+		report.Steward, err = evaluateSteward(ctx, filepath.Join(dataDir, "steward"), cases, opts)
+		if err != nil {
+			return evaluationReport{}, err
+		}
+	}
 	return report, nil
 }
 

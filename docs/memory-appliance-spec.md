@@ -17,11 +17,11 @@ remember(text)
 recall(query)
 ```
 
-The appliance owns what memory means and every policy that classifies,
-organizes, ranks, consolidates, retains, or forgets it. The first release does
-not need to implement every such policy. Hosts bind the two operations to an
-authorized Runtime; they do not expose identity, Space, View, retrieval
-strategy, or lifecycle controls as model arguments.
+The appliance owns canonical evidence, derived-memory structures, validation,
+and atomic mutation. A downstream Host decides when to request organization,
+promotion, or later lifecycle work. Hosts bind the two Agent operations to an
+authorized Runtime; they do not expose identity, Space, View, LabelSet,
+retrieval strategy, or lifecycle controls as model arguments.
 
 ## Required properties
 
@@ -33,6 +33,8 @@ strategy, or lifecycle controls as model arguments.
 - Every accepted receipt remains eligible for baseline lexical retrieval for as
   long as it exists, even if no Steward ever runs.
 - Private and shared Spaces are isolated before candidate generation.
+- Each Runtime capability selects one exact, model-hidden LabelSet inside its
+  authorized Spaces; Remember writes and Recall reads only that partition.
 - A Recall fragment is evidence, not an instruction or authorization source.
 - A host persists the exact model-visible ToolResult and replays it without
   contacting Memory.
@@ -50,14 +52,14 @@ ingestion boundary using stable host-owned effect identities; this does not
 make Memory authoritative for Session history.
 
 The Core Profile does not include public memory, mixed-audience Sessions,
-private-to-shared publication, semantic records, model-assisted Recall,
-temperature, bitemporal queries, automatic retention, graph/vector indexes,
-remote federation, or a management UI. Those may be added without changing the
-two Agent operations or weakening the invariants above.
+private-to-shared publication, model-assisted Recall, temperature, bitemporal
+queries, automatic retention, graph/vector indexes, remote federation, or a
+management UI. Those may be added without changing the two Agent operations or
+weakening the invariants above.
 
-A task-relevant briefing and a stateful identity hierarchy are planned product
+A task-relevant briefing and a stateful identity capsule are planned product
 profiles, not `memory.v1alpha1` contracts. Their APIs must not be frozen before
-corpus, time-ranking, provenance, budget, and pruning behavior has executable
+corpus, time-ranking, provenance, budget, and refinement behavior has executable
 acceptance evidence.
 
 ## Ownership boundary
@@ -65,7 +67,8 @@ acceptance evidence.
 The host owns:
 
 - stable Runtime actor identity and one Runtime output audience;
-- actor-to-Memory binding and acquisition of a temporary capability;
+- actor-to-Memory binding, selection of an opaque LabelSet, and acquisition of
+  a temporary capability;
 - tool admission, hidden request metadata, and model-visible projection;
 - exact ToolCall and ToolResult persistence and replay;
 - package construction, data-directory placement, shutdown, and product
@@ -77,11 +80,11 @@ The Memory Appliance owns:
 - Realms, cognitive Identities, Spaces, View definitions, grants, and
   capabilities;
 - receipt payloads, processing state, consistency cursors, and retrieval;
-- classification, semantic organization, prompt policies, lifecycle, retention,
-  and forgetting;
+- deterministic validation and persistence of evidence-backed derived memory;
 - all indexes and projections;
 - data-plane and management-plane authorization;
-- migrations, backup, restore, inspection, and deletion of appliance data.
+- the current schema baseline, future post-release migrations, backup, restore,
+  inspection, and deletion of appliance data.
 
 A host may import the public `appliance`, `api`, and `sdk` packages. It must not
 import `internal/*`, open the Memory database, maintain a compensating Memory
@@ -97,6 +100,7 @@ SpaceClass     = private | shared
 one Runtime actor
 one canonical Session audience
 one View definition per Runtime binding snapshot
+one exact LabelSet per Runtime capability
 ```
 
 A private Runtime reads its actor's private Space plus shared Spaces and writes
@@ -116,6 +120,7 @@ profile and must fail closed.
 | `MemoryRealm` | Administrative root for a user, team, or tenant | Indirectly |
 | `MemoryIdentity` | Stable cognitive continuity, optionally selected by a future stateful product | No |
 | `MemorySpace` | Storage, access, and retention boundary | Yes |
+| `LabelSet` | Exact logical partition within every Space readable by one Runtime | Capability-bound narrowing |
 | `MemoryViewDefinition` | Read Spaces, optional write Space, maximum disclosure, and recall-policy reference | Defines accessible data |
 | `MemoryGrant` | Principal, actor, permitted operations and audiences, expiry, and revocation for one View | Delegates use |
 | `RuntimeCapability` | Opaque temporary bearer proof derived from a current Grant | Authorizes one call |
@@ -130,7 +135,28 @@ Capability proof that the current caller received that delegation
 ```
 
 View, Grant, Identity, actor, Session, Workspace, and Space IDs are references,
-not credentials.
+not credentials. Labels are opaque values rather than product objects: Memory
+does not parse a label into a Workspace, Bot, tenant, or hierarchy.
+
+### LabelSet partition
+
+A LabelSet is a sorted set of at most 16 unique opaque labels. Each label is
+1..128 UTF-8 bytes without surrounding whitespace or control characters. The
+empty set is the backward-compatible default partition. Set equality is exact;
+there is no prefix, hierarchy, wildcard, boolean selector, or implicit fallback.
+
+The Host supplies a LabelSet only when issuing a Runtime capability. The
+appliance canonicalizes and binds it into server-side capability state. It is
+absent from Remember and Recall request bodies, Agent tool schemas, Session
+history, Recall fragments, and model-facing Steward work. A product may encode
+its own stable opaque concepts, for example a workspace or later identity, but
+that mapping remains downstream.
+
+LabelSet is a logical partition inside an already-authorized Space, not a
+replacement for Space/View authorization. Principals requiring a hard ownership
+or disclosure boundary use separate Spaces and Views. One capability uses one
+LabelSet for both reads and writes; a downstream product that deliberately
+combines contexts must orchestrate separate capabilities and calls.
 
 ### Identity continuity
 
@@ -150,6 +176,7 @@ capability is current and binds:
 - View definition and version;
 - requested operation;
 - Runtime output audience;
+- one exact LabelSet for both reads and writes;
 - expiration and non-revoked state.
 
 The Core Profile does not prescribe signed tokens, JWT, key rotation, or a
@@ -195,7 +222,7 @@ Space, View, principal, capability, audience, or policy. In v1alpha1:
 - unknown or oversized content is rejected rather than silently truncated.
 
 `source_type` and extension labels also cannot establish evidence authority or
-ranking intent. A future canonical Session ingestion path that distinguishes
+select a LabelSet. A future canonical Session ingestion path that distinguishes
 observed episodes from explicit Remember inputs requires a separate trusted,
 model-hidden contract; it must not overload `SourceContext` for that purpose.
 
@@ -341,10 +368,10 @@ No-result Recall is not an error code.
 
 ## Receipt, idempotency, and consistency
 
-The immutable receipt payload contains the receipt ID, target Space, raw text,
-normalized SourceContext, occurred time, service received time, idempotency key,
-request digest, and commit sequence. Processing state is separate mutable state
-or an append-only processing event stream.
+The immutable receipt payload contains the receipt ID, target Space, canonical
+LabelSet, raw text, normalized SourceContext, occurred time, service received
+time, idempotency key, request digest, and commit sequence. Processing state is
+separate mutable state or an append-only processing event stream.
 
 Effect identity is:
 
@@ -352,14 +379,21 @@ Effect identity is:
 write_space_id + idempotency_key
 ```
 
-The request digest covers text, occurred time, normalized SourceContext, and
-every other effect-bearing field. Therefore:
+The request digest covers text, occurred time, normalized SourceContext, the
+capability-bound LabelSet, and every other effect-bearing field. The empty
+LabelSet retains the pre-LabelSet digest encoding so acknowledged legacy effects
+remain retryable. Therefore:
 
 ```text
 same write Space + same key + same digest -> original receipt
 same write Space + same key + changed digest -> conflict
 same key in a different write Space -> independent effect identity
 ```
+
+The idempotency key remains Space-scoped. Reusing it under a different LabelSet
+conflicts rather than silently moving, duplicating, or revealing an existing
+effect. Hosts already generate globally stable effect identities and must reuse
+the original LabelSet after an unknown outcome.
 
 Capability renewal, Grant renewal, or a compatible View version change does not
 create another effect within the same write Space. The new capability must still
@@ -370,9 +404,9 @@ Different idempotency keys preserve distinct receipts even when text matches;
 semantic deduplication must never erase independent evidence.
 
 A consistency token is an opaque causal cursor, not authority. Recall accepts
-it only if the capability can read the token's Space. A stale storage generation
-returns `stale_consistency_token`. The host may persist the token only as
-audience-protected, model-hidden ToolResult provider metadata.
+it only if the capability can read the token's Space and exact LabelSet. A stale
+storage generation returns `stale_consistency_token`. The host may persist the
+token only as audience-protected, model-hidden ToolResult provider metadata.
 
 ## Baseline Recall
 
@@ -381,6 +415,7 @@ The availability path is:
 ```text
 immutable receipts
   -> rebuildable per-Space lexical projection
+  -> exact capability LabelSet filtering
   -> authorization-compatible candidate generation
   -> deterministic bounded ranking
   -> extractive fragments with receipt evidence
@@ -388,7 +423,8 @@ immutable receipts
 
 Every existing receipt is indexed, not only a recent inbox. Each readable Space
 is queried independently and results are merged after per-Space candidate
-generation. A shared-only View must not touch a private index. Deleting the
+generation. Only receipts in the capability's exact LabelSet are eligible. A
+shared-only View must not touch a private index. Deleting the
 projection and rebuilding it from receipts must preserve Recall behavior within
 documented ranking stability.
 
@@ -398,14 +434,28 @@ are disabled or unavailable.
 
 ## Semantic Steward extension
 
+The derived-memory structure is deliberately flat:
+
+```text
+immutable Receipt evidence
+  -> flat Record head
+  -> immutable numbered Revisions
+  -> exact Receipt evidence references
+```
+
+This is not a general graph or tree. Revision order and evidence provenance are
+the only canonical edges. A tree, relation graph, hierarchy, embedding, or other
+navigation structure may later be built as a disposable projection, but cannot
+become a second mutation authority without a separately accepted milestone.
+
 The Worker contract is `memory.steward.v1alpha1`. Its primary binding is a
-direct Go interface; the retained local transport is an optional adapter. A logical Steward is
-a versioned appliance prompt-policy profile plus durable receipt jobs claimed by
-downstream Workers. It is not a permanent conversation, one Agent per Identity,
-a built-in provider stack, or a second receipt authority. Profile identity and
-version are captured when a job is created; replacing a prompt policy affects
-only later jobs. A downstream host independently chooses its provider and model
-for each Worker deployment.
+direct Go interface; the retained local transport is an optional adapter. A
+logical Steward is a versioned appliance prompt-policy profile plus durable
+receipt jobs claimed by downstream Workers. It is not a permanent conversation,
+one Agent per Identity, a built-in provider stack, or a second receipt authority.
+Profile identity and version are captured when a job is created; replacing a
+prompt policy affects only later jobs. A downstream host independently chooses
+its provider and model for each Worker deployment.
 
 Profiles contain a system prompt policy, context-record limit, and exact
 input/output byte budgets. A version is immutable. Provider endpoint, model,
@@ -415,12 +465,12 @@ Worker request. Binding a profile to a Space creates Jobs only for receipts
 accepted after that binding commits. Removing the binding cancels pending or
 leased work without deleting receipts or semantic history.
 
-A Worker claims a bounded request containing the
-captured policy, one immutable receipt, and active same-Space Record heads with
-their Evidence. It deliberately omits Space, Job, lease, capability, View,
-Grant, actor, audience, and SourceContext. Receipt and Evidence IDs support
-proposal provenance but are not authority. Claim responses carry an opaque
-lease beside the model-facing request. The Worker SDK renders a
+A Worker claims a bounded request containing the captured policy, one immutable
+receipt, and active same-Space, same-LabelSet Record heads with their Evidence.
+It deliberately omits Space, Job, lease, capability, View, Grant, actor,
+audience, and SourceContext. Receipt and Evidence IDs support proposal
+provenance but are not authority. Claim responses carry an opaque lease beside
+the model-facing request. The Worker SDK renders a
 `GenerationRequest` for the injected `ModelGenerator` callback and uses the lease
 only to apply or fail the result. The Memory package never makes an outbound
 model-provider call.
@@ -448,6 +498,13 @@ MERGE       append a Revision while retaining all current Evidence
 SUPERSEDE   append a replacement Revision without deleting history
 IGNORE      complete the job without creating or changing a Record
 ```
+
+`ADD` is the primitive promotion from raw Receipt evidence into a derived
+Record. `MERGE` and `SUPERSEDE` are the refinement primitives. Memory owns shape,
+same-LabelSet evidence checks, immutable history, optimistic revision checks,
+and atomic application. The downstream Host decides whether and when to run a
+Worker; Memory contains no provider configuration and does not schedule model
+execution on its own.
 
 A proposal cannot contain Space, Job, profile, visibility, ACL, tombstone,
 publication, or physical-deletion authority. The appliance supplies the Job
@@ -541,9 +598,9 @@ two files defeats the confidentiality boundary.
 
 Restore is offline and must acquire the same owner lock as `memoryd`. It fully
 authenticates the encrypted stream, verifies SQLite integrity and foreign keys,
-applies supported forward migrations, binds the operator-provided management
-credential, and rotates `storage_generation` before atomically replacing the
-database. Any failure before replacement leaves the current database usable.
+requires the current development schema baseline, binds the operator-provided
+management credential, and rotates `storage_generation` before atomically
+replacing the database. Any failure before replacement leaves the current database usable.
 An existing database is first copied to a consistent owner-only rollback image.
 
 A restored generation starts in `restore_pending`: health and management
@@ -556,10 +613,12 @@ is still eligible for rollback. Restore and rollback each rotate generation;
 all prior consistency tokens fail with `stale_consistency_token` rather than
 being interpreted against different state.
 
-An upgrade uses the same pending-generation barrier. With the service stopped,
+After a published release establishes a compatibility floor, a future upgrade
+may use the same pending-generation barrier. With the service stopped,
 the old `memoryctl prepare-upgrade` authenticates the owner, snapshots the exact
 stopped database into the rollback image, and marks the live database pending
-before a new binary may migrate it. The new binary exposes health and
+before a new binary may migrate it. This is retained standalone-product design,
+not a pre-release compatibility path in the current package. The new binary exposes health and
 authenticated verification operations but cannot acknowledge a receipt or
 other governed mutation. Acceptance commits through `restore-commit`; failure
 is rolled back with the old `memoryctl`, preserving every effect acknowledged

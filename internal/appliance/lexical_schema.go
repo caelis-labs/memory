@@ -2,70 +2,11 @@ package appliance
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
 	stewardv1alpha1 "github.com/caelis-labs/memory/api/memory/steward/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 )
-
-func migrateLexicalProjection(ctx context.Context, tx *sql.Tx) error {
-	rows, err := tx.QueryContext(ctx,
-		`SELECT s.id, i.table_name, si.table_name
-		 FROM spaces s
-		 JOIN space_indexes i ON i.space_id = s.id
-		 JOIN semantic_space_indexes si ON si.space_id = s.id
-		 ORDER BY s.id`)
-	if err != nil {
-		return fmt.Errorf("list lexical indexes: %w", err)
-	}
-	type spaceIndexes struct {
-		spaceID       v1alpha1.SpaceID
-		receiptTable  string
-		semanticTable string
-	}
-	var indexes []spaceIndexes
-	for rows.Next() {
-		var item spaceIndexes
-		if err := rows.Scan(&item.spaceID, &item.receiptTable, &item.semanticTable); err != nil {
-			_ = rows.Close()
-			return fmt.Errorf("read lexical index: %w", err)
-		}
-		if item.receiptTable != spaceIndexTable(item.spaceID) || item.semanticTable != semanticSpaceIndexTable(item.spaceID) {
-			_ = rows.Close()
-			return fmt.Errorf("lexical Space index identity mismatch")
-		}
-		indexes = append(indexes, item)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return fmt.Errorf("list lexical indexes: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return fmt.Errorf("close lexical indexes: %w", err)
-	}
-	for _, item := range indexes {
-		if _, err := tx.ExecContext(ctx, `DROP TABLE `+item.receiptTable); err != nil {
-			return fmt.Errorf("replace receipt lexical index: %w", err)
-		}
-		if err := createReceiptFTSTable(ctx, tx, item.receiptTable); err != nil {
-			return err
-		}
-		if err := rebuildReceiptProjection(ctx, tx, item.spaceID, item.receiptTable, nil); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `DROP TABLE `+item.semanticTable); err != nil {
-			return fmt.Errorf("replace semantic lexical index: %w", err)
-		}
-		if err := createSemanticFTSTable(ctx, tx, item.semanticTable); err != nil {
-			return err
-		}
-		if err := rebuildSemanticProjection(ctx, tx, item.spaceID, item.semanticTable, nil); err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 func createReceiptFTSTable(ctx context.Context, db databaseExecutor, tableName string) error {
 	if _, err := db.ExecContext(ctx,

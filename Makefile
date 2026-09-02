@@ -13,7 +13,7 @@ SIDECAR_CHECKSUM_NAME := $(SIDECAR_NAME).sha256
 MEMORYCTL_CHECKSUM_NAME := $(MEMORYCTL_NAME).sha256
 MANIFEST_SUPPORT_FLAG ?=
 
-.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported cross-build check m5-benchmark ga-soak release-candidate standalone-preview
+.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported cross-build check corpus-gate m5-benchmark ga-soak release-candidate standalone-preview
 
 docs-links:
 	GOWORK=off go run ./scripts/markdown_links
@@ -93,9 +93,12 @@ m5-benchmark:
 ga-soak:
 	GOWORK=off go run ./scripts/ga_soak -output "$(if $(GA_SOAK_REPORT),$(GA_SOAK_REPORT),dist/ga-soak-report.json)"
 
-release-candidate: check durable race m5-benchmark
+release-candidate: check durable race corpus-gate m5-benchmark
 
 standalone-preview: check durable race m5-benchmark sidecar-supported
 
 check: docs-links fmt-check whitespace-check test vet build
 	git diff --check
+
+corpus-gate:
+	GOWORK=off go test -count=1 -v ./internal/appliance -run '^TestReleaseMultilingualCorpusGate$$'

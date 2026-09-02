@@ -117,6 +117,7 @@ const (
 type Receipt struct {
 	ReceiptID       memoryv1alpha1.ReceiptID       `json:"receipt_id"`
 	SpaceID         memoryv1alpha1.SpaceID         `json:"space_id"`
+	Labels          memoryv1alpha1.LabelSet        `json:"labels,omitempty"`
 	Text            string                         `json:"text"`
 	SourceContext   memoryv1alpha1.SourceContext   `json:"source_context"`
 	OccurredAt      *time.Time                     `json:"occurred_at,omitempty"`

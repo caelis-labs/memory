@@ -58,10 +58,6 @@ func (s *Store) Remember(
 	if err := request.Validate(); err != nil {
 		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeInvalidArgument, err.Error(), false)
 	}
-	digest, err := rememberRequestDigest(request)
-	if err != nil {
-		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "failed to normalize request", false)
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return v1alpha1.RememberResponse{}, s.databaseError("begin Remember", err)
@@ -74,6 +70,11 @@ func (s *Store) Remember(
 	if view.writeSpaceID == "" {
 		_ = tx.Rollback()
 		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "View has no writable Space", false)
+	}
+	digest, err := rememberRequestDigest(request, view.labels)
+	if err != nil {
+		_ = tx.Rollback()
+		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "failed to normalize request", false)
 	}
 	deletedEffect, err := rowExists(ctx, tx,
 		`SELECT EXISTS(SELECT 1 FROM receipt_tombstones WHERE space_id = ? AND idempotency_key = ?)`,
@@ -118,10 +119,10 @@ func (s *Store) Remember(
 	receiptID := v1alpha1.ReceiptID("receipt-" + receiptSuffix)
 	result, err := tx.ExecContext(ctx,
 		`INSERT INTO receipts(receipt_id, space_id, text, source_context, occurred_at, received_at,
-		 idempotency_key, request_digest, consistency_token)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 idempotency_key, request_digest, consistency_token, label_set, label_set_digest)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		receiptID, view.writeSpaceID, request.Text, string(sourceContext), occurredAt, formatTime(receivedAt),
-		request.IdempotencyKey, digest, consistencyToken)
+		request.IdempotencyKey, digest, consistencyToken, view.labelSetEncoded, view.labelSetDigest)
 	if err != nil {
 		_ = tx.Rollback()
 		return s.resolveRememberInsertFailure(ctx, view.writeSpaceID, request.IdempotencyKey, digest, err)
@@ -137,13 +138,14 @@ func (s *Store) Remember(
 		_ = tx.Rollback()
 		return v1alpha1.RememberResponse{}, s.databaseError("store receipt processing state", err)
 	}
-	if err := s.enqueueStewardJob(ctx, tx, receiptID, view.writeSpaceID, receivedAt); err != nil {
+	if err := s.enqueueStewardJob(ctx, tx, receiptID, view.writeSpaceID, view.labelSetEncoded, view.labelSetDigest, receivedAt); err != nil {
 		_ = tx.Rollback()
 		return v1alpha1.RememberResponse{}, s.databaseError("enqueue Steward job", err)
 	}
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO consistency_cursors(token, generation, space_id, commit_sequence) VALUES (?, ?, ?, ?)`,
-		consistencyToken, s.generation, view.writeSpaceID, commitSequence); err != nil {
+		`INSERT INTO consistency_cursors(token, generation, space_id, commit_sequence, label_set_digest)
+		 VALUES (?, ?, ?, ?, ?)`,
+		consistencyToken, s.generation, view.writeSpaceID, commitSequence, view.labelSetDigest); err != nil {
 		_ = tx.Rollback()
 		return v1alpha1.RememberResponse{}, s.databaseError("store consistency cursor", err)
 	}
@@ -268,16 +270,17 @@ func (s *Store) Recall(
 	if request.MinConsistencyToken != "" {
 		var generation string
 		var spaceID v1alpha1.SpaceID
+		var labelSetDigest string
 		err := tx.QueryRowContext(ctx,
-			`SELECT generation, space_id FROM consistency_cursors WHERE token = ?`, request.MinConsistencyToken).Scan(&generation, &spaceID)
+			`SELECT generation, space_id, label_set_digest FROM consistency_cursors WHERE token = ?`, request.MinConsistencyToken).Scan(&generation, &spaceID, &labelSetDigest)
 		if errors.Is(err, sql.ErrNoRows) || err == nil && generation != s.generation {
 			return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeStaleConsistencyToken, "consistency token is stale or unknown", false)
 		}
 		if err != nil {
 			return v1alpha1.RecallResponse{}, s.databaseError("read consistency token", err)
 		}
-		if !slices.Contains(view.readSpaceIDs, spaceID) {
-			return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "consistency token Space is not readable", false)
+		if !slices.Contains(view.readSpaceIDs, spaceID) || labelSetDigest != view.labelSetDigest {
+			return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "consistency token partition is not readable", false)
 		}
 	}
 	candidates := make([]recallCandidate, 0)
@@ -313,12 +316,12 @@ func (s *Store) Recall(
 			 bm25(`+tableName+`, 0.0, 4.0, 2.0, 0.25)
 			 FROM `+tableName+` f
 			 JOIN receipts r ON r.receipt_id = f.receipt_id AND r.space_id = ?
-			 WHERE `+tableName+` MATCH ?
+			 WHERE `+tableName+` MATCH ? AND r.label_set_digest = ?
 			 AND NOT EXISTS (
 				 SELECT 1 FROM receipt_corrections c WHERE c.original_receipt_id = r.receipt_id
 			 )
 			 ORDER BY bm25(`+tableName+`, 0.0, 4.0, 2.0, 0.25), r.commit_sequence DESC, r.receipt_id
-			 LIMIT 512`, spaceID, ftsQuery)
+			 LIMIT 512`, spaceID, ftsQuery, view.labelSetDigest)
 		if err != nil {
 			return v1alpha1.RecallResponse{}, s.databaseError("query Space index", err)
 		}
@@ -354,7 +357,7 @@ func (s *Store) Recall(
 			return v1alpha1.RecallResponse{}, s.databaseError("query Space candidates", err)
 		}
 		semanticCandidates, semanticDegraded, err := s.semanticRecallCandidates(
-			ctx, tx, spaceID, class, request.Query, ftsQuery, privateTerms,
+			ctx, tx, spaceID, view.labelSetDigest, class, request.Query, ftsQuery, privateTerms,
 		)
 		if err != nil {
 			return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeDeadline, "request deadline exceeded", true)
@@ -441,21 +444,22 @@ func (s *Store) GetReceiptStatus(
 	}
 	var status v1alpha1.ReceiptStatus
 	var spaceID v1alpha1.SpaceID
+	var labelSetDigest string
 	var acceptedAt string
 	var lastAttempt sql.NullString
 	if err := tx.QueryRowContext(ctx,
-		`SELECT r.receipt_id, r.space_id, r.received_at, p.state, p.last_attempt_at,
+		`SELECT r.receipt_id, r.space_id, r.label_set_digest, r.received_at, p.state, p.last_attempt_at,
 		 p.terminal_error_code, p.semantic_generation
 		 FROM receipts r JOIN receipt_processing p ON p.receipt_id = r.receipt_id
 		 WHERE r.receipt_id = ?`, request.ReceiptID).Scan(
-		&status.ReceiptID, &spaceID, &acceptedAt, &status.State, &lastAttempt,
+		&status.ReceiptID, &spaceID, &labelSetDigest, &acceptedAt, &status.State, &lastAttempt,
 		&status.TerminalErrorCode, &status.SemanticGeneration); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return v1alpha1.ReceiptStatus{}, s.serviceError(v1alpha1.ErrorCodeNotFound, "receipt not found", false)
 		}
 		return v1alpha1.ReceiptStatus{}, s.databaseError("read receipt status", err)
 	}
-	if !slices.Contains(view.readSpaceIDs, spaceID) {
+	if !slices.Contains(view.readSpaceIDs, spaceID) || labelSetDigest != view.labelSetDigest {
 		return v1alpha1.ReceiptStatus{}, s.serviceError(v1alpha1.ErrorCodeNotFound, "receipt not found", false)
 	}
 	status.AcceptedAt, err = parseTime(acceptedAt)
@@ -487,7 +491,7 @@ func readSpaceIndex(ctx context.Context, db databaseExecutor, spaceID v1alpha1.S
 	return tableName, nil
 }
 
-func rememberRequestDigest(request v1alpha1.RememberRequest) (string, error) {
+func rememberRequestDigest(request v1alpha1.RememberRequest, labels v1alpha1.LabelSet) (string, error) {
 	value := struct {
 		Text          string                 `json:"text"`
 		SourceContext v1alpha1.SourceContext `json:"source_context"`
@@ -499,7 +503,16 @@ func rememberRequestDigest(request v1alpha1.RememberRequest) (string, error) {
 	if request.OccurredAt != nil {
 		value.OccurredAt = request.OccurredAt.UTC().Format(time.RFC3339Nano)
 	}
-	normalized, err := json.Marshal(value)
+	var normalized []byte
+	var err error
+	if len(labels) == 0 {
+		normalized, err = json.Marshal(value)
+	} else {
+		normalized, err = json.Marshal(struct {
+			Request any               `json:"request"`
+			Labels  v1alpha1.LabelSet `json:"labels"`
+		}{Request: value, Labels: labels})
+	}
 	if err != nil {
 		return "", err
 	}

@@ -53,6 +53,57 @@ func TestDurableRestartAndIdempotency(t *testing.T) {
 	}
 }
 
+func TestLabelSetPartitionSurvivesRestart(t *testing.T) {
+	now := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	dataDir := t.TempDir()
+	store, credentials := bootstrapFixture(t, Options{DataDir: dataDir, Clock: func() time.Time { return now }})
+	operations := []v1alpha1.Operation{
+		v1alpha1.OperationRemember,
+		v1alpha1.OperationRecall,
+		v1alpha1.OperationReceiptStatus,
+	}
+	issueLabeled := func(label string) v1alpha1.CallAuthorization {
+		request := issueRequest("grant-bot-a", "actor-bot-a", v1alpha1.AudiencePrivate, operations)
+		request.Labels = v1alpha1.LabelSet{v1alpha1.Label(label)}
+		return callAuth(mustIssue(t, store, credentials["principal:actor-bot-a"], request), "actor-bot-a", v1alpha1.AudiencePrivate)
+	}
+	demoAuth := issueLabeled("workspace:demo")
+	caelisAuth := issueLabeled("workspace:caelis")
+	demo, err := store.Remember(t.Context(), demoAuth, v1alpha1.RememberRequest{
+		Text: "shared keyword belongs to demo", IdempotencyKey: "restart-label-demo",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Remember(t.Context(), caelisAuth, v1alpha1.RememberRequest{
+		Text: "shared keyword belongs to caelis", IdempotencyKey: "restart-label-caelis",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted, err := Open(t.Context(), Options{DataDir: dataDir, Clock: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = restarted.Close() })
+	recalled, err := restarted.Recall(t.Context(), demoAuth, testRecall("shared keyword", demo.ConsistencyToken))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertHasText(t, recalled, "shared keyword belongs to demo")
+	for _, fragment := range recalled.Fragments {
+		if strings.Contains(fragment.Text, "belongs to caelis") {
+			t.Fatalf("Recall crossed a persisted LabelSet: %+v", recalled.Fragments)
+		}
+	}
+	if _, err := restarted.GetReceiptStatus(t.Context(), caelisAuth, v1alpha1.GetReceiptStatusRequest{ReceiptID: demo.ReceiptID}); !v1alpha1.IsCode(err, v1alpha1.ErrorCodeNotFound) {
+		t.Fatalf("cross-LabelSet ReceiptStatus error = %v, want not_found", err)
+	}
+}
+
 func TestOwnerLockRejectsSecondProcessOwner(t *testing.T) {
 	store, err := Open(t.Context(), Options{DataDir: t.TempDir()})
 	if err != nil {
@@ -182,7 +233,7 @@ func TestConcurrentWritersWaitBeforeReadingCanonicalState(t *testing.T) {
 	}
 }
 
-func TestMigrationFailureIsExplicitAndTransactional(t *testing.T) {
+func TestSchemaBaselineFailureIsExplicit(t *testing.T) {
 	dataDir := t.TempDir()
 	store, err := Open(t.Context(), Options{DataDir: dataDir})
 	if err != nil {
@@ -202,32 +253,8 @@ func TestMigrationFailureIsExplicitAndTransactional(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = Open(t.Context(), Options{DataDir: dataDir})
-	if err == nil || !strings.Contains(err.Error(), "apply schema migration 1") {
-		t.Fatalf("Open() error = %v, want explicit migration failure", err)
-	}
-}
-
-func TestMigrationFailureRollsBackEarlierDDL(t *testing.T) {
-	database, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "migration.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer database.Close()
-	if _, err := database.ExecContext(t.Context(), `CREATE TABLE spaces(conflict TEXT)`); err != nil {
-		t.Fatal(err)
-	}
-	if err := migrate(t.Context(), database, time.Now()); err == nil {
-		t.Fatal("migrate() succeeded despite conflicting mid-migration table")
-	}
-	for _, table := range []string{"metadata", "realms", "identities"} {
-		var exists bool
-		if err := database.QueryRowContext(t.Context(),
-			`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?)`, table).Scan(&exists); err != nil {
-			t.Fatal(err)
-		}
-		if exists {
-			t.Fatalf("failed migration left earlier table %q behind", table)
-		}
+	if err == nil || !strings.Contains(err.Error(), "apply schema baseline") {
+		t.Fatalf("Open() error = %v, want explicit schema baseline failure", err)
 	}
 }
 
@@ -470,6 +497,12 @@ func newConformanceFixture(t *testing.T) conformance.Fixture {
 	now = now.Add(2 * time.Hour)
 	botA := mustIssue(t, store, credentials["principal:actor-bot-a"], issueRequest("grant-bot-a", "actor-bot-a", v1alpha1.AudiencePrivate, allOperations))
 	botARenewed := mustIssue(t, store, credentials["principal:actor-bot-a"], issueRequest("grant-bot-a", "actor-bot-a", v1alpha1.AudiencePrivate, allOperations))
+	labelRequest := issueRequest("grant-bot-a", "actor-bot-a", v1alpha1.AudiencePrivate, allOperations)
+	labelRequest.Labels = v1alpha1.LabelSet{"workspace:demo"}
+	botALabeled := mustIssue(t, store, credentials["principal:actor-bot-a"], labelRequest)
+	otherRequest := issueRequest("grant-bot-a", "actor-bot-a", v1alpha1.AudiencePrivate, allOperations)
+	otherRequest.Labels = v1alpha1.LabelSet{"workspace:caelis"}
+	botAOther := mustIssue(t, store, credentials["principal:actor-bot-a"], otherRequest)
 	botB := mustIssue(t, store, credentials["principal:actor-bot-b"], issueRequest("grant-bot-b", "actor-bot-b", v1alpha1.AudiencePrivate, allOperations))
 	sharedA := mustIssue(t, store, credentials["principal:actor-shared-a"], issueRequest("grant-shared-a", "actor-shared-a", v1alpha1.AudienceShared, allOperations))
 	sharedB := mustIssue(t, store, credentials["principal:actor-shared-b"], issueRequest("grant-shared-b", "actor-shared-b", v1alpha1.AudienceShared, allOperations))
@@ -496,6 +529,8 @@ func newConformanceFixture(t *testing.T) conformance.Fixture {
 		Service:            store,
 		BotAPrivate:        callAuth(botA, "actor-bot-a", v1alpha1.AudiencePrivate),
 		BotAPrivateRenewed: callAuth(botARenewed, "actor-bot-a", v1alpha1.AudiencePrivate),
+		BotAPrivateLabeled: callAuth(botALabeled, "actor-bot-a", v1alpha1.AudiencePrivate),
+		BotAPrivateOther:   callAuth(botAOther, "actor-bot-a", v1alpha1.AudiencePrivate),
 		BotBPrivate:        callAuth(botB, "actor-bot-b", v1alpha1.AudiencePrivate),
 		SharedA:            callAuth(sharedA, "actor-shared-a", v1alpha1.AudienceShared),
 		SharedB:            callAuth(sharedB, "actor-shared-b", v1alpha1.AudienceShared),

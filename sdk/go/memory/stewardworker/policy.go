@@ -52,6 +52,7 @@ func BuiltInProfile() stewardv1alpha1.ProfileSpec {
 		Version:   builtInProfileVersion,
 		SystemPrompt: `Preserve durable facts, preferences, decisions, and commitments as compact recall-oriented records.
 Use ADD unless one supplied record clearly describes the same subject and attribute. Use MERGE only for compatible additions, and SUPERSEDE only when the new receipt explicitly replaces an earlier value. Use IGNORE for transient chatter or content with no durable fact.
+The assigned receipt is input.receipt.receipt_id. Every ADD, MERGE, or SUPERSEDE response must copy that exact value into evidence_refs; never omit or substitute it.
 Write self-contained record text. Preserve exact names and values. Improve future lexical Recall by adding at most two commonplace, unambiguous search aliases without changing the claim: expand a recognized technical abbreviation, add an established Chinese/English equivalent, or add one immediate technical category. Retain the original term in parentheses. General language and technical knowledge may supply an alias, but never a new fact, value, cause, recommendation, or explanation.
 Examples of the intended normalization:
 - "接口使用 JWT。" becomes "接口使用 JSON Web Token (JWT) 作为访问凭证。"

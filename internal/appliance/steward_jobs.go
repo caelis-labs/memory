@@ -125,13 +125,14 @@ func (s *Store) claimStewardJob(
 	var spaceID v1alpha1.SpaceID
 	var profileID stewardv1alpha1.ProfileID
 	var profileVersion uint64
+	var labelSetDigest string
 	var attempts int
 	err = tx.QueryRowContext(ctx,
-		`SELECT job_id, receipt_id, space_id, profile_id, profile_version, attempts
+		`SELECT job_id, receipt_id, space_id, profile_id, profile_version, label_set_digest, attempts
 		 FROM steward_jobs
 		 WHERE state = 'pending' AND available_at <= ? AND attempts < ?
 		 ORDER BY created_at, job_id LIMIT 1`, formattedNow, maxStewardAttempts).Scan(
-		&jobID, &receiptID, &spaceID, &profileID, &profileVersion, &attempts)
+		&jobID, &receiptID, &spaceID, &profileID, &profileVersion, &labelSetDigest, &attempts)
 	if errors.Is(err, sql.ErrNoRows) {
 		if err := tx.Commit(); err != nil {
 			return StewardWork{}, false, false, fmt.Errorf("commit Steward reclaim: %w", err)
@@ -170,7 +171,7 @@ func (s *Store) claimStewardJob(
 	if err != nil {
 		return rollback(fmt.Errorf("read claimed Steward profile: %w", err))
 	}
-	request, err := s.readStewardWorkRequest(ctx, tx, profile.ProfileSpec, receiptID, spaceID)
+	request, err := s.readStewardWorkRequest(ctx, tx, profile.ProfileSpec, receiptID, spaceID, labelSetDigest)
 	if err != nil {
 		return rollback(err)
 	}
@@ -214,6 +215,7 @@ func (s *Store) readStewardWorkRequest(
 	profile stewardv1alpha1.ProfileSpec,
 	receiptID v1alpha1.ReceiptID,
 	spaceID v1alpha1.SpaceID,
+	labelSetDigest string,
 ) (stewardv1alpha1.WorkRequest, error) {
 	request := stewardv1alpha1.WorkRequest{
 		Protocol: stewardv1alpha1.ProtocolVersion, Profile: profile,
@@ -222,8 +224,10 @@ func (s *Store) readStewardWorkRequest(
 	var occurredAt sql.NullString
 	var receivedAt string
 	if err := db.QueryRowContext(ctx,
-		`SELECT receipt_id, text, occurred_at, received_at FROM receipts WHERE receipt_id = ? AND space_id = ?`,
-		receiptID, spaceID).Scan(&request.Receipt.ReceiptID, &request.Receipt.Text, &occurredAt, &receivedAt); err != nil {
+		`SELECT receipt_id, text, occurred_at, received_at FROM receipts
+		 WHERE receipt_id = ? AND space_id = ? AND label_set_digest = ?`,
+		receiptID, spaceID, labelSetDigest).Scan(
+		&request.Receipt.ReceiptID, &request.Receipt.Text, &occurredAt, &receivedAt); err != nil {
 		return stewardv1alpha1.WorkRequest{}, fmt.Errorf("read Steward receipt: %w", err)
 	}
 	var err error
@@ -238,7 +242,7 @@ func (s *Store) readStewardWorkRequest(
 		}
 		request.Receipt.OccurredAt = &value
 	}
-	if s.experimentalLexicon {
+	if s.experimentalLexicon && labelSetDigest == emptyLabelSetDigest {
 		request.LexiconCandidates, err = readStewardLexiconCandidates(ctx, db, spaceID, receiptID)
 		if err != nil {
 			return stewardv1alpha1.WorkRequest{}, fmt.Errorf("read Steward lexicon candidates: %w", err)
@@ -251,9 +255,9 @@ func (s *Store) readStewardWorkRequest(
 		`SELECT r.record_id, r.current_revision, v.kind, v.text
 		 FROM semantic_records r
 		 JOIN semantic_revisions v ON v.record_id = r.record_id AND v.revision = r.current_revision
-		 WHERE r.space_id = ? AND r.status = 'active'
+		 WHERE r.space_id = ? AND r.label_set_digest = ? AND r.status = 'active'
 		 ORDER BY r.updated_at DESC, r.record_id
-		 LIMIT ?`, spaceID, profile.MaxContextRecords)
+		 LIMIT ?`, spaceID, labelSetDigest, profile.MaxContextRecords)
 	if err != nil {
 		return stewardv1alpha1.WorkRequest{}, fmt.Errorf("read Steward Record context: %w", err)
 	}

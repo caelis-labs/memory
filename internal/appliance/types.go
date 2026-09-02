@@ -16,7 +16,7 @@ const (
 	ManagementCredentialFile    = "management.token"
 	StewardWorkerCredentialFile = "steward-worker.token"
 	SocketFilename              = v1alpha1.LocalSocketFilename
-	CurrentSchemaVersion        = 7
+	CurrentSchemaVersion        = 1
 	defaultSQLiteBusyTimeoutMS  = 2_000
 )
 
@@ -66,6 +66,7 @@ type IssueCapabilityRequest struct {
 	ActorRef      string               `json:"actor_ref"`
 	Audience      v1alpha1.Audience    `json:"audience"`
 	Operations    []v1alpha1.Operation `json:"operations"`
+	Labels        v1alpha1.LabelSet    `json:"labels,omitempty"`
 	TTL           time.Duration        `json:"-"`
 	TTLSeconds    int64                `json:"ttl_seconds"`
 }

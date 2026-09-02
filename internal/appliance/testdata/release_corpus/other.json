@@ -1,0 +1,68 @@
+{
+  "format_version": 1,
+  "cohort": "other",
+  "source": "authored_deidentified_v1",
+  "sanitization": "no_private_source_text_no_personal_identifiers_no_credentials",
+  "series": [
+    {
+      "language": "es",
+      "subjects": ["Alba", "Brisa", "Cobre", "Duna"],
+      "facts": [
+        {"text": "El proyecto {subject} ejecuta pruebas de concurrencia antes de cada integración.", "query": "{subject} pruebas concurrencia integración"},
+        {"text": "El servicio {subject} conserva copias recuperables durante siete días.", "query": "{subject} copias recuperables siete días"},
+        {"text": "La ventana de despliegue de {subject} es el miércoles por la tarde.", "query": "{subject} miércoles ventana despliegue"},
+        {"text": "{subject} usa PostgreSQL y registros WAL para la recuperación.", "query": "{subject} PostgreSQL WAL recuperación"}
+      ]
+    },
+    {
+      "language": "fr",
+      "subjects": ["Aube", "Brume", "Corail", "Dune"],
+      "facts": [
+        {"text": "Le projet {subject} lance les tests de concurrence avant chaque fusion.", "query": "{subject} tests concurrence fusion"},
+        {"text": "Le service {subject} conserve des sauvegardes restaurables pendant sept jours.", "query": "{subject} sauvegardes restaurables sept jours"},
+        {"text": "La fenêtre de déploiement de {subject} est fixée au mercredi après-midi.", "query": "{subject} mercredi fenêtre déploiement"},
+        {"text": "{subject} utilise PostgreSQL et les journaux WAL pour la reprise.", "query": "{subject} PostgreSQL WAL reprise"}
+      ]
+    },
+    {
+      "language": "de",
+      "subjects": ["Adler", "Birke", "Cobalt", "Düne"],
+      "facts": [
+        {"text": "Das Projekt {subject} führt vor jedem Merge Nebenläufigkeitstests aus.", "query": "{subject} Nebenläufigkeitstests Merge"},
+        {"text": "Der Dienst {subject} bewahrt sieben Tage wiederherstellbare Sicherungen auf.", "query": "{subject} sieben Tage Sicherungen"},
+        {"text": "Das Bereitstellungsfenster von {subject} liegt am Mittwochnachmittag.", "query": "{subject} Mittwochnachmittag Bereitstellungsfenster"},
+        {"text": "{subject} verwendet PostgreSQL und WAL für die Wiederherstellung.", "query": "{subject} PostgreSQL WAL Wiederherstellung"}
+      ]
+    },
+    {
+      "language": "ja",
+      "subjects": ["青空", "海風", "木立", "星雲"],
+      "facts": [
+        {"text": "{subject}プロジェクトは統合前に並行処理テストを実行します。", "query": "{subject} 統合 並行処理テスト"},
+        {"text": "{subject}サービスは七日間復元可能なバックアップを保持します。", "query": "{subject} 七日間 復元 バックアップ"},
+        {"text": "{subject}の本番リリースは水曜日の午後に行います。", "query": "{subject} 水曜日 本番リリース"},
+        {"text": "{subject}は PostgreSQL と WAL を復旧に使用します。", "query": "{subject} PostgreSQL WAL 復旧"}
+      ]
+    },
+    {
+      "language": "ko",
+      "subjects": ["하늘", "바람", "나무", "별빛"],
+      "facts": [
+        {"text": "{subject} 프로젝트는 병합 전에 동시성 검사를 실행합니다.", "query": "{subject} 동시성 검사 병합"},
+        {"text": "{subject} 서비스는 복구 가능한 백업을 칠 일 동안 보관합니다.", "query": "{subject} 복구 백업 칠 일"},
+        {"text": "{subject} 운영 배포는 수요일 오후에 진행합니다.", "query": "{subject} 수요일 운영 배포"},
+        {"text": "{subject} 시스템은 PostgreSQL 과 WAL 로 데이터를 복구합니다.", "query": "{subject} PostgreSQL WAL 복구"}
+      ]
+    },
+    {
+      "language": "ar",
+      "subjects": ["الشفق", "النسيم", "المرجان", "النخيل"],
+      "facts": [
+        {"text": "ينفذ مشروع {subject} اختبارات التزامن قبل كل عملية دمج.", "query": "{subject} اختبارات التزامن دمج"},
+        {"text": "تحتفظ خدمة {subject} بنسخ احتياطية قابلة للاستعادة لمدة سبعة أيام.", "query": "{subject} نسخ احتياطية سبعة أيام"},
+        {"text": "تكون نافذة نشر {subject} بعد ظهر يوم الأربعاء.", "query": "{subject} الأربعاء نافذة نشر"},
+        {"text": "يستخدم {subject} قاعدة PostgreSQL وسجلات WAL للاستعادة.", "query": "{subject} PostgreSQL WAL الاستعادة"}
+      ]
+    }
+  ]
+}

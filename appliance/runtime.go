@@ -1,6 +1,6 @@
 // Package appliance exposes the durable Memory runtime for in-process hosts.
 //
-// The runtime owns Memory domain state, schema migration, retrieval, and
+// The runtime owns Memory domain state, schema initialization, retrieval, and
 // Steward work. Hosts provide a data directory and bind the versioned Memory
 // APIs directly; they never access the SQLite database or internal packages.
 package appliance
@@ -46,7 +46,7 @@ type Runtime struct {
 	closeErr error
 }
 
-// Open opens storage, applies schema migrations, and returns an in-process
+// Open opens storage at the current schema baseline and returns an in-process
 // runtime. Failure is reported synchronously to the embedding Host.
 func Open(ctx context.Context, options Options) (*Runtime, error) {
 	store, err := core.Open(ctx, core.Options{DataDir: options.DataDir})
@@ -103,6 +103,7 @@ func (r *Runtime) IssueCapability(
 		ActorRef:   request.ActorRef,
 		Audience:   request.Audience,
 		Operations: request.Operations,
+		Labels:     request.Labels,
 		TTLSeconds: request.TTLSeconds,
 	})
 	if err != nil {

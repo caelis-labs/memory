@@ -10,7 +10,7 @@ status is separate:
 
 ```text
 ReceiptPayload (immutable)
-  receipt ID, Space ID, text, normalized source context
+  receipt ID, Space ID, canonical LabelSet, text, normalized source context
   occurred time, received time, idempotency key, request digest, commit sequence
 
 ReceiptProcessing (mutable or append-only events)
@@ -18,39 +18,44 @@ ReceiptProcessing (mutable or append-only events)
 ```
 
 The minimum retrieval projection lexically indexes every receipt for its whole
-lifetime. It is partitioned by Space or uses a backend that can prove equivalent
-pre-filtering. It is disposable and rebuildable from receipts.
+lifetime. It is partitioned first by authorized Space and filtered by the exact
+capability-bound LabelSet in the candidate query. It is disposable and
+rebuildable from receipts.
 
-## Optional semantic organization
+## Flat semantic organization
 
-After the durable receipt path is proven, a semantic extension may add:
+The first derived structure is intentionally flat:
 
 ```text
 Record
-  current interpreted content and status
+  current interpreted content, status, Space, and LabelSet
 Revision
   immutable version of one Record
 Evidence
-  same-Space links to receipts or authorized human corrections
+  same-Space and same-LabelSet links to receipts or authorized human corrections
 ```
 
-Record taxonomy is deliberately not frozen by v1alpha1. Claim, Episode, Summary,
-and Reference are useful hypotheses, not required database enums. New schemas
-must be justified by retrieval or governance evidence and introduced through
-migrations.
+`ADD` promotes receipt evidence into a new Record. `MERGE` and `SUPERSEDE`
+refine an existing Record by appending a Revision and moving its active head;
+they do not build a tree. The downstream host decides whether and when to invoke
+the Worker. Memory owns the fixed proposal vocabulary, validation, persistence,
+and exact partition rule. Record taxonomy, parent/child edges, relation graphs,
+and depth-based pruning are not frozen by v1alpha1 and cannot enter the default
+path without measured benefit over this flat control.
 
 Recall may merge receipt and record candidates, but it deduplicates presentation
 without erasing receipt evidence. If the semantic store, model, or jobs are
 unavailable, receipt-only Recall remains correct.
 
 The implemented merge enters each semantic FTS table only after its Space is in
-the authorized View. It joins active heads to their exact current Revision and
+the authorized View, then filters the same canonical LabelSet before returning
+candidates. It joins active heads to their exact current Revision and
 revalidates that every Evidence receipt still exists, is uncorrected, and is in
-the same Space. Semantic faults discard only the affected derived stream and
-mark the response degraded. Normalized equal text is folded only across a
-semantic candidate and overlapping receipt Evidence, or between semantic
-candidates; equal independent receipts remain separate. Evidence and Record
-references are unioned and sorted for deterministic provenance.
+the same Space and LabelSet. Semantic faults discard only the affected derived
+stream and mark the response degraded. Normalized equal text is folded only
+across a semantic candidate and overlapping receipt Evidence, or between
+semantic candidates; equal independent receipts remain separate. Evidence and
+Record references are unioned and sorted for deterministic provenance.
 
 ## Steward execution
 
@@ -67,10 +72,12 @@ SUPERSEDE
 IGNORE
 ```
 
-The model proposes; deterministic application code validates same-Space
-evidence, operation bounds, base revision, size limits, and visibility before
-committing. A model cannot edit receipt payloads, change ACL/View/Grant state,
-publish private data, tombstone, or hard-delete.
+The model proposes; deterministic application code validates same-Space and
+same-LabelSet evidence, operation bounds, base revision, size limits, and
+visibility before committing. LabelSet stays outside the model-facing Work
+request and is inherited from the durable Job. A model cannot edit receipt
+payloads, change ACL/View/Grant state, select labels, publish private data,
+tombstone, or hard-delete.
 
 The current semantic schema stores immutable `(Record, Revision)` rows and
 ordered Evidence identifiers separately from mutable Record heads. Evidence
@@ -120,13 +127,12 @@ New consumers use `ModelGenerator(GenerationRequest) -> GenerationResponse`.
 After Caelis pins the next Memory prerelease and switches to the new callback,
 the direct-proposal bridge is removed before GA.
 
-Schema 4 never reads or exposes the RC1 `provider_ref` and `model` columns. New
-rows write empty compatibility values; upgraded rows retain their old bytes so
-a prepared rollback can restore the exact RC1 generation. The physical columns
-remain temporarily because rebuilding the referenced Job/Revision/Evidence
-audit graph would add migration risk with no runtime value. They are private
-rollback residue, not domain fields, and are removed once the minimum supported
-upgrade floor is schema 4 or newer.
+Memory has no released database compatibility floor yet. A fresh database is
+created from one current development baseline; it contains no provider or model
+columns because those concepts belong to the downstream callback. A database
+created by an older unreleased schema is rejected with an explicit instruction
+to remove the development data directory and rebuild it. Forward migrations
+begin only after a published release establishes a real compatibility promise.
 
 Later operations such as RELATE, PROMOTE, DEMOTE, ARCHIVE, and model-enhanced
 Recall require independent evidence and acceptance cases.
@@ -144,7 +150,7 @@ evidence may influence a private result but cannot mutate or generate shared
 canonical state.
 
 The adaptive per-Space lexicon is an internal experiment, not a Core mechanism.
-A normal embedded Open supplies no lexicon policy, so migration, Remember,
+A normal embedded Open supplies no lexicon policy, so schema initialization, Remember,
 Recall, correction, deletion, inspection, and Steward work neither learn nor
 consume adaptive terms. Focused tests and the offline corpus evaluator may
 explicitly enable it to preserve reproducible A/B evidence. Persisted
@@ -152,7 +158,7 @@ experimental rows are inert while the experiment is disabled.
 
 ## Local durable Core
 
-M1 uses one migrated SQLite database for many Spaces, WAL, `synchronous=FULL`,
+M1 uses one SQLite database at the current schema baseline for many Spaces, WAL, `synchronous=FULL`,
 foreign keys, transactional receipts and idempotency state, and an advisory
 single-process owner lock. Receipt payload updates and deletes are rejected by
 database triggers. Mutable processing state is stored separately.

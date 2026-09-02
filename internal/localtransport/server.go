@@ -87,7 +87,7 @@ func Handler(store *appliance.Store, serviceInfo ...ServiceInfo) http.Handler {
 		capability, err := store.IssueCapability(request.Context(), appliance.IssueCapabilityRequest{
 			Authorization: appliance.IssuerAuthorization{PrincipalRef: input.PrincipalRef, Credential: credential},
 			GrantRef:      input.GrantRef, ActorRef: input.ActorRef, Audience: input.Audience,
-			Operations: input.Operations, TTLSeconds: input.TTLSeconds,
+			Operations: input.Operations, Labels: input.Labels, TTLSeconds: input.TTLSeconds,
 		})
 		if err != nil {
 			if errors.Is(err, appliance.ErrCapabilityIssueInvalid) {
@@ -372,6 +372,9 @@ func validateCapabilityIssue(input v1alpha1.CapabilityIssueRequest) error {
 	}
 	if len(input.Operations) == 0 {
 		return fmt.Errorf("at least one operation is required")
+	}
+	if _, err := v1alpha1.CanonicalLabelSet(input.Labels); err != nil {
+		return err
 	}
 	seen := make(map[v1alpha1.Operation]struct{}, len(input.Operations))
 	for _, operation := range input.Operations {

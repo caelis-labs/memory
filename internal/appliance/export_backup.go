@@ -52,7 +52,8 @@ func (s *Store) Export(ctx context.Context, request managementv1alpha1.ExportReq
 		)`
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT r.receipt_id, r.space_id, r.text, r.source_context, r.occurred_at,
+		`SELECT r.receipt_id, r.space_id, r.label_set, r.label_set_digest,
+		 r.text, r.source_context, r.occurred_at,
 		 r.received_at, r.commit_sequence, p.state,
 		 COALESCE((SELECT replacement_receipt_id FROM receipt_corrections WHERE original_receipt_id = r.receipt_id), ''),
 		 COALESCE((SELECT original_receipt_id FROM receipt_corrections WHERE replacement_receipt_id = r.receipt_id), '')

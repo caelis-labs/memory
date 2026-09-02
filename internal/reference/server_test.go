@@ -101,6 +101,10 @@ func newFixture(t *testing.T) conformance.Fixture {
 
 	botA := issue(t, server, "grant-bot-a", "actor-bot-a", v1alpha1.AudiencePrivate, allOperations)
 	botARenewed := issue(t, server, "grant-bot-a", "actor-bot-a", v1alpha1.AudiencePrivate, allOperations)
+	botALabeled := issueLabels(t, server, "grant-bot-a", "actor-bot-a", v1alpha1.AudiencePrivate, allOperations,
+		v1alpha1.LabelSet{"workspace:demo"})
+	botAOther := issueLabels(t, server, "grant-bot-a", "actor-bot-a", v1alpha1.AudiencePrivate, allOperations,
+		v1alpha1.LabelSet{"workspace:caelis"})
 	botB := issue(t, server, "grant-bot-b", "actor-bot-b", v1alpha1.AudiencePrivate, allOperations)
 	sharedA := issue(t, server, "grant-shared-a", "actor-shared-a", v1alpha1.AudienceShared, allOperations)
 	sharedB := issue(t, server, "grant-shared-b", "actor-shared-b", v1alpha1.AudienceShared, allOperations)
@@ -136,6 +140,8 @@ func newFixture(t *testing.T) conformance.Fixture {
 		Service:            server,
 		BotAPrivate:        authorization(botA, "actor-bot-a", v1alpha1.AudiencePrivate),
 		BotAPrivateRenewed: authorization(botARenewed, "actor-bot-a", v1alpha1.AudiencePrivate),
+		BotAPrivateLabeled: authorization(botALabeled, "actor-bot-a", v1alpha1.AudiencePrivate),
+		BotAPrivateOther:   authorization(botAOther, "actor-bot-a", v1alpha1.AudiencePrivate),
 		BotBPrivate:        authorization(botB, "actor-bot-b", v1alpha1.AudiencePrivate),
 		SharedA:            authorization(sharedA, "actor-shared-a", v1alpha1.AudienceShared),
 		SharedB:            authorization(sharedB, "actor-shared-b", v1alpha1.AudienceShared),
@@ -163,6 +169,18 @@ func issue(
 	audience v1alpha1.Audience,
 	operations []v1alpha1.Operation,
 ) RuntimeCapability {
+	return issueLabels(t, server, grant, actor, audience, operations, nil)
+}
+
+func issueLabels(
+	t *testing.T,
+	server *Server,
+	grant v1alpha1.GrantID,
+	actor string,
+	audience v1alpha1.Audience,
+	operations []v1alpha1.Operation,
+	labels v1alpha1.LabelSet,
+) RuntimeCapability {
 	t.Helper()
 	issuer, err := server.CreateIssuerAuthorization("principal:" + actor)
 	if err != nil {
@@ -173,6 +191,7 @@ func issue(
 		ActorRef:   actor,
 		Audience:   audience,
 		Operations: operations,
+		Labels:     labels,
 		TTL:        time.Hour,
 	})
 	if err != nil {

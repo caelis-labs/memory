@@ -60,6 +60,7 @@ type capabilityState struct {
 	actorRef     string
 	audience     v1alpha1.Audience
 	operations   []v1alpha1.Operation
+	labels       v1alpha1.LabelSet
 	expiresAt    time.Time
 }
 
@@ -75,6 +76,7 @@ type receipt struct {
 	commitSequence   uint64
 	consistencyToken v1alpha1.ConsistencyToken
 	processingState  v1alpha1.ProcessingState
+	labels           v1alpha1.LabelSet
 }
 
 type idempotencyEntry struct {
@@ -90,6 +92,7 @@ type idempotencyIdentity struct {
 type cursor struct {
 	generation string
 	spaceID    v1alpha1.SpaceID
+	labels     v1alpha1.LabelSet
 	sequence   uint64
 }
 
@@ -139,16 +142,15 @@ func (s *Server) Remember(
 	if err := request.Validate(); err != nil {
 		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeInvalidArgument, err.Error(), false)
 	}
-	digest, err := requestDigest(request)
-	if err != nil {
-		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "failed to normalize request", false)
-	}
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	view, err := s.authorizeLocked(auth, v1alpha1.OperationRemember)
+	view, labels, err := s.authorizeLocked(auth, v1alpha1.OperationRemember)
 	if err != nil {
 		return v1alpha1.RememberResponse{}, err
+	}
+	digest, err := requestDigest(request, labels)
+	if err != nil {
+		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "failed to normalize request", false)
 	}
 	if view.WriteSpaceID == "" {
 		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "View has no writable Space", false)
@@ -164,7 +166,7 @@ func (s *Server) Remember(
 
 	s.sequence++
 	receiptID := v1alpha1.ReceiptID(s.nextIdentifierLocked("receipt"))
-	token, err := s.randomConsistencyTokenLocked(view.WriteSpaceID, s.sequence)
+	token, err := s.randomConsistencyTokenLocked(view.WriteSpaceID, labels, s.sequence)
 	if err != nil {
 		return v1alpha1.RememberResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "failed to create consistency cursor", false)
 	}
@@ -181,6 +183,7 @@ func (s *Server) Remember(
 		commitSequence:   s.sequence,
 		consistencyToken: token,
 		processingState:  v1alpha1.ProcessingStateAccepted,
+		labels:           append(v1alpha1.LabelSet{}, labels...),
 	}
 	s.receipts[receiptID] = stored
 	s.receiptsBySpace[view.WriteSpaceID] = append(s.receiptsBySpace[view.WriteSpaceID], receiptID)
@@ -280,7 +283,7 @@ func (s *Server) recallSnapshot(
 ) ([]recallCandidate, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	view, err := s.authorizeLocked(auth, v1alpha1.OperationRecall)
+	view, labels, err := s.authorizeLocked(auth, v1alpha1.OperationRecall)
 	if err != nil {
 		return nil, err
 	}
@@ -289,8 +292,8 @@ func (s *Server) recallSnapshot(
 		if !ok || cursorValue.generation != s.generation {
 			return nil, s.serviceError(v1alpha1.ErrorCodeStaleConsistencyToken, "consistency token is stale or unknown", false)
 		}
-		if !slices.Contains(view.ReadSpaceIDs, cursorValue.spaceID) {
-			return nil, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "consistency token Space is not readable", false)
+		if !slices.Contains(view.ReadSpaceIDs, cursorValue.spaceID) || !slices.Equal(labels, cursorValue.labels) {
+			return nil, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "consistency token partition is not readable", false)
 		}
 	}
 	sources := make([]recallCandidate, 0)
@@ -304,8 +307,12 @@ func (s *Server) recallSnapshot(
 			if err := contextError(ctx); err != nil {
 				return nil, s.serviceError(v1alpha1.ErrorCodeDeadline, "request deadline exceeded", true)
 			}
+			stored := s.receipts[receiptID]
+			if !slices.Equal(stored.labels, labels) {
+				continue
+			}
 			sources = append(sources, recallCandidate{
-				receipt: s.receipts[receiptID],
+				receipt: stored,
 				class:   space.Class,
 			})
 		}
@@ -329,12 +336,12 @@ func (s *Server) GetReceiptStatus(
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	view, err := s.authorizeLocked(auth, v1alpha1.OperationReceiptStatus)
+	view, labels, err := s.authorizeLocked(auth, v1alpha1.OperationReceiptStatus)
 	if err != nil {
 		return v1alpha1.ReceiptStatus{}, err
 	}
 	stored, ok := s.receipts[request.ReceiptID]
-	if !ok || !slices.Contains(view.ReadSpaceIDs, stored.spaceID) {
+	if !ok || !slices.Contains(view.ReadSpaceIDs, stored.spaceID) || !slices.Equal(stored.labels, labels) {
 		return v1alpha1.ReceiptStatus{}, s.serviceError(v1alpha1.ErrorCodeNotFound, "receipt not found", false)
 	}
 	return v1alpha1.ReceiptStatus{
@@ -373,38 +380,38 @@ func (s *Server) isAvailable() bool {
 func (s *Server) authorizeLocked(
 	auth v1alpha1.CallAuthorization,
 	operation v1alpha1.Operation,
-) (ViewDefinition, error) {
+) (ViewDefinition, v1alpha1.LabelSet, error) {
 	state, ok := s.capabilities[auth.Capability]
 	if !ok || auth.Capability == "" {
-		return ViewDefinition{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability is missing or unknown", false)
+		return ViewDefinition{}, nil, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability is missing or unknown", false)
 	}
 	grant, ok := s.grants[state.grantID]
 	if !ok || grant.Revoked || grant.PrincipalRef != state.principalRef || !grant.ExpiresAt.After(s.now()) || !state.expiresAt.After(s.now()) {
-		return ViewDefinition{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability is expired or revoked", false)
+		return ViewDefinition{}, nil, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability is expired or revoked", false)
 	}
 	if auth.ActorRef != state.actorRef || auth.ActorRef != grant.ActorRef {
-		return ViewDefinition{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability actor mismatch", false)
+		return ViewDefinition{}, nil, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability actor mismatch", false)
 	}
 	if auth.Audience != state.audience || !containsAudience(grant.AllowedAudiences, auth.Audience) {
-		return ViewDefinition{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability audience mismatch", false)
+		return ViewDefinition{}, nil, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability audience mismatch", false)
 	}
 	if !containsOperation(state.operations, operation) || !containsOperation(grant.AllowedOperations, operation) {
-		return ViewDefinition{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability operation mismatch", false)
+		return ViewDefinition{}, nil, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability operation mismatch", false)
 	}
 	view, ok := s.views[grant.ViewRef]
 	if !ok || view.Version != state.viewVersion {
-		return ViewDefinition{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability View is stale", false)
+		return ViewDefinition{}, nil, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability View is stale", false)
 	}
 	if auth.Audience == v1alpha1.AudienceShared && view.MaxDisclosureClass == v1alpha1.SpaceClassPrivate {
-		return ViewDefinition{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "private View is incompatible with shared audience", false)
+		return ViewDefinition{}, nil, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "private View is incompatible with shared audience", false)
 	}
 	if operation == v1alpha1.OperationRemember && auth.Audience == v1alpha1.AudiencePrivate {
 		writeSpace, ok := s.spaces[view.WriteSpaceID]
 		if !ok || writeSpace.Class != v1alpha1.SpaceClassPrivate {
-			return ViewDefinition{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "private Runtime cannot write shared memory", false)
+			return ViewDefinition{}, nil, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "private Runtime cannot write shared memory", false)
 		}
 	}
-	return cloneView(view), nil
+	return cloneView(view), append(v1alpha1.LabelSet{}, state.labels...), nil
 }
 
 type recallCandidate struct {
@@ -423,7 +430,7 @@ func rememberResponse(stored receipt, deduplicated bool) v1alpha1.RememberRespon
 	}
 }
 
-func requestDigest(request v1alpha1.RememberRequest) (string, error) {
+func requestDigest(request v1alpha1.RememberRequest, labels v1alpha1.LabelSet) (string, error) {
 	value := struct {
 		Text          string                 `json:"text"`
 		SourceContext v1alpha1.SourceContext `json:"source_context"`
@@ -435,7 +442,16 @@ func requestDigest(request v1alpha1.RememberRequest) (string, error) {
 	if request.OccurredAt != nil {
 		value.OccurredAt = request.OccurredAt.UTC().Format(time.RFC3339Nano)
 	}
-	normalized, err := json.Marshal(value)
+	var normalized []byte
+	var err error
+	if len(labels) == 0 {
+		normalized, err = json.Marshal(value)
+	} else {
+		normalized, err = json.Marshal(struct {
+			Request any               `json:"request"`
+			Labels  v1alpha1.LabelSet `json:"labels"`
+		}{Request: value, Labels: labels})
+	}
 	if err != nil {
 		return "", err
 	}
@@ -519,13 +535,22 @@ func (s *Server) randomToken() (v1alpha1.CapabilityToken, error) {
 	return v1alpha1.CapabilityToken(base64.RawURLEncoding.EncodeToString(raw)), nil
 }
 
-func (s *Server) randomConsistencyTokenLocked(spaceID v1alpha1.SpaceID, sequence uint64) (v1alpha1.ConsistencyToken, error) {
+func (s *Server) randomConsistencyTokenLocked(
+	spaceID v1alpha1.SpaceID,
+	labels v1alpha1.LabelSet,
+	sequence uint64,
+) (v1alpha1.ConsistencyToken, error) {
 	raw := make([]byte, 24)
 	if _, err := io.ReadFull(s.random, raw); err != nil {
 		return "", err
 	}
 	token := v1alpha1.ConsistencyToken(base64.RawURLEncoding.EncodeToString(raw))
-	s.tokens[token] = cursor{generation: s.generation, spaceID: spaceID, sequence: sequence}
+	s.tokens[token] = cursor{
+		generation: s.generation,
+		spaceID:    spaceID,
+		labels:     append(v1alpha1.LabelSet{}, labels...),
+		sequence:   sequence,
+	}
 	return token, nil
 }
 

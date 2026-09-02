@@ -24,6 +24,9 @@ type authorizedView struct {
 	readSpaceIDs       []v1alpha1.SpaceID
 	writeSpaceID       v1alpha1.SpaceID
 	maxDisclosureClass v1alpha1.SpaceClass
+	labels             v1alpha1.LabelSet
+	labelSetEncoded    string
+	labelSetDigest     string
 }
 
 // Bootstrap creates a complete local topology in one transaction.
@@ -273,6 +276,10 @@ func (s *Store) IssueCapability(ctx context.Context, request IssueCapabilityRequ
 	if request.Authorization.PrincipalRef == "" || request.Authorization.Credential == "" {
 		return RuntimeCapability{}, fmt.Errorf("%w: issuer authorization is required", ErrCapabilityIssueInvalid)
 	}
+	labels, err := normalizeLabelSet(request.Labels)
+	if err != nil {
+		return RuntimeCapability{}, fmt.Errorf("%w: %v", ErrCapabilityIssueInvalid, err)
+	}
 	const maxCapabilityTTL = 24 * time.Hour
 	ttl := request.TTL
 	if ttl == 0 && request.TTLSeconds > 0 {
@@ -360,9 +367,11 @@ func (s *Store) IssueCapability(ctx context.Context, request IssueCapabilityRequ
 	}
 	tokenDigest := digestBytes(token)
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO capabilities(token_digest, grant_id, principal_ref, view_version, actor_ref, audience, expires_at, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		tokenDigest, request.GrantRef, principal, viewVersion, actor, request.Audience, formatTime(expiresAt), formatTime(s.now())); err != nil {
+		`INSERT INTO capabilities(token_digest, grant_id, principal_ref, view_version, actor_ref, audience,
+		 expires_at, created_at, label_set, label_set_digest)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		tokenDigest, request.GrantRef, principal, viewVersion, actor, request.Audience,
+		formatTime(expiresAt), formatTime(s.now()), labels.encoded, labels.digest); err != nil {
 		return rollback(fmt.Errorf("store capability: %w", err))
 	}
 	for _, operation := range request.Operations {
@@ -435,10 +444,13 @@ func (s *Store) authorize(ctx context.Context, db databaseExecutor, auth v1alpha
 	var viewVersion uint64
 	var capabilityAudience v1alpha1.Audience
 	var capabilityExpiresRaw string
+	var labelSetEncoded, labelSetDigest string
 	if err := db.QueryRowContext(ctx,
-		`SELECT grant_id, principal_ref, view_version, actor_ref, audience, expires_at
+		`SELECT grant_id, principal_ref, view_version, actor_ref, audience, expires_at,
+		 label_set, label_set_digest
 		 FROM capabilities WHERE token_digest = ?`, digestBytes(string(auth.Capability))).Scan(
-		&grantID, &principal, &viewVersion, &actor, &capabilityAudience, &capabilityExpiresRaw); err != nil {
+		&grantID, &principal, &viewVersion, &actor, &capabilityAudience, &capabilityExpiresRaw,
+		&labelSetEncoded, &labelSetDigest); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return authorizedView{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability is missing or unknown", false)
 		}
@@ -447,6 +459,10 @@ func (s *Store) authorize(ctx context.Context, db databaseExecutor, auth v1alpha
 	capabilityExpires, err := parseTime(capabilityExpiresRaw)
 	if err != nil || !capabilityExpires.After(s.now()) {
 		return authorizedView{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "capability is expired or revoked", false)
+	}
+	labels, err := decodeStoredLabelSet(labelSetEncoded, labelSetDigest)
+	if err != nil {
+		return authorizedView{}, s.serviceError(v1alpha1.ErrorCodeInternal, "stored capability LabelSet is invalid", false)
 	}
 	var grantPrincipal, grantActor string
 	var viewID v1alpha1.ViewID
@@ -490,6 +506,9 @@ func (s *Store) authorize(ctx context.Context, db databaseExecutor, auth v1alpha
 	}
 	var view authorizedView
 	view.id = viewID
+	view.labels = labels.labels
+	view.labelSetEncoded = labels.encoded
+	view.labelSetDigest = labels.digest
 	var writeSpace sql.NullString
 	if err := db.QueryRowContext(ctx,
 		`SELECT version, write_space_id, max_disclosure_class FROM views WHERE id = ?`, viewID).Scan(

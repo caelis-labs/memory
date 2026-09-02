@@ -34,16 +34,18 @@ var ErrStewardUnknownOutcome = errors.New("steward proposal commit outcome is un
 type StewardLease = stewardv1alpha1.Lease
 
 type storedStewardJob struct {
-	receiptID      v1alpha1.ReceiptID
-	spaceID        v1alpha1.SpaceID
-	profileID      stewardv1alpha1.ProfileID
-	profileVersion uint64
-	state          string
-	leaseExpiresAt sql.NullString
-	leaseDigest    string
-	proposalDigest string
-	resultJSON     string
-	attempts       int
+	receiptID       v1alpha1.ReceiptID
+	spaceID         v1alpha1.SpaceID
+	profileID       stewardv1alpha1.ProfileID
+	profileVersion  uint64
+	state           string
+	leaseExpiresAt  sql.NullString
+	leaseDigest     string
+	proposalDigest  string
+	resultJSON      string
+	attempts        int
+	labelSetEncoded string
+	labelSetDigest  string
 }
 
 // ApplyStewardProposal validates and atomically applies one untrusted model
@@ -131,9 +133,11 @@ func (s *Store) ApplyStewardProposal(
 			recordID = stewardv1alpha1.RecordID("record-" + suffix)
 			revision = 1
 			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO semantic_records(record_id, space_id, kind, status, current_revision, created_at, updated_at)
-				 VALUES (?, ?, ?, 'active', 1, ?, ?)`,
-				recordID, job.spaceID, canonical.Kind, formatTime(now), formatTime(now)); err != nil {
+				`INSERT INTO semantic_records(record_id, space_id, kind, status, current_revision,
+				 created_at, updated_at, label_set, label_set_digest)
+				 VALUES (?, ?, ?, 'active', 1, ?, ?, ?, ?)`,
+				recordID, job.spaceID, canonical.Kind, formatTime(now), formatTime(now),
+				job.labelSetEncoded, job.labelSetDigest); err != nil {
 				return rollback(fmt.Errorf("create semantic Record: %w", err))
 			}
 		} else {
@@ -141,15 +145,18 @@ func (s *Store) ApplyStewardProposal(
 			var kind string
 			var status stewardv1alpha1.RecordStatus
 			var currentRevision uint64
+			var labelSetDigest string
 			if err := tx.QueryRowContext(ctx,
-				`SELECT space_id, kind, status, current_revision FROM semantic_records WHERE record_id = ?`,
-				recordID).Scan(&spaceID, &kind, &status, &currentRevision); err != nil {
+				`SELECT space_id, kind, status, current_revision, label_set_digest
+				 FROM semantic_records WHERE record_id = ?`,
+				recordID).Scan(&spaceID, &kind, &status, &currentRevision, &labelSetDigest); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					return rollback(ErrStewardConflict)
 				}
 				return rollback(fmt.Errorf("read semantic Record head: %w", err))
 			}
-			if spaceID != job.spaceID || status != stewardv1alpha1.RecordStatusActive || currentRevision != canonical.ExpectedRevision {
+			if spaceID != job.spaceID || labelSetDigest != job.labelSetDigest ||
+				status != stewardv1alpha1.RecordStatusActive || currentRevision != canonical.ExpectedRevision {
 				return rollback(ErrStewardConflict)
 			}
 			if canonical.Operation == stewardv1alpha1.OperationMerge {
@@ -257,10 +264,11 @@ func readStewardJob(ctx context.Context, db databaseExecutor, jobID stewardv1alp
 	var job storedStewardJob
 	err := db.QueryRowContext(ctx,
 		`SELECT receipt_id, space_id, profile_id, profile_version, state, lease_expires_at,
-		 lease_token_digest, proposal_digest, result_json, attempts
+		 lease_token_digest, proposal_digest, result_json, attempts, label_set, label_set_digest
 		 FROM steward_jobs WHERE job_id = ?`, jobID).Scan(
 		&job.receiptID, &job.spaceID, &job.profileID, &job.profileVersion, &job.state,
-		&job.leaseExpiresAt, &job.leaseDigest, &job.proposalDigest, &job.resultJSON, &job.attempts)
+		&job.leaseExpiresAt, &job.leaseDigest, &job.proposalDigest, &job.resultJSON, &job.attempts,
+		&job.labelSetEncoded, &job.labelSetDigest)
 	return job, err
 }
 
@@ -288,8 +296,10 @@ func validateStewardEvidence(
 	}
 	for _, receiptID := range evidenceRefs {
 		var spaceID v1alpha1.SpaceID
+		var labelSetDigest string
 		if err := tx.QueryRowContext(ctx,
-			`SELECT space_id FROM receipts WHERE receipt_id = ?`, receiptID).Scan(&spaceID); err != nil {
+			`SELECT space_id, label_set_digest FROM receipts WHERE receipt_id = ?`, receiptID).Scan(
+			&spaceID, &labelSetDigest); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("%w: evidence receipt is unavailable", ErrStewardProposalInvalid)
 			}
@@ -297,6 +307,9 @@ func validateStewardEvidence(
 		}
 		if spaceID != job.spaceID {
 			return fmt.Errorf("%w: evidence crosses Space boundary", ErrStewardProposalInvalid)
+		}
+		if labelSetDigest != job.labelSetDigest {
+			return fmt.Errorf("%w: evidence crosses LabelSet boundary", ErrStewardProposalInvalid)
 		}
 	}
 	return nil
@@ -339,15 +352,22 @@ func (s *Store) GetSemanticRecord(
 	recordID stewardv1alpha1.RecordID,
 ) (stewardv1alpha1.Record, stewardv1alpha1.Revision, error) {
 	var record stewardv1alpha1.Record
-	var createdAt, updatedAt string
+	var labelSetEncoded, labelSetDigest, createdAt, updatedAt string
 	err := s.db.QueryRowContext(ctx,
-		`SELECT record_id, space_id, kind, status, current_revision, invalidated_reason, created_at, updated_at
+		`SELECT record_id, space_id, label_set, label_set_digest, kind, status,
+		 current_revision, invalidated_reason, created_at, updated_at
 		 FROM semantic_records WHERE record_id = ?`, recordID).Scan(
-		&record.RecordID, &record.SpaceID, &record.Kind, &record.Status, &record.CurrentRevision,
+		&record.RecordID, &record.SpaceID, &labelSetEncoded, &labelSetDigest,
+		&record.Kind, &record.Status, &record.CurrentRevision,
 		&record.InvalidatedReason, &createdAt, &updatedAt)
 	if err != nil {
 		return stewardv1alpha1.Record{}, stewardv1alpha1.Revision{}, err
 	}
+	labels, err := decodeStoredLabelSet(labelSetEncoded, labelSetDigest)
+	if err != nil {
+		return stewardv1alpha1.Record{}, stewardv1alpha1.Revision{}, err
+	}
+	record.Labels = labels.labels
 	record.CreatedAt, err = parseTime(createdAt)
 	if err != nil {
 		return stewardv1alpha1.Record{}, stewardv1alpha1.Revision{}, err

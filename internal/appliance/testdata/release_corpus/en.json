@@ -1,0 +1,22 @@
+{
+  "format_version": 1,
+  "cohort": "en",
+  "source": "authored_deidentified_v1",
+  "sanitization": "no_private_source_text_no_personal_identifiers_no_credentials",
+  "series": [
+    {
+      "language": "en",
+      "subjects": ["Aurora", "Beacon", "Cedar", "Delta", "Ember", "Fjord", "Grove", "Harbor"],
+      "facts": [
+        {"text": "The {subject} build pipeline runs race detection before every merge.", "query": "{subject} race detection merge"},
+        {"text": "The {subject} service keeps seven days of restorable database snapshots.", "query": "{subject} seven days restorable snapshots"},
+        {"text": "The {subject} production release window is Wednesday afternoon.", "query": "{subject} Wednesday release window"},
+        {"text": "The {subject} frontend uses React and TypeScript and deploys to Vercel.", "query": "{subject} React TypeScript Vercel"},
+        {"text": "The {subject} security changes require approval from two reviewers.", "query": "{subject} security two reviewers"},
+        {"text": "The {subject} relational data uses PostgreSQL with WAL recovery.", "query": "{subject} PostgreSQL WAL recovery"},
+        {"text": "The {subject} on-call engineer acknowledges critical alerts within fifteen minutes.", "query": "{subject} fifteen minutes critical alerts"},
+        {"text": "The {subject} runtime uses zero-call static memory when no Steward model is bound.", "query": "{subject} Steward zero-call static memory"}
+      ]
+    }
+  ]
+}

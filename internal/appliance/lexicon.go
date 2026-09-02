@@ -534,6 +534,9 @@ func (s *Store) applyStewardLexiconTerms(
 	if len(terms) == 0 {
 		return 0, nil
 	}
+	if job.labelSetDigest != emptyLabelSetDigest {
+		return 0, fmt.Errorf("%w: adaptive lexicon is not LabelSet-scoped", ErrStewardProposalInvalid)
+	}
 	if !s.experimentalLexicon {
 		return 0, fmt.Errorf("%w: adaptive lexicon is experimental and disabled", ErrStewardProposalInvalid)
 	}

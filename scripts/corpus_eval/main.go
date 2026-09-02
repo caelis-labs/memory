@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/caelis-labs/memory/internal/appliance"
 )
@@ -25,6 +26,10 @@ type options struct {
 	limit               int
 	experimentalLexicon bool
 	lexiconPolicy       appliance.LexiconPolicy
+	stewardModel        string
+	stewardEndpoint     string
+	stewardLimit        int
+	stewardTimeout      time.Duration
 }
 
 func main() {
@@ -49,6 +54,10 @@ func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) erro
 	flags.IntVar(&opts.lexiconPolicy.MinBoundaryDiversity, "lexicon-min-boundaries", 2, "distinct left and right boundaries required for activation")
 	flags.Float64Var(&opts.lexiconPolicy.MinActivationScore, "lexicon-min-score", 6, "minimum evidence score for activation")
 	flags.Float64Var(&opts.lexiconPolicy.MaxAverageOccurrences, "lexicon-max-average-occurrences", 8, "maximum average occurrences per receipt")
+	flags.StringVar(&opts.stewardModel, "steward-model", "", "optional local Ollama model for real-corpus Steward evaluation")
+	flags.StringVar(&opts.stewardEndpoint, "steward-endpoint", "http://127.0.0.1:11434", "loopback-only Ollama endpoint")
+	flags.IntVar(&opts.stewardLimit, "steward-limit", 24, "maximum real-corpus receipts organized by the optional Steward model")
+	flags.DurationVar(&opts.stewardTimeout, "steward-timeout", 2*time.Minute, "timeout for each local Steward model call")
 	if err := flags.Parse(arguments); err != nil {
 		return err
 	}
@@ -72,6 +81,20 @@ func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) erro
 	}
 	if opts.limit < 10 || opts.limit > 10_000 {
 		return fmt.Errorf("-limit must be within 10..10000")
+	}
+	if opts.stewardTimeout < 10*time.Second || opts.stewardTimeout > 10*time.Minute {
+		return fmt.Errorf("-steward-timeout must be within 10s..10m")
+	}
+	if strings.TrimSpace(opts.stewardModel) != "" {
+		if opts.stewardLimit < 1 || opts.stewardLimit > 1_000 {
+			return fmt.Errorf("-steward-limit must be within 1..1000")
+		}
+		endpoint, err := localOllamaEndpoint(opts.stewardEndpoint)
+		if err != nil {
+			return err
+		}
+		opts.stewardModel = strings.TrimSpace(opts.stewardModel)
+		opts.stewardEndpoint = endpoint
 	}
 	if opts.lexiconPolicy.MinDocumentFrequency < 2 || opts.lexiconPolicy.MinDocumentFrequency > 100_000 ||
 		opts.lexiconPolicy.MinBoundaryDiversity < 1 || opts.lexiconPolicy.MinBoundaryDiversity > 8 ||

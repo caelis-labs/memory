@@ -30,6 +30,7 @@ type CapabilityIssueRequest struct {
 	ActorRef     string      `json:"actor_ref"`
 	Audience     Audience    `json:"audience"`
 	Operations   []Operation `json:"operations"`
+	Labels       LabelSet    `json:"labels,omitempty"`
 	TTLSeconds   int64       `json:"ttl_seconds"`
 }
 

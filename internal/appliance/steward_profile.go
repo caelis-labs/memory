@@ -40,10 +40,10 @@ func (s *Store) PutStewardProfile(
 	now := s.now().UTC()
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO steward_profiles(
-		 profile_id, version, provider_ref, model, system_prompt, max_context_records,
+		 profile_id, version, system_prompt, max_context_records,
 		 max_input_bytes, max_output_bytes, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		request.Profile.ProfileID, request.Profile.Version, "", "",
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		request.Profile.ProfileID, request.Profile.Version,
 		request.Profile.SystemPrompt, request.Profile.MaxContextRecords, request.Profile.MaxInputBytes,
 		request.Profile.MaxOutputBytes, formatTime(now)); err != nil {
 		return managementv1alpha1.PutStewardProfileResponse{}, s.databaseError("store Steward profile", err)
@@ -239,6 +239,8 @@ func (s *Store) enqueueStewardJob(
 	tx *sql.Tx,
 	receiptID v1alpha1.ReceiptID,
 	spaceID v1alpha1.SpaceID,
+	labelSetEncoded string,
+	labelSetDigest string,
 	now time.Time,
 ) error {
 	var profileID stewardv1alpha1.ProfileID
@@ -257,9 +259,10 @@ func (s *Store) enqueueStewardJob(
 	_, err = tx.ExecContext(ctx,
 		`INSERT INTO steward_jobs(
 		 job_id, receipt_id, space_id, profile_id, profile_version, state, attempts,
-		 available_at, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?)`,
-		jobID, receiptID, spaceID, profileID, profileVersion, formattedNow, formattedNow, formattedNow)
+		 available_at, created_at, updated_at, label_set, label_set_digest)
+		 VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?, ?, ?)`,
+		jobID, receiptID, spaceID, profileID, profileVersion, formattedNow, formattedNow, formattedNow,
+		labelSetEncoded, labelSetDigest)
 	return err
 }
 

@@ -1,10 +1,7 @@
 package appliance
 
 import (
-	"database/sql"
 	"errors"
-	"fmt"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,135 +9,6 @@ import (
 	stewardv1alpha1 "github.com/caelis-labs/memory/api/memory/steward/v1alpha1"
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 )
-
-func TestLexiconMigrationsLeaveNewStateDormantAndRetireSchemaSixProjection(t *testing.T) {
-	database, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "lexicon-migration.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer database.Close()
-	now := time.Now().UTC()
-	if err := migrateTo(t.Context(), database, now, 5); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := database.ExecContext(t.Context(),
-		`INSERT INTO realms(id, created_at) VALUES ('realm-lexicon', ?)`, formatTime(now)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := database.ExecContext(t.Context(),
-		`INSERT INTO spaces(id, realm_id, identity_id, class, created_at)
-		 VALUES ('space-lexicon', 'realm-lexicon', NULL, 'shared', ?)`, formatTime(now)); err != nil {
-		t.Fatal(err)
-	}
-	receiptTable := spaceIndexTable("space-lexicon")
-	semanticTable := semanticSpaceIndexTable("space-lexicon")
-	if _, err := database.ExecContext(t.Context(),
-		`INSERT INTO space_indexes(space_id, table_name) VALUES ('space-lexicon', ?)`, receiptTable); err != nil {
-		t.Fatal(err)
-	}
-	if err := createReceiptFTSTable(t.Context(), database, receiptTable); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := database.ExecContext(t.Context(),
-		`INSERT INTO semantic_space_indexes(space_id, table_name) VALUES ('space-lexicon', ?)`, semanticTable); err != nil {
-		t.Fatal(err)
-	}
-	if err := createSemanticFTSTable(t.Context(), database, semanticTable); err != nil {
-		t.Fatal(err)
-	}
-	for index, text := range []string{"采用云舟网络。", "升级云舟网络。", "云舟网络稳定。"} {
-		receiptID := fmt.Sprintf("receipt-migration-%d", index)
-		if _, err := database.ExecContext(t.Context(),
-			`INSERT INTO receipts(
-			 receipt_id, space_id, text, source_context, occurred_at, received_at,
-			 idempotency_key, request_digest, consistency_token
-			) VALUES (?, 'space-lexicon', ?, '{}', NULL, ?, ?, ?, ?)`,
-			receiptID, text, formatTime(now), fmt.Sprintf("migration-%d", index),
-			fmt.Sprintf("digest-%d", index), fmt.Sprintf("cursor-%d", index)); err != nil {
-			t.Fatal(err)
-		}
-		if err := indexReceiptProjection(t.Context(), database, receiptTable, v1alpha1.ReceiptID(receiptID), text, nil); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := migrateTo(t.Context(), database, now, 6); err != nil {
-		t.Fatal(err)
-	}
-	var terms int
-	if err := database.QueryRowContext(t.Context(),
-		`SELECT COUNT(*) FROM lexicon_terms WHERE space_id = 'space-lexicon'`).Scan(&terms); err != nil {
-		t.Fatal(err)
-	}
-	if terms != 0 {
-		t.Fatalf("migrated lexicon terms = %d, want dormant experiment", terms)
-	}
-	var generation, indexedGeneration int
-	if err := database.QueryRowContext(t.Context(),
-		`SELECT generation, indexed_generation FROM space_lexicons WHERE space_id = 'space-lexicon'`).Scan(
-		&generation, &indexedGeneration); err != nil {
-		t.Fatal(err)
-	}
-	if generation != 1 || indexedGeneration != 1 {
-		t.Fatalf("migrated generations = %d/%d, want dormant 1/1", generation, indexedGeneration)
-	}
-
-	if _, err := database.ExecContext(t.Context(),
-		`INSERT INTO lexicon_terms(
-		 space_id, term, status, source, document_frequency, occurrence_count,
-		 left_diversity, right_diversity, score, first_seen_sequence,
-		 last_seen_sequence, activated_generation, updated_at
-		) VALUES ('space-lexicon', '云舟网络', 'active', 'learner', 3, 3, 2, 2, 8, 1, 3, 2, ?)`,
-		formatTime(now)); err != nil {
-		t.Fatal(err)
-	}
-	for index := range 3 {
-		if _, err := database.ExecContext(t.Context(),
-			`INSERT INTO lexicon_term_evidence(
-			 space_id, term, receipt_id, occurrences, left_contexts, right_contexts, commit_sequence
-			) VALUES ('space-lexicon', '云舟网络', ?, 1, '^', '$', ?)`,
-			fmt.Sprintf("receipt-migration-%d", index), index+1); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := database.ExecContext(t.Context(),
-		`UPDATE space_lexicons SET generation = 2 WHERE space_id = 'space-lexicon'`); err != nil {
-		t.Fatal(err)
-	}
-	if err := rebuildSpaceLexicalProjection(t.Context(), database, "space-lexicon", []string{"云舟网络"}, formatTime(now)); err != nil {
-		t.Fatal(err)
-	}
-	if err := migrateTo(t.Context(), database, now, 7); err != nil {
-		t.Fatal(err)
-	}
-	var status string
-	if err := database.QueryRowContext(t.Context(),
-		`SELECT status FROM lexicon_terms WHERE space_id = 'space-lexicon' AND term = '云舟网络'`).Scan(&status); err != nil {
-		t.Fatal(err)
-	}
-	if status != "retired" {
-		t.Fatalf("schema 7 lexicon status = %q, want retired", status)
-	}
-	projection, err := projectLexical("采用云舟网络。", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var indexedTerms string
-	if err := database.QueryRowContext(t.Context(),
-		`SELECT terms FROM `+receiptTable+` WHERE receipt_id = 'receipt-migration-0'`).Scan(&indexedTerms); err != nil {
-		t.Fatal(err)
-	}
-	if indexedTerms != projection.terms {
-		t.Fatalf("schema 7 indexed terms = %q, want fixed projection %q", indexedTerms, projection.terms)
-	}
-	if err := database.QueryRowContext(t.Context(),
-		`SELECT generation, indexed_generation FROM space_lexicons WHERE space_id = 'space-lexicon'`).Scan(
-		&generation, &indexedGeneration); err != nil {
-		t.Fatal(err)
-	}
-	if generation != 3 || indexedGeneration != 3 {
-		t.Fatalf("schema 7 generations = %d/%d, want retired 3/3", generation, indexedGeneration)
-	}
-}
 
 func TestAdaptiveLexiconIsAbsentFromDefaultRuntimePaths(t *testing.T) {
 	store, auth := newGoldenStore(t, t.TempDir(), time.Now)

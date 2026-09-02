@@ -250,7 +250,7 @@ func Restore(ctx context.Context, options RestoreOptions) (RestoreResult, error)
 		return RestoreResult{}, err
 	}
 	if err := verifySQLiteFile(ctx, stagedPath, true); err != nil {
-		return RestoreResult{}, fmt.Errorf("verify migrated restore snapshot: %w", err)
+		return RestoreResult{}, fmt.Errorf("verify initialized restore snapshot: %w", err)
 	}
 	databasePath := filepath.Join(options.DataDir, DatabaseFilename)
 	rollbackAvailable, err := createRollbackSnapshot(ctx, databasePath, rollbackPath)
@@ -397,7 +397,7 @@ func prepareRestoredDatabase(
 	if err := database.QueryRowContext(ctx, `SELECT value FROM metadata WHERE key = 'storage_generation'`).Scan(&sourceGeneration); err != nil {
 		return "", "", fmt.Errorf("read restored storage generation: %w", err)
 	}
-	if err := migrate(ctx, database, now); err != nil {
+	if err := initializeSchema(ctx, database, now); err != nil {
 		return "", "", fmt.Errorf("migrate restored database: %w", err)
 	}
 	newGeneration, err := randomHexFrom(random, 16)

@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadSourceUnderstandsMarkdownAndCodexMessages(t *testing.T) {
@@ -87,7 +90,7 @@ func TestEvaluateReportsMultiRoundDurabilityWithoutSourceText(t *testing.T) {
 	if report.Final.PrivateLeakageCount != 0 || len(report.Final.Cohorts) != 3 {
 		t.Fatalf("evaluation isolation/cohorts = %+v", report.Final)
 	}
-	if report.FormatVersion != 2 || report.Configuration.RetrievalPolicy.Analyzer == "" ||
+	if report.FormatVersion != 3 || report.Configuration.RetrievalPolicy.Analyzer == "" ||
 		report.Configuration.RetrievalPolicy.ExactPhraseWeight != 4 ||
 		report.Configuration.LexiconPolicy.MinDocumentFrequency != 3 ||
 		report.Configuration.LexiconPolicy.Enabled {
@@ -180,5 +183,79 @@ func TestRunWritesOwnerOnlyAggregateReport(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("report mode = %o", info.Mode().Perm())
+	}
+}
+
+func TestEvaluateRunsPromptOnlyStewardThroughLoopbackOllama(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/api/chat" {
+			http.NotFound(writer, request)
+			return
+		}
+		var call ollamaChatRequest
+		if err := json.NewDecoder(request.Body).Decode(&call); err != nil {
+			t.Error(err)
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if call.Format != "json" || call.Think || len(call.Messages) != 2 ||
+			!strings.Contains(call.Messages[0].Content, `"operation":"ADD"`) {
+			t.Errorf("Steward prompt omitted exact response contract")
+		}
+		var input struct {
+			Receipt struct {
+				ReceiptID string `json:"receipt_id"`
+				Text      string `json:"text"`
+			} `json:"receipt"`
+		}
+		if err := json.Unmarshal([]byte(call.Messages[1].Content), &input); err != nil {
+			t.Error(err)
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		proposal, _ := json.Marshal(map[string]any{
+			"operation": "ADD", "kind": "fact", "text": input.Receipt.Text,
+			"evidence_refs": []string{input.Receipt.ReceiptID},
+		})
+		_ = json.NewEncoder(writer).Encode(map[string]any{
+			"message": map[string]string{"content": string(proposal)}, "done": true,
+			"total_duration": int64(time.Millisecond), "prompt_eval_count": 100, "eval_count": 20,
+		})
+	}))
+	defer server.Close()
+	chunks := make([]string, 0, 12)
+	for index := range 12 {
+		chunks = append(chunks, fmt.Sprintf("Realistic private decision uniquefact%03d remains in force for this workspace.", index))
+	}
+	report, err := evaluate(t.Context(), sourceData{
+		kind: "markdown", digest: strings.Repeat("c", 64), bytes: 4096,
+		extracted: len(chunks), chunks: chunks,
+	}, options{
+		dataDir: t.TempDir(), rounds: 3, limit: len(chunks), stewardLimit: 4,
+		stewardModel: "fixture-model", stewardEndpoint: server.URL, stewardTimeout: 10 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Steward == nil || report.Steward.Jobs.Completed != 4 || report.Steward.Jobs.Failed != 0 ||
+		report.Steward.Operations["ADD"] != 4 || report.Steward.ModelUsage.Calls != 4 ||
+		report.Steward.SemanticRecall.TargetRetrievalAt8 != 1 || report.Steward.Policy.PromptDrift {
+		t.Fatalf("Steward report = %+v", report.Steward)
+	}
+	encoded, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encoded, []byte("Realistic private decision")) || bytes.Contains(encoded, []byte("uniquefact")) {
+		t.Fatal("aggregate Steward report contains source text")
+	}
+}
+
+func TestLocalOllamaEndpointRejectsPrivateCorpusEgress(t *testing.T) {
+	if _, err := localOllamaEndpoint("https://models.example.com"); err == nil {
+		t.Fatal("external Steward endpoint was accepted")
+	}
+	if endpoint, err := localOllamaEndpoint("http://127.0.0.1:11434/"); err != nil || endpoint != "http://127.0.0.1:11434" {
+		t.Fatalf("loopback endpoint = %q, %v", endpoint, err)
 	}
 }
