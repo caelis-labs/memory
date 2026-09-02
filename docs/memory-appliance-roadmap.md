@@ -83,12 +83,15 @@ Standalone Distribution (deferred, independent of P0-P3)
 | --- | --- | --- |
 | P0 | Implemented locally | Complete package gates, publish an exact source revision, then review the public facade and SDK conformance diff |
 | P1 | Implemented locally | Complete Caelis aggregate, race, architecture, product-regression, and platform gates against the exact Memory revision |
-| P2 | In progress | Chinese lexical baseline and private lexicon growth are measured; freeze the reviewed semantic/contradiction corpus and run the explicitly selected low-cost Steward model |
+| P2 | In progress | Chinese lexical baseline, private lexicon growth, and a replicated 64-case low-cost Steward alias/category study are measured; expand the reviewed semantic/contradiction corpus to at least 200 cases |
 | P3 | Pending | Produce the exact-revision candidate bundle, complete the release matrix, run Rocky native acceptance, and stop for external review |
 
 The first privacy-preserving multi-round evidence uses both the local Codex
 Memory registry and canonical Caelis Session JSONL without retaining source
 text. See [Local Memory Registry Corpus Evidence](evidence/memory-registry-corpus-2026-09-02.md).
+The first real-provider Steward parameter study uses a frozen non-literal query
+fixture and records both accepted and rejected policy variants. See
+[Memory Steward Evaluation](evidence/memory-steward-evaluation-2026-09-02.md).
 
 ## P0: Package Boundary
 

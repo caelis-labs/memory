@@ -146,3 +146,5 @@ internal mechanism rather than a claimed product improvement.
 
 The first retained privacy-preserving result for the package path is
 [Local Memory Registry Corpus Evidence](evidence/memory-registry-corpus-2026-09-02.md).
+The separate downstream-model parameter and replication evidence is
+[Memory Steward Evaluation](evidence/memory-steward-evaluation-2026-09-02.md).
