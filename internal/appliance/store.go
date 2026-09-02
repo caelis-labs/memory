@@ -83,6 +83,12 @@ func Open(ctx context.Context, options Options) (*Store, error) {
 	query.Add("_pragma", "journal_mode(WAL)")
 	query.Add("_pragma", "synchronous(FULL)")
 	query.Add("_pragma", "busy_timeout("+strconv.Itoa(options.BusyTimeoutMS)+")")
+	// Every mutable transaction reads authorization or canonical state before
+	// writing. BEGIN IMMEDIATE acquires SQLite's single WAL writer slot before
+	// those reads, avoiding an un-retryable deferred-transaction snapshot
+	// upgrade when Remember and Steward commit concurrently. Read-only
+	// transactions remain deferred because the driver honors TxOptions.ReadOnly.
+	query.Set("_txlock", "immediate")
 	dsnURL.RawQuery = query.Encode()
 	db, err := sql.Open("sqlite", dsnURL.String())
 	if err != nil {

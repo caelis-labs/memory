@@ -121,6 +121,67 @@ func TestSQLiteLockReturnsUnavailableWithoutAcceptance(t *testing.T) {
 	}
 }
 
+func TestConcurrentWritersWaitBeforeReadingCanonicalState(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var blocked atomic.Bool
+	store, auth := newGoldenStoreWithOptions(t, Options{
+		DataDir: t.TempDir(), BusyTimeoutMS: 1_000,
+		Faults: Faults{BeforeRememberCommit: func() error {
+			if blocked.CompareAndSwap(false, true) {
+				close(entered)
+				<-release
+			}
+			return nil
+		}},
+	})
+	t.Cleanup(func() { _ = store.Close() })
+
+	type result struct {
+		response v1alpha1.RememberResponse
+		err      error
+	}
+	first := make(chan result, 1)
+	second := make(chan result, 1)
+	go func() {
+		response, err := store.Remember(t.Context(), auth, v1alpha1.RememberRequest{
+			Text: "first concurrent writer", IdempotencyKey: "writer-first",
+		})
+		first <- result{response: response, err: err}
+	}()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first writer did not reach the commit boundary")
+	}
+	go func() {
+		response, err := store.Remember(t.Context(), auth, v1alpha1.RememberRequest{
+			Text: "second concurrent writer", IdempotencyKey: "writer-second",
+		})
+		second <- result{response: response, err: err}
+	}()
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+
+	for name, resultChannel := range map[string]<-chan result{"first": first, "second": second} {
+		select {
+		case outcome := <-resultChannel:
+			if outcome.err != nil || !outcome.response.Accepted {
+				t.Fatalf("%s concurrent writer = %+v, %v", name, outcome.response, outcome.err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s concurrent writer did not finish", name)
+		}
+	}
+	inspection, err := store.Inspect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.Receipts.Stored != 2 {
+		t.Fatalf("stored receipts = %d, want 2", inspection.Receipts.Stored)
+	}
+}
+
 func TestMigrationFailureIsExplicitAndTransactional(t *testing.T) {
 	dataDir := t.TempDir()
 	store, err := Open(t.Context(), Options{DataDir: dataDir})
