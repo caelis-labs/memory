@@ -81,10 +81,10 @@ Standalone Distribution (deferred, independent of P0-P3)
 
 | Milestone | State | Remaining independent review slice |
 | --- | --- | --- |
-| P0 | Implemented locally | Complete package gates, publish an exact source revision, then review the public facade and SDK conformance diff |
-| P1 | Implemented locally | Complete Caelis aggregate, race, architecture, product-regression, and platform gates against the exact Memory revision |
+| P0 | Candidate complete | `v0.5.0-rc.2` resolves to source revision `638d3260edcea286532b6f35f01c61e9ed0b0de1`; review the public facade, SDK conformance, analyzer, lexicon, and writer-serialization slices |
+| P1 | Implemented locally | Caelis candidate commits `b85b7a1` and `90f81cf` pin `v0.5.0-rc.2`; external review and an authorized Caelis push remain |
 | P2 | In progress | Chinese lexical baseline, private lexicon growth, and a replicated 64-case low-cost Steward alias/category study are measured; expand the reviewed semantic/contradiction corpus to at least 200 cases |
-| P3 | Pending | Produce the exact-revision candidate bundle, complete the release matrix, run Rocky native acceptance, and stop for external review |
+| P3 | External-review candidate | macOS package/Caelis gates, Rocky 10.1 ARM64 native package/Caelis tests, and six-target Caelis builds pass; 200-case semantic evidence, native Windows acceptance, and external review remain |
 
 The first privacy-preserving multi-round evidence uses both the local Codex
 Memory registry and canonical Caelis Session JSONL without retaining source
