@@ -18,6 +18,7 @@ const (
 	MaxRecordTextBytes  = 32 << 10
 	MaxRecordKindBytes  = 64
 	MaxProposalEvidence = 32
+	MaxLexiconTerms     = 16
 )
 
 // RecordID identifies appliance-owned interpreted continuity.
@@ -84,13 +85,26 @@ type RecordContext struct {
 	EvidenceRefs []memoryv1alpha1.ReceiptID `json:"evidence_refs"`
 }
 
+// LexiconCandidate is a same-Space, evidence-backed local term near the static
+// activation boundary. The downstream model can recommend it, but cannot see
+// Space identity, evidence text beyond the assigned receipt, or index state.
+type LexiconCandidate struct {
+	Term              string  `json:"term"`
+	DocumentFrequency int     `json:"document_frequency"`
+	OccurrenceCount   int     `json:"occurrence_count"`
+	LeftDiversity     int     `json:"left_diversity"`
+	RightDiversity    int     `json:"right_diversity"`
+	Score             float64 `json:"score"`
+}
+
 // WorkRequest is the bounded structured input passed to a downstream Generator.
 // It deliberately contains no Job, Space, lease, bearer, or provider config.
 type WorkRequest struct {
-	Protocol string          `json:"protocol"`
-	Profile  ProfileSpec     `json:"profile"`
-	Receipt  ReceiptInput    `json:"receipt"`
-	Records  []RecordContext `json:"records"`
+	Protocol          string             `json:"protocol"`
+	Profile           ProfileSpec        `json:"profile"`
+	Receipt           ReceiptInput       `json:"receipt"`
+	Records           []RecordContext    `json:"records"`
+	LexiconCandidates []LexiconCandidate `json:"lexicon_candidates,omitempty"`
 }
 
 // EncodedSize returns the exact JSON request size used for profile input
@@ -127,6 +141,7 @@ type Proposal struct {
 	Kind             string                     `json:"kind,omitempty"`
 	Text             string                     `json:"text,omitempty"`
 	EvidenceRefs     []memoryv1alpha1.ReceiptID `json:"evidence_refs,omitempty"`
+	LexiconTerms     []string                   `json:"lexicon_terms,omitempty"`
 }
 
 // ValidateShape rejects unsupported operations and fields before canonical
@@ -137,7 +152,6 @@ func (p Proposal) ValidateShape() error {
 		if p.TargetRecordID != "" || p.ExpectedRevision != 0 || p.Kind != "" || p.Text != "" || len(p.EvidenceRefs) != 0 {
 			return fmt.Errorf("IGNORE cannot contain mutation fields")
 		}
-		return nil
 	case OperationAdd:
 		if p.TargetRecordID != "" || p.ExpectedRevision != 0 {
 			return fmt.Errorf("ADD cannot target an existing Record")
@@ -149,24 +163,39 @@ func (p Proposal) ValidateShape() error {
 	default:
 		return fmt.Errorf("unsupported proposal operation %q", p.Operation)
 	}
-	if !utf8.ValidString(p.Kind) || p.Kind == "" || strings.TrimSpace(p.Kind) != p.Kind || len(p.Kind) > MaxRecordKindBytes || strings.ContainsAny(p.Kind, "\r\n\t") {
-		return fmt.Errorf("record kind must be bounded non-whitespace UTF-8")
-	}
-	if !utf8.ValidString(p.Text) || strings.TrimSpace(p.Text) == "" || len(p.Text) > MaxRecordTextBytes {
-		return fmt.Errorf("record text must be 1..%d UTF-8 bytes", MaxRecordTextBytes)
-	}
-	if len(p.EvidenceRefs) == 0 || len(p.EvidenceRefs) > MaxProposalEvidence {
-		return fmt.Errorf("proposal evidence count must be 1..%d", MaxProposalEvidence)
-	}
-	seen := make(map[memoryv1alpha1.ReceiptID]struct{}, len(p.EvidenceRefs))
-	for _, receiptID := range p.EvidenceRefs {
-		if receiptID == "" {
-			return fmt.Errorf("proposal evidence reference is empty")
+	if p.Operation != OperationIgnore {
+		if !utf8.ValidString(p.Kind) || p.Kind == "" || strings.TrimSpace(p.Kind) != p.Kind || len(p.Kind) > MaxRecordKindBytes || strings.ContainsAny(p.Kind, "\r\n\t") {
+			return fmt.Errorf("record kind must be bounded non-whitespace UTF-8")
 		}
-		if _, exists := seen[receiptID]; exists {
-			return fmt.Errorf("proposal evidence references must be unique")
+		if !utf8.ValidString(p.Text) || strings.TrimSpace(p.Text) == "" || len(p.Text) > MaxRecordTextBytes {
+			return fmt.Errorf("record text must be 1..%d UTF-8 bytes", MaxRecordTextBytes)
 		}
-		seen[receiptID] = struct{}{}
+		if len(p.EvidenceRefs) == 0 || len(p.EvidenceRefs) > MaxProposalEvidence {
+			return fmt.Errorf("proposal evidence count must be 1..%d", MaxProposalEvidence)
+		}
+		seen := make(map[memoryv1alpha1.ReceiptID]struct{}, len(p.EvidenceRefs))
+		for _, receiptID := range p.EvidenceRefs {
+			if receiptID == "" {
+				return fmt.Errorf("proposal evidence reference is empty")
+			}
+			if _, exists := seen[receiptID]; exists {
+				return fmt.Errorf("proposal evidence references must be unique")
+			}
+			seen[receiptID] = struct{}{}
+		}
+	}
+	if len(p.LexiconTerms) > MaxLexiconTerms {
+		return fmt.Errorf("lexicon term count must be 0..%d", MaxLexiconTerms)
+	}
+	seenTerms := make(map[string]struct{}, len(p.LexiconTerms))
+	for _, term := range p.LexiconTerms {
+		if !utf8.ValidString(term) || strings.TrimSpace(term) != term || term == "" || len(term) > 128 || strings.ContainsAny(term, "\r\n\t ") {
+			return fmt.Errorf("lexicon term must be bounded non-whitespace UTF-8")
+		}
+		if _, found := seenTerms[term]; found {
+			return fmt.Errorf("lexicon terms must be unique")
+		}
+		seenTerms[term] = struct{}{}
 	}
 	return nil
 }
@@ -214,6 +243,7 @@ type ApplyResult struct {
 	Operation         Operation `json:"operation"`
 	RecordID          RecordID  `json:"record_id,omitempty"`
 	Revision          uint64    `json:"revision,omitempty"`
+	LexiconActivated  int       `json:"lexicon_activated,omitempty"`
 	DeduplicatedRetry bool      `json:"deduplicated_retry"`
 }
 

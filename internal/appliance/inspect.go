@@ -35,6 +35,7 @@ func (s *Store) Inspect(ctx context.Context) (Inspection, error) {
 		"realms", "identities", "spaces", "views", "grants", "capabilities",
 		"receipts", "receipt_corrections", "receipt_tombstones",
 		"steward_profiles", "space_steward_bindings", "steward_jobs", "semantic_records",
+		"space_lexicons", "lexicon_terms", "lexicon_term_evidence",
 	} {
 		var count int64
 		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+table).Scan(&count); err != nil {
@@ -117,12 +118,39 @@ func (s *Store) Inspect(ctx context.Context) (Inspection, error) {
 	if err := s.inspectStewardDiagnostics(ctx, &result); err != nil {
 		return Inspection{}, err
 	}
+	if err := s.inspectLexiconDiagnostics(ctx, &result); err != nil {
+		return Inspection{}, err
+	}
 	storage, err := inspectStorage(s.dataDir)
 	if err != nil {
 		return Inspection{}, err
 	}
 	result.Storage = storage
 	return result, nil
+}
+
+func (s *Store) inspectLexiconDiagnostics(ctx context.Context, result *Inspection) error {
+	result.Lexicon.AlgorithmVersion = lexiconAlgorithmVersion
+	result.Lexicon.Spaces = result.Counts["space_lexicons"]
+	result.Lexicon.EvidenceLinks = result.Counts["lexicon_term_evidence"]
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT
+		 COALESCE(SUM(generation), 0),
+		 COALESCE(SUM(CASE WHEN generation != indexed_generation THEN 1 ELSE 0 END), 0)
+		 FROM space_lexicons`).Scan(&result.Lexicon.GenerationSum, &result.Lexicon.PendingRebuilds); err != nil {
+		return fmt.Errorf("inspect lexicon generations: %w", err)
+	}
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT
+		 COALESCE(SUM(CASE WHEN status = 'candidate' THEN 1 ELSE 0 END), 0),
+		 COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0),
+		 COALESCE(SUM(CASE WHEN status = 'retired' THEN 1 ELSE 0 END), 0)
+		 FROM lexicon_terms`).Scan(
+		&result.Lexicon.CandidateTerms, &result.Lexicon.ActiveTerms, &result.Lexicon.RetiredTerms,
+	); err != nil {
+		return fmt.Errorf("inspect lexicon terms: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) inspectReceiptDiagnostics(ctx context.Context, result *Inspection) error {
@@ -393,11 +421,16 @@ func (s *Store) RebuildFTS(ctx context.Context) error {
 		return fmt.Errorf("close Space indexes: %w", err)
 	}
 	for _, item := range indexes {
+		activeTerms, err := readActiveLexiconTerms(ctx, tx, item.spaceID)
+		if err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("read Space lexicon: %w", err)
+		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM `+item.tableName); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("clear Space FTS projection: %w", err)
 		}
-		if err := rebuildReceiptProjection(ctx, tx, item.spaceID, item.tableName, nil); err != nil {
+		if err := rebuildReceiptProjection(ctx, tx, item.spaceID, item.tableName, activeTerms); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("rebuild Space FTS projection: %w", err)
 		}
@@ -432,13 +465,24 @@ func (s *Store) RebuildFTS(ctx context.Context) error {
 		return fmt.Errorf("close semantic Space indexes: %w", err)
 	}
 	for _, item := range semanticIndexes {
+		activeTerms, err := readActiveLexiconTerms(ctx, tx, item.spaceID)
+		if err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("read semantic Space lexicon: %w", err)
+		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM `+item.tableName); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("clear semantic Space FTS projection: %w", err)
 		}
-		if err := rebuildSemanticProjection(ctx, tx, item.spaceID, item.tableName, nil); err != nil {
+		if err := rebuildSemanticProjection(ctx, tx, item.spaceID, item.tableName, activeTerms); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("rebuild semantic Space FTS projection: %w", err)
+		}
+	}
+	for _, item := range indexes {
+		if err := markLexiconIndexed(ctx, tx, item.spaceID, formatTime(s.now().UTC())); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("publish rebuilt Space lexicon: %w", err)
 		}
 	}
 	if _, err := tx.ExecContext(ctx,
@@ -453,7 +497,7 @@ func (s *Store) RebuildFTS(ctx context.Context) error {
 	return nil
 }
 
-func createSpaceIndex(ctx context.Context, tx *sql.Tx, spaceID v1alpha1.SpaceID) error {
+func createSpaceIndex(ctx context.Context, tx *sql.Tx, spaceID v1alpha1.SpaceID, now string) error {
 	tableName := spaceIndexTable(spaceID)
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO space_indexes(space_id, table_name) VALUES (?, ?)`, spaceID, tableName); err != nil {
@@ -462,7 +506,15 @@ func createSpaceIndex(ctx context.Context, tx *sql.Tx, spaceID v1alpha1.SpaceID)
 	if err := createReceiptFTSTable(ctx, tx, tableName); err != nil {
 		return fmt.Errorf("create Space %q index: %w", spaceID, err)
 	}
-	return createSemanticSpaceIndex(ctx, tx, spaceID)
+	if err := createSemanticSpaceIndex(ctx, tx, spaceID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO space_lexicons(space_id, algorithm_version, updated_at) VALUES (?, ?, ?)`,
+		spaceID, lexiconAlgorithmVersion, now); err != nil {
+		return fmt.Errorf("initialize Space %q lexicon: %w", spaceID, err)
+	}
+	return nil
 }
 
 func spaceIndexTable(spaceID v1alpha1.SpaceID) string {

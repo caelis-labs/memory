@@ -86,6 +86,20 @@ type Inspection struct {
 	Projection        ProjectionDiagnostics `json:"projection"`
 	Capabilities      CapabilityDiagnostics `json:"capabilities"`
 	Steward           StewardDiagnostics    `json:"steward"`
+	Lexicon           LexiconDiagnostics    `json:"lexicon"`
+}
+
+// LexiconDiagnostics reports private adaptive-index health without exposing
+// learned terms or receipt text.
+type LexiconDiagnostics struct {
+	AlgorithmVersion string `json:"algorithm_version"`
+	Spaces           int64  `json:"spaces"`
+	GenerationSum    int64  `json:"generation_sum"`
+	CandidateTerms   int64  `json:"candidate_terms"`
+	ActiveTerms      int64  `json:"active_terms"`
+	RetiredTerms     int64  `json:"retired_terms"`
+	EvidenceLinks    int64  `json:"evidence_links"`
+	PendingRebuilds  int64  `json:"pending_rebuilds"`
 }
 
 // ReceiptState describes whether canonical receipt text is active, shadowed by

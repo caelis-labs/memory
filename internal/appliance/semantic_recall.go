@@ -22,6 +22,7 @@ func (s *Store) semanticRecallCandidates(
 	class v1alpha1.SpaceClass,
 	query string,
 	ftsQuery string,
+	privateTerms []string,
 ) ([]recallCandidate, bool, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, false, err
@@ -93,7 +94,7 @@ func (s *Store) semanticRecallCandidates(
 			_ = rows.Close()
 			return nil, true, nil
 		}
-		candidate.rank, err = lexicalRank(query, candidate.text, nil, bm25Rank)
+		candidate.rank, err = lexicalRank(query, candidate.text, privateTerms, bm25Rank)
 		if err != nil {
 			_ = rows.Close()
 			return nil, true, nil

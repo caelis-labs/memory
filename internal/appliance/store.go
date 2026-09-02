@@ -42,6 +42,7 @@ type Store struct {
 	managementMu       sync.RWMutex
 	managementRotateMu sync.Mutex
 	stewardJobMu       sync.Mutex
+	lexiconPolicy      LexiconPolicy
 }
 
 // Open acquires the data-directory owner lock, migrates SQLite, and initializes
@@ -98,6 +99,7 @@ func Open(ctx context.Context, options Options) (*Store, error) {
 		random:        options.Random,
 		faults:        options.Faults,
 		candidateRead: options.CandidateRead,
+		lexiconPolicy: normalizeLexiconPolicy(options.LexiconPolicy),
 	}
 	if err := store.initialize(ctx); err != nil {
 		_ = store.closeResources()

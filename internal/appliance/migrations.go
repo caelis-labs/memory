@@ -296,6 +296,48 @@ var migrations = []migration{
 		version: 5,
 		apply:   migrateLexicalProjection,
 	},
+	{
+		version: 6,
+		statements: []string{
+			`CREATE TABLE space_lexicons (
+				space_id TEXT PRIMARY KEY REFERENCES spaces(id),
+				generation INTEGER NOT NULL DEFAULT 1 CHECK (generation > 0),
+				indexed_generation INTEGER NOT NULL DEFAULT 1 CHECK (indexed_generation > 0),
+				algorithm_version TEXT NOT NULL,
+				updated_at TEXT NOT NULL
+			) STRICT`,
+			`CREATE TABLE lexicon_terms (
+				space_id TEXT NOT NULL REFERENCES spaces(id),
+				term TEXT NOT NULL,
+				status TEXT NOT NULL CHECK (status IN ('candidate', 'active', 'retired')),
+				source TEXT NOT NULL CHECK (source IN ('learner', 'steward')),
+				document_frequency INTEGER NOT NULL DEFAULT 0 CHECK (document_frequency >= 0),
+				occurrence_count INTEGER NOT NULL DEFAULT 0 CHECK (occurrence_count >= 0),
+				left_diversity INTEGER NOT NULL DEFAULT 0 CHECK (left_diversity >= 0),
+				right_diversity INTEGER NOT NULL DEFAULT 0 CHECK (right_diversity >= 0),
+				score REAL NOT NULL DEFAULT 0,
+				first_seen_sequence INTEGER NOT NULL CHECK (first_seen_sequence > 0),
+				last_seen_sequence INTEGER NOT NULL CHECK (last_seen_sequence > 0),
+				activated_generation INTEGER NOT NULL DEFAULT 0 CHECK (activated_generation >= 0),
+				updated_at TEXT NOT NULL,
+				PRIMARY KEY (space_id, term)
+			) STRICT`,
+			`CREATE TABLE lexicon_term_evidence (
+				space_id TEXT NOT NULL,
+				term TEXT NOT NULL,
+				receipt_id TEXT NOT NULL REFERENCES receipts(receipt_id) ON DELETE CASCADE,
+				occurrences INTEGER NOT NULL CHECK (occurrences > 0),
+				left_contexts TEXT NOT NULL,
+				right_contexts TEXT NOT NULL,
+				commit_sequence INTEGER NOT NULL CHECK (commit_sequence > 0),
+				PRIMARY KEY (space_id, term, receipt_id),
+				FOREIGN KEY (space_id, term) REFERENCES lexicon_terms(space_id, term) ON DELETE CASCADE
+			) STRICT`,
+			`CREATE INDEX lexicon_terms_space_status ON lexicon_terms(space_id, status, score DESC, term)`,
+			`CREATE INDEX lexicon_evidence_receipt ON lexicon_term_evidence(receipt_id, space_id, term)`,
+		},
+		apply: migrateAdaptiveLexicons,
+	},
 }
 
 func migrate(ctx context.Context, db *sql.DB, now time.Time) error {

@@ -152,7 +152,17 @@ func (s *Store) Remember(
 		_ = tx.Rollback()
 		return v1alpha1.RememberResponse{}, s.databaseError("resolve Space index", err)
 	}
-	if err := indexReceiptProjection(ctx, tx, tableName, receiptID, request.Text, nil); err != nil {
+	lexicon, err := s.learnReceiptLexicon(ctx, tx, view.writeSpaceID, receiptID, commitSequence, request.Text)
+	if err != nil {
+		_ = tx.Rollback()
+		return v1alpha1.RememberResponse{}, s.databaseError("learn Space lexicon", err)
+	}
+	if lexicon.changed {
+		if err := rebuildSpaceLexicalProjection(ctx, tx, view.writeSpaceID, lexicon.activeTerms, formatTime(receivedAt)); err != nil {
+			_ = tx.Rollback()
+			return v1alpha1.RememberResponse{}, s.databaseError("publish Space lexicon", err)
+		}
+	} else if err := indexReceiptProjection(ctx, tx, tableName, receiptID, request.Text, lexicon.activeTerms); err != nil {
 		_ = tx.Rollback()
 		return v1alpha1.RememberResponse{}, s.databaseError("index accepted receipt", err)
 	}
@@ -270,27 +280,25 @@ func (s *Store) Recall(
 			return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "consistency token Space is not readable", false)
 		}
 	}
-	ftsQuery, err := lexicalFTSQuery(request.Query, nil)
-	if err != nil {
-		return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "lexical analyzer is unavailable", true)
-	}
 	candidates := make([]recallCandidate, 0)
 	degraded := false
-	if ftsQuery == "" {
-		if err := tx.Commit(); err != nil {
-			return v1alpha1.RecallResponse{}, s.databaseError("complete Recall snapshot", err)
-		}
-		return v1alpha1.RecallResponse{
-			Fragments:        []v1alpha1.RecallFragment{},
-			ConsistencyToken: request.MinConsistencyToken,
-		}, nil
-	}
 	for _, spaceID := range view.readSpaceIDs {
 		if err := contextError(ctx); err != nil {
 			return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeDeadline, "request deadline exceeded", true)
 		}
 		if s.candidateRead != nil {
 			s.candidateRead(spaceID)
+		}
+		privateTerms, err := readActiveLexiconTerms(ctx, tx, spaceID)
+		if err != nil {
+			return v1alpha1.RecallResponse{}, s.databaseError("read Space lexicon", err)
+		}
+		ftsQuery, err := lexicalFTSQuery(request.Query, privateTerms)
+		if err != nil {
+			return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "lexical analyzer is unavailable", true)
+		}
+		if ftsQuery == "" {
+			continue
 		}
 		tableName, err := readSpaceIndex(ctx, tx, spaceID)
 		if err != nil {
@@ -325,7 +333,7 @@ func (s *Store) Recall(
 				_ = rows.Close()
 				return v1alpha1.RecallResponse{}, s.databaseError("read Space candidate", err)
 			}
-			candidate.rank, err = lexicalRank(request.Query, candidate.text, nil, bm25Rank)
+			candidate.rank, err = lexicalRank(request.Query, candidate.text, privateTerms, bm25Rank)
 			if err != nil {
 				_ = rows.Close()
 				return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "lexical analyzer is unavailable", true)
@@ -345,7 +353,9 @@ func (s *Store) Recall(
 		if err := rows.Err(); err != nil {
 			return v1alpha1.RecallResponse{}, s.databaseError("query Space candidates", err)
 		}
-		semanticCandidates, semanticDegraded, err := s.semanticRecallCandidates(ctx, tx, spaceID, class, request.Query, ftsQuery)
+		semanticCandidates, semanticDegraded, err := s.semanticRecallCandidates(
+			ctx, tx, spaceID, class, request.Query, ftsQuery, privateTerms,
+		)
 		if err != nil {
 			return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeDeadline, "request deadline exceeded", true)
 		}

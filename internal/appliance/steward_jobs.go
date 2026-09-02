@@ -182,6 +182,14 @@ func (s *Store) claimStewardJob(
 		if encodedSize <= profile.MaxInputBytes {
 			break
 		}
+		if len(request.Records) > 0 {
+			request.Records = request.Records[:len(request.Records)-1]
+			continue
+		}
+		if len(request.LexiconCandidates) > 0 {
+			request.LexiconCandidates = request.LexiconCandidates[:len(request.LexiconCandidates)-1]
+			continue
+		}
 		if len(request.Records) == 0 {
 			if err := failStewardJobTx(ctx, tx, jobID, receiptID, formattedNow, "input_too_large"); err != nil {
 				return rollback(err)
@@ -191,7 +199,6 @@ func (s *Store) claimStewardJob(
 			}
 			return StewardWork{}, false, false, nil
 		}
-		request.Records = request.Records[:len(request.Records)-1]
 	}
 	if err := tx.Commit(); err != nil {
 		return StewardWork{}, false, false, fmt.Errorf("commit Steward lease: %w", err)
@@ -230,6 +237,10 @@ func readStewardWorkRequest(
 			return stewardv1alpha1.WorkRequest{}, fmt.Errorf("parse Steward occurrence time: %w", err)
 		}
 		request.Receipt.OccurredAt = &value
+	}
+	request.LexiconCandidates, err = readStewardLexiconCandidates(ctx, db, spaceID, receiptID)
+	if err != nil {
+		return stewardv1alpha1.WorkRequest{}, fmt.Errorf("read Steward lexicon candidates: %w", err)
 	}
 	if profile.MaxContextRecords == 0 {
 		return request, nil

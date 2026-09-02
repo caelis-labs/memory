@@ -16,7 +16,7 @@ const (
 	ManagementCredentialFile    = "management.token"
 	StewardWorkerCredentialFile = "steward-worker.token"
 	SocketFilename              = v1alpha1.LocalSocketFilename
-	CurrentSchemaVersion        = 5
+	CurrentSchemaVersion        = 6
 	defaultSQLiteBusyTimeoutMS  = 2_000
 )
 
@@ -29,6 +29,7 @@ type Options struct {
 	BusyTimeoutMS int
 	Faults        Faults
 	CandidateRead func(v1alpha1.SpaceID)
+	LexiconPolicy *LexiconPolicy
 }
 
 // Faults injects test-only failures around durable effect boundaries.

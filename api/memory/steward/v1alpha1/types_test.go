@@ -11,6 +11,7 @@ import (
 func TestProposalShapeVocabularyAndBounds(t *testing.T) {
 	valid := []Proposal{
 		{Operation: OperationIgnore},
+		{Operation: OperationIgnore, LexiconTerms: []string{"量子织网"}},
 		{Operation: OperationAdd, Kind: "claim", Text: "the service uses Go", EvidenceRefs: []memoryv1alpha1.ReceiptID{"receipt-a"}},
 		{Operation: OperationMerge, TargetRecordID: "record-a", ExpectedRevision: 1, Kind: "claim", Text: "merged", EvidenceRefs: []memoryv1alpha1.ReceiptID{"receipt-a", "receipt-b"}},
 		{Operation: OperationSupersede, TargetRecordID: "record-a", ExpectedRevision: 2, Kind: "claim", Text: "current", EvidenceRefs: []memoryv1alpha1.ReceiptID{"receipt-c"}},
@@ -29,6 +30,8 @@ func TestProposalShapeVocabularyAndBounds(t *testing.T) {
 		{Operation: OperationAdd, Kind: " claim", Text: "text", EvidenceRefs: []memoryv1alpha1.ReceiptID{"receipt-a"}},
 		{Operation: OperationAdd, Kind: "claim", Text: strings.Repeat("x", MaxRecordTextBytes+1), EvidenceRefs: []memoryv1alpha1.ReceiptID{"receipt-a"}},
 		{Operation: OperationAdd, Kind: "claim", Text: "text", EvidenceRefs: []memoryv1alpha1.ReceiptID{"receipt-a", "receipt-a"}},
+		{Operation: OperationIgnore, LexiconTerms: []string{"bad term"}},
+		{Operation: OperationIgnore, LexiconTerms: []string{"量子织网", "量子织网"}},
 	}
 	for _, proposal := range invalid {
 		if err := proposal.ValidateShape(); err == nil {

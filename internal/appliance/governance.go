@@ -30,11 +30,11 @@ func (s *Store) SearchReceipts(
 	if err := request.Validate(); err != nil {
 		return managementv1alpha1.SearchReceiptsResponse{}, s.serviceError(v1alpha1.ErrorCodeInvalidArgument, err.Error(), false)
 	}
-	ftsQuery, err := lexicalFTSQuery(request.Query, nil)
+	baselineQuery, err := lexicalFTSQuery(request.Query, nil)
 	if err != nil {
 		return managementv1alpha1.SearchReceiptsResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "lexical analyzer is unavailable", true)
 	}
-	if ftsQuery == "" {
+	if baselineQuery == "" {
 		return managementv1alpha1.SearchReceiptsResponse{}, s.serviceError(v1alpha1.ErrorCodeInvalidArgument, "query has no searchable terms", false)
 	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
@@ -50,7 +50,16 @@ func (s *Store) SearchReceipts(
 		return managementv1alpha1.SearchReceiptsResponse{}, s.databaseError("resolve management search Spaces", err)
 	}
 	candidates := make([]receiptSearchCandidate, 0)
-	for _, tableName := range indexes {
+	for _, index := range indexes {
+		privateTerms, err := readActiveLexiconTerms(ctx, tx, index.spaceID)
+		if err != nil {
+			return managementv1alpha1.SearchReceiptsResponse{}, s.databaseError("read management search lexicon", err)
+		}
+		ftsQuery, err := lexicalFTSQuery(request.Query, privateTerms)
+		if err != nil {
+			return managementv1alpha1.SearchReceiptsResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "lexical analyzer is unavailable", true)
+		}
+		tableName := index.tableName
 		activePredicate := ""
 		if !request.IncludeCorrected {
 			activePredicate = ` AND NOT EXISTS (
@@ -79,7 +88,7 @@ func (s *Store) SearchReceipts(
 				_ = rows.Close()
 				return managementv1alpha1.SearchReceiptsResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "stored receipt metadata is invalid", false)
 			}
-			candidate.rank, err = lexicalRank(request.Query, candidate.receipt.Text, nil, bm25Rank)
+			candidate.rank, err = lexicalRank(request.Query, candidate.receipt.Text, privateTerms, bm25Rank)
 			if err != nil {
 				_ = rows.Close()
 				return managementv1alpha1.SearchReceiptsResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "lexical analyzer is unavailable", true)
@@ -252,7 +261,25 @@ func (s *Store) CorrectReceipt(
 	if err != nil {
 		return rollback(s.databaseError("resolve correction Space index", err))
 	}
-	if err := indexReceiptProjection(ctx, tx, tableName, replacementID, request.ReplacementText, nil); err != nil {
+	removedLexicon, err := s.removeReceiptLexiconEvidence(ctx, tx, spaceID, request.ReceiptID)
+	if err != nil {
+		return rollback(s.databaseError("remove corrected lexicon evidence", err))
+	}
+	replacementLexicon, err := s.learnReceiptLexicon(
+		ctx, tx, spaceID, replacementID, commitSequence, request.ReplacementText,
+	)
+	if err != nil {
+		return rollback(s.databaseError("learn correction lexicon", err))
+	}
+	if removedLexicon.changed || replacementLexicon.changed {
+		if err := rebuildSpaceLexicalProjection(
+			ctx, tx, spaceID, replacementLexicon.activeTerms, formatTime(now),
+		); err != nil {
+			return rollback(s.databaseError("publish correction lexicon", err))
+		}
+	} else if err := indexReceiptProjection(
+		ctx, tx, tableName, replacementID, request.ReplacementText, replacementLexicon.activeTerms,
+	); err != nil {
 		return rollback(s.databaseError("index replacement receipt", err))
 	}
 	if _, err := tx.ExecContext(ctx,
@@ -360,8 +387,17 @@ func (s *Store) DeleteReceipt(
 	if _, err := tx.ExecContext(ctx, `DELETE FROM receipt_processing WHERE receipt_id = ?`, request.ReceiptID); err != nil {
 		return rollback(s.databaseError("remove receipt processing state", err))
 	}
+	lexicon, err := s.removeReceiptLexiconEvidence(ctx, tx, spaceID, request.ReceiptID)
+	if err != nil {
+		return rollback(s.databaseError("remove deleted lexicon evidence", err))
+	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM receipts WHERE receipt_id = ?`, request.ReceiptID); err != nil {
 		return rollback(s.databaseError("remove receipt content", err))
+	}
+	if lexicon.changed {
+		if err := rebuildSpaceLexicalProjection(ctx, tx, spaceID, lexicon.activeTerms, formatTime(now)); err != nil {
+			return rollback(s.databaseError("publish deletion lexicon", err))
+		}
 	}
 	response := managementv1alpha1.DeleteReceiptResponse{
 		Deleted: true, ReceiptID: request.ReceiptID, TombstoneID: tombstoneID,
@@ -376,26 +412,31 @@ func (s *Store) DeleteReceipt(
 	return response, nil
 }
 
-func managementSearchIndexes(ctx context.Context, tx *sql.Tx, spaceID v1alpha1.SpaceID) ([]string, error) {
+type managementSearchIndex struct {
+	spaceID   v1alpha1.SpaceID
+	tableName string
+}
+
+func managementSearchIndexes(ctx context.Context, tx *sql.Tx, spaceID v1alpha1.SpaceID) ([]managementSearchIndex, error) {
 	if spaceID != "" {
 		name, err := readSpaceIndex(ctx, tx, spaceID)
 		if err != nil {
 			return nil, err
 		}
-		return []string{name}, nil
+		return []managementSearchIndex{{spaceID: spaceID, tableName: name}}, nil
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT table_name FROM space_indexes ORDER BY space_id`)
+	rows, err := tx.QueryContext(ctx, `SELECT space_id, table_name FROM space_indexes ORDER BY space_id`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var indexes []string
+	var indexes []managementSearchIndex
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
+		var item managementSearchIndex
+		if err := rows.Scan(&item.spaceID, &item.tableName); err != nil {
 			return nil, err
 		}
-		indexes = append(indexes, name)
+		indexes = append(indexes, item)
 	}
 	return indexes, rows.Err()
 }

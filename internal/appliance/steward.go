@@ -194,11 +194,21 @@ func (s *Store) ApplyStewardProposal(
 		if _, err := tx.ExecContext(ctx, `DELETE FROM `+tableName+` WHERE record_id = ?`, recordID); err != nil {
 			return rollback(fmt.Errorf("replace semantic projection: %w", err))
 		}
-		if err := indexSemanticProjection(ctx, tx, tableName, recordID, revision, canonical.Text, nil); err != nil {
+		activeTerms, err := readActiveLexiconTerms(ctx, tx, job.spaceID)
+		if err != nil {
+			return rollback(fmt.Errorf("read semantic Space lexicon: %w", err))
+		}
+		if err := indexSemanticProjection(ctx, tx, tableName, recordID, revision, canonical.Text, activeTerms); err != nil {
 			return rollback(fmt.Errorf("index semantic Revision: %w", err))
 		}
 		result.RecordID = recordID
 		result.Revision = revision
+	}
+	result.LexiconActivated, err = s.applyStewardLexiconTerms(
+		ctx, tx, job, canonical.LexiconTerms, formatTime(s.now().UTC()),
+	)
+	if err != nil {
+		return rollback(err)
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
@@ -258,6 +268,8 @@ func canonicalStewardProposal(proposal stewardv1alpha1.Proposal) (stewardv1alpha
 	canonical := proposal
 	canonical.EvidenceRefs = append([]v1alpha1.ReceiptID(nil), proposal.EvidenceRefs...)
 	sort.Slice(canonical.EvidenceRefs, func(i, j int) bool { return canonical.EvidenceRefs[i] < canonical.EvidenceRefs[j] })
+	canonical.LexiconTerms = append([]string(nil), proposal.LexiconTerms...)
+	sort.Strings(canonical.LexiconTerms)
 	encoded, err := json.Marshal(canonical)
 	if err != nil {
 		return stewardv1alpha1.Proposal{}, "", 0, err

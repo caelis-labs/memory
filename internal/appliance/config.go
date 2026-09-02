@@ -75,7 +75,7 @@ func (s *Store) Bootstrap(ctx context.Context, request BootstrapRequest) (Bootst
 			space.ID, space.RealmID, identity, space.Class, now); err != nil {
 			return rollback(fmt.Errorf("create Space %q: %w", space.ID, err))
 		}
-		if err := createSpaceIndex(ctx, tx, space.ID); err != nil {
+		if err := createSpaceIndex(ctx, tx, space.ID, now); err != nil {
 			return rollback(err)
 		}
 	}
