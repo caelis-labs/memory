@@ -17,11 +17,11 @@ remember(text)
 recall(query)
 ```
 
-The appliance owns what memory means, how it is classified and organized, when
-it becomes active or cold, how conflicts are represented, and how retention and
-forgetting work. Hosts bind those two operations to an authorized Runtime; they
-do not expose identity, Space, View, retrieval strategy, or lifecycle controls
-as model arguments.
+The appliance owns what memory means and every policy that classifies,
+organizes, ranks, consolidates, retains, or forgets it. The first release does
+not need to implement every such policy. Hosts bind the two operations to an
+authorized Runtime; they do not expose identity, Space, View, retrieval
+strategy, or lifecycle controls as model arguments.
 
 ## Required properties
 
@@ -42,16 +42,23 @@ as model arguments.
 
 ## Non-goals
 
-Memory is not a Session transcript, context-compaction format, message bus, task
-queue, workflow state machine, approval ledger, lock, or execution receipt. It
-does not scan a host conversation; facts enter only through an explicit
-Remember call.
+Memory is not the canonical Session transcript, context-compaction format,
+message bus, task queue, workflow state machine, approval ledger, lock, or
+execution receipt. It does not scan host storage or physical Session logs. A
+host may project sanitized canonical Session events into the same durable
+ingestion boundary using stable host-owned effect identities; this does not
+make Memory authoritative for Session history.
 
 The Core Profile does not include public memory, mixed-audience Sessions,
 private-to-shared publication, semantic records, model-assisted Recall,
 temperature, bitemporal queries, automatic retention, graph/vector indexes,
 remote federation, or a management UI. Those may be added without changing the
 two Agent operations or weakening the invariants above.
+
+A task-relevant briefing and a stateful identity hierarchy are planned product
+profiles, not `memory.v1alpha1` contracts. Their APIs must not be frozen before
+corpus, time-ranking, provenance, budget, and pruning behavior has executable
+acceptance evidence.
 
 ## Ownership boundary
 
@@ -107,7 +114,7 @@ profile and must fail closed.
 | Object | Meaning | Decides authority |
 | --- | --- | --- |
 | `MemoryRealm` | Administrative root for a user, team, or tenant | Indirectly |
-| `MemoryIdentity` | Stable cognitive continuity, normally associated with one Bot | No |
+| `MemoryIdentity` | Stable cognitive continuity, optionally selected by a future stateful product | No |
 | `MemorySpace` | Storage, access, and retention boundary | Yes |
 | `MemoryViewDefinition` | Read Spaces, optional write Space, maximum disclosure, and recall-policy reference | Defines accessible data |
 | `MemoryGrant` | Principal, actor, permitted operations and audiences, expiry, and revocation for one View | Delegates use |
@@ -186,6 +193,11 @@ Space, View, principal, capability, audience, or policy. In v1alpha1:
 - each label key is at most 64 bytes and each value at most 256 bytes;
 - the normalized structure is at most 4 KiB;
 - unknown or oversized content is rejected rather than silently truncated.
+
+`source_type` and extension labels also cannot establish evidence authority or
+ranking intent. A future canonical Session ingestion path that distinguishes
+observed episodes from explicit Remember inputs requires a separate trusted,
+model-hidden contract; it must not overload `SourceContext` for that purpose.
 
 ### Remember
 
@@ -408,9 +420,16 @@ captured policy, one immutable receipt, and active same-Space Record heads with
 their Evidence. It deliberately omits Space, Job, lease, capability, View,
 Grant, actor, audience, and SourceContext. Receipt and Evidence IDs support
 proposal provenance but are not authority. Claim responses carry an opaque
-lease beside the model-facing request. The Worker SDK passes only the request
-to an injected `Generator` callback and uses the lease only to apply or fail the
-result. The Memory package never makes an outbound model-provider call.
+lease beside the model-facing request. The Worker SDK renders a
+`GenerationRequest` for the injected `ModelGenerator` callback and uses the lease
+only to apply or fail the result. The Memory package never makes an outbound
+model-provider call.
+
+The Worker SDK renders the complete operation shapes in provider instructions
+and strictly parses exactly one proposal. A native provider JSON Schema may be
+supplied as an optimization, but the prompt and parser remain the correctness
+boundary so a prompt-only provider has identical proposal semantics. The Host
+must not maintain a second Memory prompt or proposal parser.
 
 The appliance reclaims expired durable leases, bounds attempts and exponential
 delay, and records only stable non-sensitive failure codes. Worker processes
@@ -586,6 +605,12 @@ of semantic objects, and publication require explicit versioned protocols;
 they cannot silently widen the Core Profile. Internal semantic candidates may
 use the already-reserved `record_refs` and `degraded` response fields without
 adding an Agent operation or changing authorization.
+
+Future explicit Recall, stateless briefing, and stateful identity projections
+may apply different ranking, temporal, and abstention policies over the same
+evidence. They must not become separate receipt authorities. Any model-visible
+qualification of historical evidence is response presentation, not a new
+model-controlled request parameter or a grant of authority.
 
 The API may become stable `v1` only after the durable embedded package and the
 Caelis Golden Path pass end to end. Semantic compatibility is demonstrated by

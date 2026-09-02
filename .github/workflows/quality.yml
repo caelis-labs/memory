@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ga-buildability:
+  standalone-preview-buildability:
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -52,7 +52,7 @@ jobs:
       - run: make durable
       - run: make race
 
-  native-darwin-arm64-release-candidate:
+  native-darwin-arm64-package-check:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -63,15 +63,3 @@ jobs:
       - name: Require supported native architecture
         run: test "$(uname -s)/$(uname -m)" = "Darwin/arm64"
       - run: make release-candidate
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: memoryd-${{ github.sha }}-darwin-arm64
-          path: |
-            dist/memoryd-darwin-arm64
-            dist/memoryd-darwin-arm64.manifest.json
-            dist/memoryd-darwin-arm64.sha256
-            dist/memoryctl-darwin-arm64
-            dist/memoryctl-darwin-arm64.manifest.json
-            dist/memoryctl-darwin-arm64.sha256
-          if-no-files-found: error
-          retention-days: 14

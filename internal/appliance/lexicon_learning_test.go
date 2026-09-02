@@ -13,7 +13,7 @@ import (
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 )
 
-func TestSchemaFiveMigrationLearnsHistoricalPrivateLexicon(t *testing.T) {
+func TestLexiconMigrationsLeaveNewStateDormantAndRetireSchemaSixProjection(t *testing.T) {
 	database, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "lexicon-migration.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -66,15 +66,13 @@ func TestSchemaFiveMigrationLearnsHistoricalPrivateLexicon(t *testing.T) {
 	if err := migrateTo(t.Context(), database, now, 6); err != nil {
 		t.Fatal(err)
 	}
-	var status string
-	var frequency int
+	var terms int
 	if err := database.QueryRowContext(t.Context(),
-		`SELECT status, document_frequency FROM lexicon_terms
-		 WHERE space_id = 'space-lexicon' AND term = '云舟网络'`).Scan(&status, &frequency); err != nil {
+		`SELECT COUNT(*) FROM lexicon_terms WHERE space_id = 'space-lexicon'`).Scan(&terms); err != nil {
 		t.Fatal(err)
 	}
-	if status != "active" || frequency != 3 {
-		t.Fatalf("migrated lexicon = %s/%d, want active/3", status, frequency)
+	if terms != 0 {
+		t.Fatalf("migrated lexicon terms = %d, want dormant experiment", terms)
 	}
 	var generation, indexedGeneration int
 	if err := database.QueryRowContext(t.Context(),
@@ -82,14 +80,110 @@ func TestSchemaFiveMigrationLearnsHistoricalPrivateLexicon(t *testing.T) {
 		&generation, &indexedGeneration); err != nil {
 		t.Fatal(err)
 	}
-	if generation <= 1 || generation != indexedGeneration {
-		t.Fatalf("migrated generations = %d/%d", generation, indexedGeneration)
+	if generation != 1 || indexedGeneration != 1 {
+		t.Fatalf("migrated generations = %d/%d, want dormant 1/1", generation, indexedGeneration)
+	}
+
+	if _, err := database.ExecContext(t.Context(),
+		`INSERT INTO lexicon_terms(
+		 space_id, term, status, source, document_frequency, occurrence_count,
+		 left_diversity, right_diversity, score, first_seen_sequence,
+		 last_seen_sequence, activated_generation, updated_at
+		) VALUES ('space-lexicon', '云舟网络', 'active', 'learner', 3, 3, 2, 2, 8, 1, 3, 2, ?)`,
+		formatTime(now)); err != nil {
+		t.Fatal(err)
+	}
+	for index := range 3 {
+		if _, err := database.ExecContext(t.Context(),
+			`INSERT INTO lexicon_term_evidence(
+			 space_id, term, receipt_id, occurrences, left_contexts, right_contexts, commit_sequence
+			) VALUES ('space-lexicon', '云舟网络', ?, 1, '^', '$', ?)`,
+			fmt.Sprintf("receipt-migration-%d", index), index+1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := database.ExecContext(t.Context(),
+		`UPDATE space_lexicons SET generation = 2 WHERE space_id = 'space-lexicon'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := rebuildSpaceLexicalProjection(t.Context(), database, "space-lexicon", []string{"云舟网络"}, formatTime(now)); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateTo(t.Context(), database, now, 7); err != nil {
+		t.Fatal(err)
+	}
+	var status string
+	if err := database.QueryRowContext(t.Context(),
+		`SELECT status FROM lexicon_terms WHERE space_id = 'space-lexicon' AND term = '云舟网络'`).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "retired" {
+		t.Fatalf("schema 7 lexicon status = %q, want retired", status)
+	}
+	projection, err := projectLexical("采用云舟网络。", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var indexedTerms string
+	if err := database.QueryRowContext(t.Context(),
+		`SELECT terms FROM `+receiptTable+` WHERE receipt_id = 'receipt-migration-0'`).Scan(&indexedTerms); err != nil {
+		t.Fatal(err)
+	}
+	if indexedTerms != projection.terms {
+		t.Fatalf("schema 7 indexed terms = %q, want fixed projection %q", indexedTerms, projection.terms)
+	}
+	if err := database.QueryRowContext(t.Context(),
+		`SELECT generation, indexed_generation FROM space_lexicons WHERE space_id = 'space-lexicon'`).Scan(
+		&generation, &indexedGeneration); err != nil {
+		t.Fatal(err)
+	}
+	if generation != 3 || indexedGeneration != 3 {
+		t.Fatalf("schema 7 generations = %d/%d, want retired 3/3", generation, indexedGeneration)
+	}
+}
+
+func TestAdaptiveLexiconIsAbsentFromDefaultRuntimePaths(t *testing.T) {
+	store, auth := newGoldenStore(t, t.TempDir(), time.Now)
+	defer store.Close()
+	putAndBindSteward(t, store, 1)
+
+	var last v1alpha1.RememberResponse
+	for index, text := range []string{"采用量子织网。", "升级量子织网。", "量子织网稳定。"} {
+		remembered, err := store.Remember(t.Context(), auth, v1alpha1.RememberRequest{
+			Text: text, IdempotencyKey: "lexicon-default-off-" + string(rune('a'+index)),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		last = remembered
+	}
+	var terms, evidence int
+	if err := store.db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM lexicon_terms`).Scan(&terms); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM lexicon_term_evidence`).Scan(&evidence); err != nil {
+		t.Fatal(err)
+	}
+	if terms != 0 || evidence != 0 {
+		t.Fatalf("default adaptive lexicon state = terms:%d evidence:%d, want zero", terms, evidence)
+	}
+	work, found, err := store.ClaimStewardJob(t.Context(), time.Minute)
+	if err != nil || !found {
+		t.Fatalf("ClaimStewardJob found=%v err=%v", found, err)
+	}
+	if len(work.Request.LexiconCandidates) != 0 {
+		t.Fatalf("default Steward lexicon candidates = %+v, want none", work.Request.LexiconCandidates)
+	}
+	if _, err := store.Recall(t.Context(), auth, testRecall("量子织网", last.ConsistencyToken)); err != nil {
+		t.Fatalf("static Recall with dormant lexicon: %v", err)
 	}
 }
 
 func TestPrivateLexiconPromotesAcrossIndependentReceiptsAndPersists(t *testing.T) {
 	dataDir := t.TempDir()
-	store, auth := newGoldenStore(t, dataDir, time.Now)
+	store, auth := newGoldenStoreWithOptions(t, Options{
+		DataDir: dataDir, Clock: time.Now, LexiconPolicy: &LexiconPolicy{},
+	})
 	texts := []string{
 		"采用量子织网。",
 		"升级量子织网。",
@@ -115,7 +209,7 @@ func TestPrivateLexiconPromotesAcrossIndependentReceiptsAndPersists(t *testing.T
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err = Open(t.Context(), Options{DataDir: dataDir})
+	store, err = Open(t.Context(), Options{DataDir: dataDir, LexiconPolicy: &LexiconPolicy{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +223,9 @@ func TestPrivateLexiconPromotesAcrossIndependentReceiptsAndPersists(t *testing.T
 }
 
 func TestLexiconRetiresWhenEvidenceIsCorrectedAndDeleted(t *testing.T) {
-	store, auth := newGoldenStore(t, t.TempDir(), time.Now)
+	store, auth := newGoldenStoreWithOptions(t, Options{
+		DataDir: t.TempDir(), Clock: time.Now, LexiconPolicy: &LexiconPolicy{},
+	})
 	defer store.Close()
 	receipts := make([]v1alpha1.ReceiptID, 0, 3)
 	for index, text := range []string{"采用星河编排。", "升级星河编排。", "星河编排稳定。"} {
@@ -158,7 +254,9 @@ func TestLexiconRetiresWhenEvidenceIsCorrectedAndDeleted(t *testing.T) {
 }
 
 func TestLexiconRejectsSingleReceiptRepetition(t *testing.T) {
-	store, auth := newGoldenStore(t, t.TempDir(), time.Now)
+	store, auth := newGoldenStoreWithOptions(t, Options{
+		DataDir: t.TempDir(), Clock: time.Now, LexiconPolicy: &LexiconPolicy{},
+	})
 	defer store.Close()
 	if _, err := store.Remember(t.Context(), auth, v1alpha1.RememberRequest{
 		Text: "幻海矩阵幻海矩阵幻海矩阵幻海矩阵。", IdempotencyKey: "lexicon-spam",
@@ -169,7 +267,9 @@ func TestLexiconRejectsSingleReceiptRepetition(t *testing.T) {
 }
 
 func TestStewardCanApproveOnlyEvidenceBackedNearThresholdTerm(t *testing.T) {
-	store, auth := newGoldenStore(t, t.TempDir(), time.Now)
+	store, auth := newGoldenStoreWithOptions(t, Options{
+		DataDir: t.TempDir(), Clock: time.Now, LexiconPolicy: &LexiconPolicy{},
+	})
 	defer store.Close()
 	putAndBindSteward(t, store, 1)
 	for index, text := range []string{"采用曜石编排。", "升级曜石编排。"} {
@@ -213,7 +313,9 @@ func TestStewardCanApproveOnlyEvidenceBackedNearThresholdTerm(t *testing.T) {
 }
 
 func TestStewardCannotInventLexiconTerm(t *testing.T) {
-	store, auth := newGoldenStore(t, t.TempDir(), time.Now)
+	store, auth := newGoldenStoreWithOptions(t, Options{
+		DataDir: t.TempDir(), Clock: time.Now, LexiconPolicy: &LexiconPolicy{},
+	})
 	defer store.Close()
 	putAndBindSteward(t, store, 1)
 	receipt, err := store.Remember(t.Context(), auth, v1alpha1.RememberRequest{

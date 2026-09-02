@@ -338,6 +338,10 @@ var migrations = []migration{
 		},
 		apply: migrateAdaptiveLexicons,
 	},
+	{
+		version: 7,
+		apply:   retireAdaptiveLexiconProjection,
+	},
 }
 
 func migrate(ctx context.Context, db *sql.DB, now time.Time) error {

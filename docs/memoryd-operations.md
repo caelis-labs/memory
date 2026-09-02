@@ -280,17 +280,19 @@ Recall.
 A downstream process implements only the callback:
 
 ```go
-type Generator interface {
-    Generate(context.Context, stewardv1alpha1.WorkRequest) (stewardv1alpha1.Proposal, error)
+type ModelGenerator interface {
+    Generate(context.Context, stewardworker.GenerationRequest) (stewardworker.GenerationResponse, error)
 }
 ```
 
 It then constructs `stewardworker.Runner` with a local Worker client, its
-Generator, a whole-second lease within 1s..10m, and a 10ms..10s polling
-interval. The callback receives the captured prompt policy, bounded receipt,
-and bounded active same-Space Record context. It does not receive Space, Job,
-lease, SourceContext, actor, audience, View, Grant, capability, management
-bearer, Worker bearer, provider, model, endpoint, or provider credentials.
+`ModelGenerator`, a whole-second lease within 1s..10m, and a 10ms..10s polling
+interval. Memory renders the complete instructions, bounded JSON input,
+optional native JSON Schema, and output budget before invoking the callback.
+The callback returns untrusted text and its envelope mode; Memory extracts,
+parses, and validates the proposal. It does not receive Space, Job, lease,
+SourceContext, actor, audience, View, Grant, capability, management bearer,
+Worker bearer, provider, model, endpoint, or provider credentials.
 
 `memoryd` owns lease expiry, five-attempt retry ceilings, exponential retry
 delay, proposal and evidence validation, revision conflict handling, and atomic

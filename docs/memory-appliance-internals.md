@@ -105,12 +105,20 @@ context heads are removed until the exact JSON fits the profile budget. Job,
 Space, lease, access policy, SourceContext, model/provider configuration, and all
 bearers never enter that JSON.
 
-The Go Worker SDK accepts a `Generator` callback supplied by the downstream
-host. It contains callback panics and classifies only stable non-sensitive
-failure codes before calling claim/apply/fail routes. The Memory core owns lease
-expiry, retry ceilings, exponential delay, proposal validation, and atomic
-canonical application; it has no outbound provider adapter. Starting without a
-Worker leaves accepted receipts on the baseline path.
+The Go Worker SDK accepts a `ModelGenerator` callback supplied by the downstream
+host. Memory renders the complete prompt and operation shapes, bounds the input,
+and parses one strict proposal; native provider JSON Schema is only an optional
+optimization. The SDK contains callback panics and classifies only stable
+non-sensitive failure codes before calling claim/apply/fail routes. The Memory
+core owns lease expiry, retry ceilings, exponential delay, proposal validation,
+and atomic canonical application; it has no outbound provider adapter. Starting
+without a Worker leaves accepted receipts on the baseline path.
+
+The older `Generator(WorkRequest) -> Proposal` callback remains only as a
+pre-GA source-compatibility bridge for the currently published Caelis import.
+New consumers use `ModelGenerator(GenerationRequest) -> GenerationResponse`.
+After Caelis pins the next Memory prerelease and switches to the new callback,
+the direct-proposal bridge is removed before GA.
 
 Schema 4 never reads or exposes the RC1 `provider_ref` and `model` columns. New
 rows write empty compatibility values; upgraded rows retain their old bytes so
@@ -134,6 +142,13 @@ Temporal interpretation, conflict resolution, shadowing, supersession, vector
 search, relation graphs, and automatic retention are future extensions. Private
 evidence may influence a private result but cannot mutate or generate shared
 canonical state.
+
+The adaptive per-Space lexicon is an internal experiment, not a Core mechanism.
+A normal embedded Open supplies no lexicon policy, so migration, Remember,
+Recall, correction, deletion, inspection, and Steward work neither learn nor
+consume adaptive terms. Focused tests and the offline corpus evaluator may
+explicitly enable it to preserve reproducible A/B evidence. Persisted
+experimental rows are inert while the experiment is disabled.
 
 ## Local durable Core
 

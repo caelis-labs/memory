@@ -7,7 +7,9 @@ substitute for downstream-Generator model or semantic-quality evaluation.
 ## Input boundary
 
 `scripts/corpus_eval` report format 2 accepts a local Markdown memory file, a Codex rollout
-JSONL, or a Caelis Session event JSONL. Markdown fenced code is excluded. Codex
+JSONL, or a Caelis Session event JSONL. It is an offline evaluation reader, not
+the production Session ingestion path; production uses canonical Session
+Service events and a durable checkpoint. Markdown fenced code is excluded. Codex
 extraction accepts only user `input_text` and assistant `output_text` message
 items. Caelis extraction accepts only canonical user/assistant `text` parts.
 Developer data, reasoning, transient events, tool calls, and tool results are
@@ -41,7 +43,8 @@ query. It then:
 7. rebuilds the same corpus and probes in an in-memory SQLite FTS5
    `unicode61` index as the legacy control;
 8. records private lexicon candidates, active terms, evidence links,
-   generations, and pending rebuilds after every round.
+   generations, and pending rebuilds after every round only when the explicit
+   `-experimental-lexicon` option is present; otherwise these remain zero.
 
 This exercises realistic corpus shape, accumulation, restart, consistency, and
 authorization behavior while keeping evaluation deterministic. Queries are
@@ -86,27 +89,30 @@ GOWORK=off go run ./scripts/corpus_eval \
 ```
 
 For an A/B parameter sweep, keep every input argument fixed and vary only the
-private lexicon policy. The four retained profiles are:
+private lexicon policy. Ordinary evaluation is the product control and leaves
+the experiment disabled. Experimental profiles require explicit opt-in:
 
 ```sh
-# Default: 3 documents, 2 boundary variants, score 6.
+# Product control: fixed analyzer, no adaptive lexicon.
 GOWORK=off go run ./scripts/corpus_eval -source /absolute/path/to/MEMORY.md \
   -rounds 8 -limit 2000 -output /private/path/default.json
 
-# Permissive.
+# Experimental default: 3 documents, 2 boundary variants, score 6.
 GOWORK=off go run ./scripts/corpus_eval -source /absolute/path/to/MEMORY.md \
-  -rounds 8 -limit 2000 -lexicon-min-docs 2 -lexicon-min-boundaries 1 \
+  -rounds 8 -limit 2000 -experimental-lexicon \
+  -output /private/path/experimental-default.json
+
+# Experimental permissive.
+GOWORK=off go run ./scripts/corpus_eval -source /absolute/path/to/MEMORY.md \
+  -rounds 8 -limit 2000 -experimental-lexicon \
+  -lexicon-min-docs 2 -lexicon-min-boundaries 1 \
   -lexicon-min-score 4.5 -output /private/path/permissive.json
 
-# Strict.
+# Experimental strict.
 GOWORK=off go run ./scripts/corpus_eval -source /absolute/path/to/MEMORY.md \
-  -rounds 8 -limit 2000 -lexicon-min-docs 4 -lexicon-min-boundaries 2 \
+  -rounds 8 -limit 2000 -experimental-lexicon \
+  -lexicon-min-docs 4 -lexicon-min-boundaries 2 \
   -lexicon-min-score 7 -output /private/path/strict.json
-
-# Static control: retain candidate evidence but activate no learned terms.
-GOWORK=off go run ./scripts/corpus_eval -source /absolute/path/to/MEMORY.md \
-  -rounds 8 -limit 2000 -lexicon-min-docs 100000 \
-  -output /private/path/static.json
 ```
 
 Evaluate one Codex Session export:
@@ -142,9 +148,52 @@ An increasing candidate or active-term count is not a quality result. A local
 lexicon profile is acceptable only when it beats the static control on the same
 frozen probes without increasing private leakage or zero-result rate. If no
 profile does, the report must say so and the lexicon remains an experimental
-internal mechanism rather than a claimed product improvement.
+internal mechanism rather than a claimed product improvement. Lexicon tuning
+flags without `-experimental-lexicon` fail instead of silently changing the
+product-control path.
 
 The first retained privacy-preserving result for the package path is
 [Local Memory Registry Corpus Evidence](evidence/memory-registry-corpus-2026-09-02.md).
 The separate downstream-model parameter and replication evidence is
 [Memory Steward Evaluation](evidence/memory-steward-evaluation-2026-09-02.md).
+
+## Product-quality evaluation ladder
+
+Receipt reachability is necessary but does not prove that Memory helps an
+Agent. Product-foundation experiments therefore use a frozen tuning partition
+and a blind holdout partition, keep the exact-lexical implementation as the
+control, and evaluate four independently attributable conditions:
+
+1. empty context;
+2. current exact lexical Recall;
+3. the best bounded zero-token candidate, ranking, and briefing pipeline;
+4. an optional Steward or later experimental retriever.
+
+Every report includes all tried parameter points, not only the winner. It
+records the dataset revision, sanitization policy, analyzer and expansion
+versions, temporal functions, source-intent rules, result budgets, latency,
+storage, rebuild time, and model-call/token cost when applicable. A tuning gain
+that disappears on the blind holdout is reported as rejected evidence.
+
+The product metrics are deliberately broader than question-answer retrieval:
+
+- Retrieval@k, Recall@k, MRR, zero-result rate, and result-budget truncation;
+- current-fact retention and stale keyword-only suppression by age cohort;
+- correction, supersession, contradiction, and repeated-support errors;
+- correct abstention when evidence is weak, unrelated, private, or unresolved;
+- harmful-context and false-memory rate in the assembled task briefing;
+- task outcome against the empty-context control for similar work, stable
+  preferences, and accepted technical decisions;
+- private leakage, provenance coverage, model calls, tokens, latency, database
+  growth, and deterministic rebuild.
+
+Long-conversation or memory QA benchmarks may be used as secondary comparison
+sets. They cannot substitute for local product cases because conversational QA
+does not by itself test Session sanitization, authority, briefing harm,
+zero-token operation, or stateful-identity boundaries.
+
+Embedding, graph, hierarchy, and adaptive-lexicon experiments use the same
+partitions and budgets. They remain non-default unless blind-holdout task
+benefit is material after operational cost and false-positive regressions are
+included, and the report names a deterministic rollback to the prior accepted
+projection.

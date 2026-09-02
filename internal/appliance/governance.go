@@ -51,7 +51,7 @@ func (s *Store) SearchReceipts(
 	}
 	candidates := make([]receiptSearchCandidate, 0)
 	for _, index := range indexes {
-		privateTerms, err := readActiveLexiconTerms(ctx, tx, index.spaceID)
+		privateTerms, err := s.activeLexiconTerms(ctx, tx, index.spaceID)
 		if err != nil {
 			return managementv1alpha1.SearchReceiptsResponse{}, s.databaseError("read management search lexicon", err)
 		}

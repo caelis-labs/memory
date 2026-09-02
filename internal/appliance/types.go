@@ -16,7 +16,7 @@ const (
 	ManagementCredentialFile    = "management.token"
 	StewardWorkerCredentialFile = "steward-worker.token"
 	SocketFilename              = v1alpha1.LocalSocketFilename
-	CurrentSchemaVersion        = 6
+	CurrentSchemaVersion        = 7
 	defaultSQLiteBusyTimeoutMS  = 2_000
 )
 

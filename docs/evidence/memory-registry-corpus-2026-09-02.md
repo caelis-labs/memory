@@ -1,8 +1,8 @@
 # Local Memory Registry Corpus Evidence — 2026-09-02
 
-Status: privacy-preserving lexical product evidence and private-lexicon
-parameter study. This supersedes the earlier 400-case format-1 run. It is not a
-semantic-model quality claim or a GA sign-off.
+Status: privacy-preserving lexical product evidence and a pre-convergence
+private-lexicon parameter study. This supersedes the earlier 400-case format-1
+run. It is not a semantic-model quality claim or a GA sign-off.
 
 ## Frozen source and method
 
@@ -81,12 +81,11 @@ measurably effective on this corpus: default and strict activation tie the
 no-activation control, while permissive activation is slightly worse at
 Recall@5.
 
-Therefore the conservative policy is retained for safety and continued
-observation, but no GA quality claim is assigned to private term activation.
-The external review must choose between retaining it as an internal
-experimental mechanism or disabling default activation until a frozen scenario
-shows positive lift. Semantic and abstract-query improvement belongs to the
-Steward record path, not to progressively looser token activation.
+Therefore adaptive activation is disabled in the product runtime. Its code and
+parameter evidence remain available only through an explicit internal
+evaluation option until a frozen scenario shows positive lift without a
+regression. Semantic and abstract-query improvement belongs to task briefing
+and evidence-backed organization, not to progressively looser token activation.
 
 ## Reproduction
 

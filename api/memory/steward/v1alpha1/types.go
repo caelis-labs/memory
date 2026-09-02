@@ -97,8 +97,10 @@ type LexiconCandidate struct {
 	Score             float64 `json:"score"`
 }
 
-// WorkRequest is the bounded structured input passed to a downstream Generator.
-// It deliberately contains no Job, Space, lease, bearer, or provider config.
+// WorkRequest is the bounded structured input used by the Memory Worker SDK to
+// prepare one downstream model request. A deprecated pre-GA callback may still
+// receive it directly until its host updates. It deliberately contains no Job,
+// Space, lease, bearer, or provider config.
 type WorkRequest struct {
 	Protocol          string             `json:"protocol"`
 	Profile           ProfileSpec        `json:"profile"`

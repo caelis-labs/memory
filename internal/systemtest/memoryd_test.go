@@ -401,8 +401,8 @@ func TestMemorydStewardWorkerAndMemoryctlConfiguration(t *testing.T) {
 	}
 	generator := &systemStewardGenerator{}
 	runner := stewardworker.Runner{
-		Client:    stewardworker.NewClientForEndpoint(process.endpoint, strings.TrimSpace(string(workerCredentialBytes))),
-		Generator: generator,
+		Client:         stewardworker.NewClientForEndpoint(process.endpoint, strings.TrimSpace(string(workerCredentialBytes))),
+		ModelGenerator: generator,
 		Options: stewardworker.RunnerOptions{
 			LeaseDuration: 30 * time.Second,
 			PollInterval:  20 * time.Millisecond,
@@ -466,15 +466,27 @@ func TestMemorydStewardWorkerAndMemoryctlConfiguration(t *testing.T) {
 }
 
 type systemStewardGenerator struct {
-	request stewardv1alpha1.WorkRequest
+	request stewardworker.GenerationRequest
 }
 
-func (g *systemStewardGenerator) Generate(_ context.Context, request stewardv1alpha1.WorkRequest) (stewardv1alpha1.Proposal, error) {
+func (g *systemStewardGenerator) Generate(_ context.Context, request stewardworker.GenerationRequest) (stewardworker.GenerationResponse, error) {
 	g.request = request
-	return stewardv1alpha1.Proposal{
+	var input struct {
+		Receipt struct {
+			ReceiptID v1alpha1.ReceiptID `json:"receipt_id"`
+		} `json:"receipt"`
+	}
+	if err := json.Unmarshal([]byte(request.Input), &input); err != nil {
+		return stewardworker.GenerationResponse{}, err
+	}
+	encoded, err := json.Marshal(stewardv1alpha1.Proposal{
 		Operation: stewardv1alpha1.OperationAdd, Kind: "claim", Text: "The project uses Go.",
-		EvidenceRefs: []v1alpha1.ReceiptID{request.Receipt.ReceiptID},
-	}, nil
+		EvidenceRefs: []v1alpha1.ReceiptID{input.Receipt.ReceiptID},
+	})
+	if err != nil {
+		return stewardworker.GenerationResponse{}, err
+	}
+	return stewardworker.GenerationResponse{Text: string(encoded), ParseMode: stewardworker.ParseModeStrict}, nil
 }
 
 func TestMemoryctlEncryptedBackupRestoreAndRollback(t *testing.T) {

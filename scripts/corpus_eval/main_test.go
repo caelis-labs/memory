@@ -89,8 +89,12 @@ func TestEvaluateReportsMultiRoundDurabilityWithoutSourceText(t *testing.T) {
 	}
 	if report.FormatVersion != 2 || report.Configuration.RetrievalPolicy.Analyzer == "" ||
 		report.Configuration.RetrievalPolicy.ExactPhraseWeight != 4 ||
-		report.Configuration.LexiconPolicy.MinDocumentFrequency != 3 {
+		report.Configuration.LexiconPolicy.MinDocumentFrequency != 3 ||
+		report.Configuration.LexiconPolicy.Enabled {
 		t.Fatalf("evaluation policy = format %d config %+v", report.FormatVersion, report.Configuration)
+	}
+	if report.Final.Lexicon.CandidateTerms != 0 || report.Final.Lexicon.ActiveTerms != 0 {
+		t.Fatalf("default evaluation unexpectedly enabled adaptive lexicon: %+v", report.Final.Lexicon)
 	}
 	for _, round := range report.Rounds {
 		if round.ImmediateRetrievalAt8 != 1 || round.ImmediateRecallAt1 != 1 || round.PostRestartDurableReceiptRate != 1 || round.PostRestartRetrievalAt8 != 1 || round.PostRestartRecallAt1 != 1 || round.PrivateLeakageCount != 0 {
@@ -103,6 +107,17 @@ func TestEvaluateReportsMultiRoundDurabilityWithoutSourceText(t *testing.T) {
 	}
 	if bytes.Contains(encoded, []byte("uniquemarker")) || bytes.Contains(encoded, []byte("Fictional project")) {
 		t.Fatal("aggregate report contains source text")
+	}
+}
+
+func TestRunRequiresExplicitExperimentalLexiconOptIn(t *testing.T) {
+	sourcePath := filepath.Join(t.TempDir(), "MEMORY.md")
+	if err := os.WriteFile(sourcePath, []byte(strings.Repeat("- durable fact marker remains valid\n", 12)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(t.Context(), []string{"-source", sourcePath, "-lexicon-min-docs", "2"}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil ||
+		!strings.Contains(err.Error(), "require -experimental-lexicon") {
+		t.Fatalf("run without experimental opt-in error = %v", err)
 	}
 }
 

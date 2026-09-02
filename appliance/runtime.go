@@ -9,6 +9,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	managementv1alpha1 "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
@@ -38,7 +40,10 @@ type Management interface {
 
 // Runtime is one synchronously opened durable Memory component.
 type Runtime struct {
-	store *core.Store
+	store    *core.Store
+	closed   atomic.Bool
+	close    sync.Once
+	closeErr error
 }
 
 // Open opens storage, applies schema migrations, and returns an in-process
@@ -57,7 +62,7 @@ func Open(ctx context.Context, options Options) (*Runtime, error) {
 
 // DataPlane returns the stable Remember/Recall service boundary.
 func (r *Runtime) DataPlane() memoryv1alpha1.DataPlane {
-	if r == nil {
+	if r == nil || r.closed.Load() {
 		return nil
 	}
 	return r.store
@@ -65,7 +70,7 @@ func (r *Runtime) DataPlane() memoryv1alpha1.DataPlane {
 
 // Management returns the appliance-owned management plane.
 func (r *Runtime) Management() Management {
-	if r == nil {
+	if r == nil || r.closed.Load() {
 		return nil
 	}
 	return r.store
@@ -73,7 +78,7 @@ func (r *Runtime) Management() Management {
 
 // StewardWorker returns the appliance-owned Steward work plane.
 func (r *Runtime) StewardWorker() stewardworker.Worker {
-	if r == nil {
+	if r == nil || r.closed.Load() {
 		return nil
 	}
 	return embeddedStewardWorker{store: r.store}
@@ -86,7 +91,7 @@ func (r *Runtime) IssueCapability(
 	issuerCredential string,
 	request memoryv1alpha1.CapabilityIssueRequest,
 ) (memoryv1alpha1.RuntimeCapability, error) {
-	if r == nil || r.store == nil {
+	if r == nil || r.closed.Load() {
 		return memoryv1alpha1.RuntimeCapability{}, unavailableError("Memory runtime is closed")
 	}
 	issued, err := r.store.IssueCapability(ctx, core.IssueCapabilityRequest{
@@ -115,12 +120,14 @@ func (r *Runtime) IssueCapability(
 
 // Close releases the database and owner lock.
 func (r *Runtime) Close() error {
-	if r == nil || r.store == nil {
+	if r == nil {
 		return nil
 	}
-	err := r.store.Close()
-	r.store = nil
-	return err
+	r.close.Do(func() {
+		r.closed.Store(true)
+		r.closeErr = r.store.Close()
+	})
+	return r.closeErr
 }
 
 type embeddedStewardWorker struct {

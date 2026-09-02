@@ -289,7 +289,7 @@ func (s *Store) Recall(
 		if s.candidateRead != nil {
 			s.candidateRead(spaceID)
 		}
-		privateTerms, err := readActiveLexiconTerms(ctx, tx, spaceID)
+		privateTerms, err := s.activeLexiconTerms(ctx, tx, spaceID)
 		if err != nil {
 			return v1alpha1.RecallResponse{}, s.databaseError("read Space lexicon", err)
 		}

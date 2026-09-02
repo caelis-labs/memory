@@ -16,8 +16,9 @@ import (
 
 const lexiconAlgorithmVersion = "han-boundary-v1"
 
-// LexiconPolicy is internal tuning input used by corpus evaluation. Embedded
-// hosts never configure it; production always uses the normalized defaults.
+// LexiconPolicy is experimental tuning input used only by corpus evaluation
+// and focused tests. A nil policy keeps adaptive lexicon learning and use out
+// of the production Remember, Recall, correction, deletion, and Steward paths.
 type LexiconPolicy struct {
 	MinTermRunes          int
 	MaxTermRunes          int
@@ -154,6 +155,9 @@ func (s *Store) learnReceiptLexicon(
 	commitSequence int64,
 	text string,
 ) (lexiconUpdate, error) {
+	if !s.experimentalLexicon {
+		return lexiconUpdate{}, nil
+	}
 	observations, err := discoverLexiconCandidates(text, s.lexiconPolicy)
 	if err != nil {
 		return lexiconUpdate{}, err
@@ -205,6 +209,9 @@ func (s *Store) removeReceiptLexiconEvidence(
 	spaceID v1alpha1.SpaceID,
 	receiptID v1alpha1.ReceiptID,
 ) (lexiconUpdate, error) {
+	if !s.experimentalLexicon {
+		return lexiconUpdate{}, nil
+	}
 	rows, err := tx.QueryContext(ctx,
 		`SELECT term FROM lexicon_term_evidence WHERE space_id = ? AND receipt_id = ? ORDER BY term`,
 		spaceID, receiptID)
@@ -399,6 +406,17 @@ func readActiveLexiconTerms(
 	return terms, rows.Err()
 }
 
+func (s *Store) activeLexiconTerms(
+	ctx context.Context,
+	db databaseExecutor,
+	spaceID v1alpha1.SpaceID,
+) ([]string, error) {
+	if !s.experimentalLexicon {
+		return nil, nil
+	}
+	return readActiveLexiconTerms(ctx, db, spaceID)
+}
+
 func markLexiconIndexed(ctx context.Context, db databaseExecutor, spaceID v1alpha1.SpaceID, updatedAt string) error {
 	_, err := db.ExecContext(ctx,
 		`UPDATE space_lexicons SET indexed_generation = generation, updated_at = ? WHERE space_id = ?`,
@@ -515,6 +533,9 @@ func (s *Store) applyStewardLexiconTerms(
 ) (int, error) {
 	if len(terms) == 0 {
 		return 0, nil
+	}
+	if !s.experimentalLexicon {
+		return 0, fmt.Errorf("%w: adaptive lexicon is experimental and disabled", ErrStewardProposalInvalid)
 	}
 	activated := 0
 	for _, term := range terms {

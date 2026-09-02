@@ -67,6 +67,7 @@ type retrievalPolicyReport struct {
 }
 
 type lexiconPolicyReport struct {
+	Enabled               bool    `json:"enabled"`
 	MinDocumentFrequency  int     `json:"min_document_frequency"`
 	MinBoundaryDiversity  int     `json:"min_boundary_diversity"`
 	MinActivationScore    float64 `json:"min_activation_score"`
@@ -185,7 +186,7 @@ func evaluate(ctx context.Context, source sourceData, opts options) (evaluationR
 	if removeData {
 		defer removeTemporaryData(dataDir)
 	}
-	store, privateAuth, isolatedAuth, err := bootstrapEvaluationStore(ctx, dataDir, opts.lexiconPolicy)
+	store, privateAuth, isolatedAuth, err := bootstrapEvaluationStore(ctx, dataDir, evaluationLexiconPolicy(opts))
 	if err != nil {
 		return evaluationReport{}, err
 	}
@@ -209,6 +210,7 @@ func evaluate(ctx context.Context, source sourceData, opts options) (evaluationR
 				PrivateLexiconWeight: 3, BM25TieBreakWeight: 0.001,
 			},
 			LexiconPolicy: lexiconPolicyReport{
+				Enabled:               opts.experimentalLexicon,
 				MinDocumentFrequency:  opts.lexiconPolicy.MinDocumentFrequency,
 				MinBoundaryDiversity:  opts.lexiconPolicy.MinBoundaryDiversity,
 				MinActivationScore:    opts.lexiconPolicy.MinActivationScore,
@@ -256,7 +258,7 @@ func evaluate(ctx context.Context, source sourceData, opts options) (evaluationR
 		if err := store.Close(); err != nil {
 			return evaluationReport{}, fmt.Errorf("close evaluation store after round %d: %w", round, err)
 		}
-		store, err = appliance.Open(ctx, appliance.Options{DataDir: dataDir, LexiconPolicy: &opts.lexiconPolicy})
+		store, err = appliance.Open(ctx, appliance.Options{DataDir: dataDir, LexiconPolicy: evaluationLexiconPolicy(opts)})
 		if err != nil {
 			return evaluationReport{}, fmt.Errorf("restart evaluation store after round %d: %w", round, err)
 		}
@@ -353,12 +355,19 @@ func normalizedEvaluationLexiconPolicy(policy appliance.LexiconPolicy) appliance
 	return policy
 }
 
+func evaluationLexiconPolicy(opts options) *appliance.LexiconPolicy {
+	if !opts.experimentalLexicon {
+		return nil
+	}
+	return &opts.lexiconPolicy
+}
+
 func bootstrapEvaluationStore(
 	ctx context.Context,
 	dataDir string,
-	policy appliance.LexiconPolicy,
+	policy *appliance.LexiconPolicy,
 ) (*appliance.Store, v1alpha1.CallAuthorization, v1alpha1.CallAuthorization, error) {
-	store, err := appliance.Open(ctx, appliance.Options{DataDir: dataDir, LexiconPolicy: &policy})
+	store, err := appliance.Open(ctx, appliance.Options{DataDir: dataDir, LexiconPolicy: policy})
 	if err != nil {
 		return nil, v1alpha1.CallAuthorization{}, v1alpha1.CallAuthorization{}, fmt.Errorf("open evaluation store: %w", err)
 	}

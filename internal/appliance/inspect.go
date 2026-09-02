@@ -421,7 +421,7 @@ func (s *Store) RebuildFTS(ctx context.Context) error {
 		return fmt.Errorf("close Space indexes: %w", err)
 	}
 	for _, item := range indexes {
-		activeTerms, err := readActiveLexiconTerms(ctx, tx, item.spaceID)
+		activeTerms, err := s.activeLexiconTerms(ctx, tx, item.spaceID)
 		if err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("read Space lexicon: %w", err)
@@ -465,7 +465,7 @@ func (s *Store) RebuildFTS(ctx context.Context) error {
 		return fmt.Errorf("close semantic Space indexes: %w", err)
 	}
 	for _, item := range semanticIndexes {
-		activeTerms, err := readActiveLexiconTerms(ctx, tx, item.spaceID)
+		activeTerms, err := s.activeLexiconTerms(ctx, tx, item.spaceID)
 		if err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("read semantic Space lexicon: %w", err)

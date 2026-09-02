@@ -9,9 +9,11 @@ recall(query)
 ```
 
 The package owns identity continuity, Spaces, Views, durable receipts,
-retrieval, classification, consolidation, lifecycle, and forgetting. A host
-opens the package, binds those two operations, and may inject a model-backed
-Steward callback through its existing provider stack.
+authorization, retrieval, and every derived-memory mutation. The current
+package baseline is a durable model-free lexical path plus an optional
+provider-neutral Steward path. Classification, consolidation, lifecycle, and
+forgetting are product directions, not claims that the first release already
+implements them.
 
 Caelis imports Memory and runs it as part of the Caelis Host. There is no
 separate Memory download, installation, process, endpoint, readiness state, or
@@ -44,9 +46,40 @@ or lifecycle.
 - durable Steward jobs with typed `ADD`, `MERGE`, `SUPERSEDE`, and `IGNORE`
   proposals;
 - evidence and revision validation owned by Memory;
-- a provider-neutral Steward `Generator` boundary;
+- a provider-neutral Steward `ModelGenerator` boundary plus Memory-owned prompt
+  rendering and strict proposal parsing;
 - static receipt/lexical Recall that consumes zero model tokens when no Steward
   model is bound.
+
+Adaptive local lexicon learning is retained only as an internal experiment.
+The public embedded runtime does not enable it, learn terms, consult learned
+terms during Recall, expose its candidates to Steward, or rebuild indexes for
+it. It may re-enter the product path only after a frozen-corpus A/B result shows
+a material quality gain over the fixed analyzer.
+
+## Product direction
+
+The product target is a private persistent corpus, not merely two keyword
+tools. Caelis will project sanitized canonical Session content into Memory,
+Memory will rank evidence with explicit time authority, and an ordinary
+stateless Session will receive a short task-relevant briefing assembled without
+model calls. That briefing is evidence for context only: it is not an
+instruction, authorization, or durable identity.
+
+One immutable evidence authority serves three deliberately different
+projections: explicit Recall, the stricter stateless briefing, and a future
+bounded identity capsule. Session observations do not silently become explicit
+user preferences, and old historical evidence is not presented as current just
+because a keyword matches. Embeddings, graphs, and hierarchies remain
+evaluation-gated internal choices rather than required providers or public API
+concepts.
+
+A later stateful identity profile may maintain personality, relationships, and
+working style through a bounded hierarchical memory. That profile remains
+separate from the first useful stateless-Session path. Background ingestion,
+indexing, decay, and deterministic organization are algorithm-first; no idle
+model billing is acceptable. See the [roadmap](docs/memory-appliance-roadmap.md)
+for the staged product and acceptance boundary.
 
 ## Embedded use
 

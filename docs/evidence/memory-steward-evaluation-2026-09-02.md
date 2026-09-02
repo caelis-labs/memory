@@ -1,8 +1,9 @@
 # Memory Steward Evaluation — 2026-09-02
 
-Status: pre-GA model-assisted quality evidence for external review. This report
-accepts the low-cost Steward policy for continued integration; it does not
-satisfy the separate 200-case semantic GA gate.
+Status: historical pre-convergence model-assisted evidence. It accepts the
+alias/category hypothesis for continued evaluation, but predates the
+Memory-owned `memory-default` prompt and parser and does not accept the current
+implementation or satisfy the separate 200-case semantic GA gate.
 
 ## Frozen experiment
 
@@ -21,7 +22,7 @@ satisfy the separate 200-case semantic GA gate.
   protocol shapes, timing, and token counts. They contain no provider
   credential, receipt text, query text, receipt ID, or Store path.
 
-The final policy is `caelis-default` version 3. Its profile prompt SHA-256 is
+The evaluated policy was `caelis-default` version 3. Its profile prompt SHA-256 is
 `6e16888f4012167d9b202877e007d50aa0f0dfa909243ecb2ad2ea1868aec32f`.
 For requests without lexicon candidates, the complete effective prompt SHA-256
 is `579a6f464d5e649576bf4d385ff89f943f6ba8b1d9b96d6dbbdfaf8c834a34b7`.
@@ -96,7 +97,7 @@ descriptive user-experience evidence, not hard performance gates.
 
 ## Acceptance and remaining risks
 
-Accepted for the pre-GA feature:
+Learned from this pre-convergence experiment:
 
 - MiMo at `effort=none` is sufficient; a higher-cost model is not required for
   the current Steward default;
@@ -104,7 +105,8 @@ Accepted for the pre-GA feature:
   constrains JSON syntax but does not enforce the supplied JSON Schema;
 - controlled bilingual, abbreviation, and immediate-category expansion gives
   repeatable, material Recall lift;
-- lexicon recommendations must remain candidate-gated and appliance-validated;
+- mentioning unused lexicon output harmed quality, supporting its removal from
+  the default path;
 - an unbound Steward continues to use the zero-token static path.
 
 Still required before semantic GA acceptance:
@@ -116,6 +118,7 @@ Still required before semantic GA acceptance:
 - evaluate ranking under multiple relevant records and more unrelated noise;
 - rerun the exact candidate revisions in the Rocky Linux and Caelis release
   matrix;
+- repeat the study through the Memory-owned `memory-default` request and parser;
 - complete independent external review. The reviewer should treat category
   groups, especially the two-case technical category group, as directional
   evidence rather than a stable estimate.
@@ -128,4 +131,3 @@ selected local profile and managed credential into temporary Stores, binds the
 system-managed Steward, and writes an aggregate report when
 `CAELIS_REAL_MEMORY_STEWARD_REPORT` is set. The local provider Store and report
 path are operator inputs and must never be committed.
-

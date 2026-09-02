@@ -4,8 +4,10 @@ Status: authoritative implementation and GA plan.
 
 The primary product is the Go package `github.com/caelis-labs/memory`. Caelis
 imports it and runs one Memory runtime as part of the Caelis Host. The package,
-not Caelis Control, owns Memory schema, data, authorization, retrieval,
-classification, Steward work, lifecycle, and forgetting.
+not Caelis Control, owns Memory schema, data, authorization, retrieval, Steward
+policy, and every derived-memory mutation. Classification, lifecycle, and
+forgetting remain Memory-owned concepts when implemented; they are not first
+release claims.
 
 The repository retains `cmd/memoryd`, local transport, `memoryctl`, and packaging
 code as a future standalone distribution framework. Building, publishing,
@@ -26,6 +28,7 @@ Caelis Host
 Memory package
   -> SQLite, migrations, receipts, indexes, topology, authorization
   -> static zero-token retrieval
+  -> time-aware ranking and bounded task briefing (planned foundation)
   -> durable Steward jobs and deterministic proposal application
 ```
 
@@ -40,7 +43,142 @@ readiness, degraded-start, or dynamic tool-injection state. A Memory open or
 migration error is an ordinary Host startup error. Host shutdown closes Memory
 after Runtime work drains.
 
-## Golden Path
+## Product vision
+
+The product is a private persistent corpus, not merely two keyword tools. It
+has two consumption profiles that share evidence, authorization, storage, and
+retrieval without becoming two Memory systems.
+
+### Stateless Session profile
+
+An ordinary Session has no durable personality or autonomous identity. Before
+work begins, the Host may supply bounded task text and receive a short
+task-relevant briefing containing such evidence as similar prior tasks, stable
+user preferences, and previously accepted technical decisions. The briefing:
+
+- is length-bounded and evidence-backed;
+- is advisory context, never an instruction, authority, permission, or
+  decision;
+- does not give the Session a persistent identity;
+- is assembled by deterministic retrieval and ranking in the default path;
+- is an assembly-time context input, not a third model-visible Memory tool.
+
+The public briefing API is deliberately not frozen until corpus projection,
+ranking inputs, and response budgets have executable acceptance tests.
+
+### Stateful identity profile
+
+A future Bot-like product may bind an opaque product identity to one stable
+`MemoryIdentity`. Its memory may form a bounded hierarchy whose root represents
+identity continuity and whose branches represent personality, relationships,
+work style, and learned context. New evidence attaches to or merges with nearby
+nodes; depth, fan-out, and evidence value bound compaction and leaf pruning.
+
+Memory owns that hierarchy. The downstream product owns the meaning of “Bot”
+and maps it to an opaque binding; no Bot type enters the Memory package. This
+profile is a post-foundation milestone and is not a first-release requirement.
+
+### Corpus ingestion
+
+All eligible local Caelis Session content is a product corpus source, but the
+Memory database is not the canonical Session log. Production ingestion reads a
+checkpointed canonical Session projection through the Session Service API and
+submits stable, idempotent Memory inputs. It never scans physical `*.jsonl`
+files or depends on their layout.
+
+The projection retains durable user and assistant facts with source provenance.
+It excludes system and developer prompts, hidden reasoning, credentials,
+approval payloads, transient progress, and raw tool input/output unless a
+separately reviewed sanitizer converts them into safe durable facts. Import is
+resumable, bounded, and model-free. A local JSONL reader may remain an offline
+evaluation utility but is not a production ingestion path.
+
+### Time and authority
+
+Receipt occurrence, receipt arrival, later reinforcement, correction, and
+supersession are separate signals. Recall remains able to locate old evidence,
+but generic ranking applies an explicit deterministic decay prior so an old
+keyword match cannot silently outrank a recent supported fact. Exact lookup,
+repeated reinforcement, and authoritative correction may counter decay; decay
+never deletes evidence by itself.
+
+The curve and weights are frozen only after a labeled multi-age corpus measures
+ranking quality. The report records the curve, parameters, age cohorts, and
+quality trajectory so “time-aware” is auditable behavior rather than a hidden
+constant.
+
+### Model-cost contract
+
+Receipt ingestion, sanitization, indexing, time decay, candidate retrieval,
+deduplication, and default briefing generation consume zero model tokens.
+Starting or idling Caelis with no Memory work consumes zero model tokens. A
+model-backed Steward runs only after an explicit model binding and only for new
+eligible evidence or an explicit bounded organization action analogous to
+`/dream`; it never wakes solely because wall-clock time passed.
+
+Automatic model work has a frozen per-receipt call budget. A network or model
+failure cannot create an unattended retry loop: any retry that spends another
+model call waits for a later active task or an explicit organization action.
+
+Memory owns the prompt, input budget, proposal parser, evidence checks, and
+apply policy. The downstream Host supplies only its existing provider/model
+callback and accounting. Algorithmic organization remains authoritative;
+model output is optional untrusted advice.
+
+### Product convergence rules
+
+Memory keeps one evidence authority and derives bounded products from it. It
+does not create separate authoritative stores for episodic, semantic, hot,
+warm, or cold memory. The planned products are:
+
+- explicit Recall, which searches evidence on demand and may answer an
+  explicitly historical query;
+- a stateless task briefing, which admits only current, sufficiently supported
+  evidence and may be empty;
+- a future identity capsule, which projects a small stable root for one
+  stateful identity before any hierarchical expansion is justified.
+
+Those products may use different ranking, temporal, and abstention policies.
+There is no universal `relevance * recency * confidence` score: a recent
+incidental mention must not outrank an explicit durable decision merely because
+it is newer, while an old unsupported preference must not enter an automatic
+briefing merely because one keyword matches. Correction and supersession are
+state transitions, not negative score weights.
+
+Explicit Remember and sanitized Session observation are also different forms
+of evidence. A Session projection records what occurred; it does not silently
+upgrade every conversation sentence into an accepted preference or decision.
+Because `SourceContext` is untrusted audit metadata, any source class that
+affects ranking or admission must come from a host-authenticated, model-hidden
+ingestion boundary defined and tested in P2.
+
+Skills, executable procedures, routines, credentials, files, and Session logs
+retain their existing product owners. Memory may recall evidence about them but
+does not become their registry, scheduler, or canonical store.
+
+### Retrieval evolution ladder
+
+Retrieval evolves behind the same narrow Remember/Recall surface:
+
+1. the current fixed multilingual lexical analyzer is the durable control;
+2. P2 may add bounded model-free phrase, association, temporal, contradiction,
+   and abstention projections when each beats that control on a blind holdout;
+3. an explicitly bound Steward may add evidence-backed semantic Records, but
+   static retrieval and briefing remain complete without it;
+4. embeddings, relation graphs, or hierarchical indexes remain experiments
+   until they produce material end-to-end benefit over the best zero-token
+   baseline without unacceptable privacy, latency, storage, rebuild, or
+   dependency cost.
+
+Every derived index is disposable and rebuildable from authorized evidence.
+An experiment cannot add a user-facing model/provider setting, change the
+Remember/Recall arguments, or become required for startup. Promotion requires
+the same frozen corpus, a held-out set, parameter-trajectory evidence, and a
+documented rollback to the previous accepted retriever.
+
+## Golden Paths
+
+### Durable tool path
 
 1. Start Caelis with an empty Store.
 2. Host synchronously opens Memory and provisions one private Identity, Space,
@@ -56,6 +194,18 @@ after Runtime work drains.
 9. Remove the binding and prove later receipts remain available through the
    static path without model calls.
 
+### Product-foundation path
+
+1. Import eligible canonical history from multiple local Sessions through one
+   resumable cursor.
+2. Start an unrelated new Session with a natural-language task, without asking
+   the model to guess Recall keywords.
+3. Assemble one short authorized briefing that cites similar tasks, relevant
+   preferences, and current decisions.
+4. Prefer recent supported evidence over stale keyword-only evidence while
+   retaining explicit historical lookup.
+5. Repeat the path offline with no Steward binding and observe zero model calls.
+
 Future product concepts may select another opaque `BindingRef`. Bot, user,
 tenant, workspace, and product identity do not enter the Memory API.
 
@@ -64,41 +214,44 @@ tenant, workspace, and product identity do not enter the Memory API.
 ```text
 P0 Package Boundary
   -> P1 Embedded Caelis Feature
-    -> P2 Steward and Realistic Evaluation
-      -> P3 GA Candidate and External Review
+    -> P2 Product Foundation
+      -> P3 Optional Steward Quality
+        -> P4 GA Candidate and External Review
+          -> P5 Stateful Identity Hierarchy
 
-Standalone Distribution (deferred, independent of P0-P3)
+Standalone Distribution (deferred, independent of P0-P5)
 ```
 
 | SDLC stage | Milestone | Independently reviewable result |
 | --- | --- | --- |
-| Architecture | P0 | Public embedded facade over the existing durable authority |
-| Construction and integration | P1 | Default Caelis Remember/Recall path works without a sidecar |
-| Product verification | P2 | Static and model-backed multi-round behavior is measured |
-| Release acceptance | P3 | Caelis release matrix and external review accept the feature |
+| Architecture | P0 | Public embedded facade over the durable authority |
+| Construction and integration | P1 | Default Caelis Remember/Recall works without a sidecar |
+| Product foundation | P2 | Sanitized Session corpus, time-aware ranking, and bounded task briefing make Memory useful without exact tool keywords |
+| Optional enhancement | P3 | Memory-owned Steward policy adds measured value without becoming a cost or availability dependency |
+| Release acceptance | P4 | Caelis release matrix and external review accept the feature |
+| Future identity | P5 | A bounded evidence-backed hierarchy supports stateful identities without polluting the stateless path |
 
 ## Implementation status — 2026-09-02
 
 | Milestone | State | Remaining independent review slice |
 | --- | --- | --- |
-| P0 | Candidate complete | `v0.5.0-rc.2` resolves to source revision `638d3260edcea286532b6f35f01c61e9ed0b0de1`; review the public facade, SDK conformance, analyzer, lexicon, and writer-serialization slices |
-| P1 | Implemented locally | Caelis candidate commits `b85b7a1` and `90f81cf` pin `v0.5.0-rc.2`; external review and an authorized Caelis push remain |
-| P2 | In progress | Chinese lexical baseline, private lexicon growth, and a replicated 64-case low-cost Steward alias/category study are measured; expand the reviewed semantic/contradiction corpus to at least 200 cases |
-| P3 | External-review candidate | macOS package/Caelis gates, Rocky 10.1 ARM64 native package/Caelis tests, and six-target Caelis builds pass; 200-case semantic evidence, native Windows acceptance, and external review remain |
+| P0 | Complete at package scope | Public facade, SDK conformance, default-path lexicon retirement, close concurrency, and CI package checks are implemented; external review remains part of P4 |
+| P1 | Technical integration complete | Default embedded tools, persistence, replay, and system-managed Steward binding exist; product usefulness is not yet accepted |
+| P2 | Planned, now GA-critical | Implement canonical Session corpus projection, deterministic time-aware ranking, and a bounded model-free task briefing |
+| P3 | In progress, non-blocking for static operation | Memory-owned prompt/parser and an initial 64-case low-cost study exist; Caelis adapter cutover and at least 200 reviewed cases remain |
+| P4 | Not accepted | Product-foundation gates, native Windows acceptance, exact-revision cross-platform gates, and external review remain |
+| P5 | Vision only | Define the stateful hierarchy only after P2/P3 establish evidence, pruning, and cost behavior |
 
-The first privacy-preserving multi-round evidence uses both the local Codex
-Memory registry and canonical Caelis Session JSONL without retaining source
-text. See [Local Memory Registry Corpus Evidence](evidence/memory-registry-corpus-2026-09-02.md).
-The first real-provider Steward parameter study uses a frozen non-literal query
-fixture and records both accepted and rejected policy variants. See
-[Memory Steward Evaluation](evidence/memory-steward-evaluation-2026-09-02.md).
+The retained evidence reports describe pre-convergence experiments, not current
+product claims. See [Local Memory Registry Corpus Evidence](evidence/memory-registry-corpus-2026-09-02.md)
+and [Memory Steward Evaluation](evidence/memory-steward-evaluation-2026-09-02.md).
 
 ## P0: Package Boundary
 
 ### Goal
 
-Make the existing durable engine a first-class embeddable Go package without
-exporting storage implementation details.
+Make the durable engine a first-class embeddable Go package without exporting
+storage implementation details.
 
 ### Deliverables
 
@@ -106,14 +259,17 @@ exporting storage implementation details.
 - a narrow Runtime lifecycle with `DataPlane`, owner Management, Steward Worker,
   capability issuance, and `Close` boundaries;
 - direct SDK binding to `memory.v1alpha1.DataPlane`;
-- one provider-neutral Steward Worker interface implemented by both embedded
-  and local-transport clients;
-- package-level Remember/Recall/restart tests using real SQLite;
-- `cmd/memoryd` remains a thin optional composition over the same core.
+- one provider-neutral Steward Worker interface implemented by embedded and
+  retained local-transport clients;
+- package-level Remember/Recall/restart and concurrent-close tests using real
+  SQLite;
+- `cmd/memoryd` remains a thin optional composition over the same core;
+- adaptive lexicon code is internal, explicitly experimental, and absent from
+  public Open, default migration, and production data paths.
 
 ### Explicit non-goals
 
-- public concrete Store, SQL access, index access, or schema API;
+- public concrete Store, SQL access, index access, schema API, or tuning flags;
 - download, installation, updater, R2/GitHub acquisition, process supervisor,
   compatibility manifest, or platform artifact matrix;
 - new cognitive taxonomy, vector/graph search, or model-provider integration.
@@ -123,7 +279,9 @@ exporting storage implementation details.
 - an external Go consumer imports only public packages and completes durable
   Remember/Recall;
 - read-your-writes and restart persistence pass with no transport;
-- embedded and local-transport paths share the same semantic conformance suite;
+- embedded and retained local-transport paths share the semantic conformance
+  suite;
+- default paths produce no adaptive terms or related Steward inputs;
 - `go test ./...`, race tests, formatting, and diff checks pass.
 
 ## P1: Embedded Caelis Feature
@@ -156,16 +314,16 @@ Ship Memory as an ordinary default Caelis Host capability.
 ### Review slices
 
 1. Memory public facade and direct SDK conformance.
-2. Caelis Host composition and automatic topology.
+2. Caelis Host composition, automatic topology, and close lifecycle.
 3. Runtime tools, Session pinning, restart, and replay.
 4. Steward static/default behavior and model callback.
 
-Each slice must compile and pass its owning tests independently. Do not combine
+Each slice compiles and passes its owning tests independently. Do not combine
 future standalone distribution work with these reviews.
 
 ### Exit criteria
 
-- the Golden Path passes through step 7;
+- the durable Golden Path passes through step 7;
 - a fresh Caelis Store needs no Memory configuration;
 - a successful Host always assembles Memory tools for an admitted Runtime;
 - restart retains acknowledged facts and causal cursors;
@@ -174,33 +332,95 @@ future standalone distribution work with these reviews.
 - removal of sidecar composition leaves no runtime resolver, manifest pin,
   endpoint, downloader, supervisor, readiness diagnostic, or artifact setting.
 
-## P2: Steward and Realistic Evaluation
+## P2: Product Foundation
 
 ### Goal
 
-Prove that Memory is useful across realistic multi-round facts before adding
-new domain mechanisms.
+Make Memory useful before an Agent guesses an exact Recall keyword, without
+introducing a background token bill.
+
+### Independently reviewable slices
+
+1. **Canonical Session corpus projection.** Caelis reads checkpointed canonical
+   Session events through the Session Service, applies a reviewed sanitizer,
+   and submits stable idempotent inputs. Restart resumes from a durable cursor;
+   no production code reads physical Session JSONL.
+2. **Time-aware retrieval and admission.** Memory combines the fixed analyzer
+   with bounded corpus-derived phrase/association candidates, then applies
+   deterministic occurrence, reinforcement, correction, supersession, and
+   source-intent signals. Explicit Recall keeps historical search possible and
+   qualifies non-current evidence in the model-visible result; automatic
+   briefing uses a stricter current-evidence gate and may abstain. Evaluation
+   publishes the exact expansion limits, temporal functions, and decision
+   rules.
+3. **Task briefing.** A package-owned bounded request/response produces a short
+   advisory context for a new stateless Session from task text and authorized
+   evidence. It has provenance and a byte budget, carries no authority, and
+   makes no model call.
+4. **Corpus evaluation.** Frozen Chinese, English, and mixed-language tuning
+   and blind holdout cases cover similar historical tasks, durable preferences,
+   changed decisions, stale facts, contradictory evidence, sparse/non-literal
+   task wording, correct abstention, and harmful irrelevant context. Every
+   report compares the empty-context, exact-lexical, best model-free, and any
+   model-assisted variants and preserves the parameter trajectory rather than
+   only the winning run.
+
+Each slice is independently committable and reviewable. Do not freeze the
+briefing public API before slices 1 and 2 establish the real inputs and ranking
+contract.
+
+### Exit criteria
+
+- every eligible local Session is projected or has a recorded, non-sensitive
+  exclusion reason;
+- explicit Remember and observational Session evidence remain distinguishable
+  through a trusted, model-hidden source boundary; `SourceContext` labels do
+  not establish authority;
+- re-import and crash recovery create no duplicate facts;
+- excluded content and one identity's private evidence never appear in another
+  authorized result;
+- multi-age ranking meets its frozen cohort thresholds and reports all decay
+  parameters;
+- the frozen non-literal set improves over exact lexical retrieval without an
+  embedding model or unacceptable false-positive growth;
+- a historical Recall result is visibly qualified, while an unqualified stale
+  or unresolved candidate is omitted from an automatic briefing;
+- the briefing fits its byte budget, cites its evidence, contains no authority
+  or imperative policy, and improves a frozen task-context benchmark over an
+  empty-context control without increasing harmful-context or false-memory
+  errors;
+- all four slices consume zero model tokens.
+
+## P3: Optional Steward Quality
+
+### Goal
+
+Prove that an explicitly bound low-cost model materially improves organization
+or non-literal retrieval without weakening the static path.
 
 ### Deliverables
 
 - explicit Steward model binding through Caelis' existing provider stack;
 - unbound mode deterministically disables later semantic Jobs while retaining
   receipt Recall;
-- bounded Memory-owned prompt policy and proposal validation;
-- cleaned, privacy-reviewed corpora derived from local Memory Markdown and
-  Caelis Session JSONL fixtures;
+- bounded Memory-owned prompt rendering, input construction, proposal parsing,
+  and proposal validation; native JSON Schema may optimize a provider but is
+  never required for correctness;
+- cleaned, privacy-reviewed evaluation corpora derived from local Memory
+  Markdown and canonical Session projections;
 - fixed `gse` base dictionary plus two- and three-rune Han fallback projection,
   with the same analyzer used for write, Recall, correction, semantic records,
   migration, and rebuild;
-- Space-private lexicon evidence, bounded static promotion, retirement, restart,
-  and inspection counts; no term text crosses the management boundary;
-- a reproducible parameter sweep that compares default, permissive, strict, and
-  no-activation controls against the same legacy `unicode61` baseline;
+- adaptive lexicon learning retained only behind an internal evaluation option;
+  default Open, migration, Remember, Recall, correction, deletion, and Steward
+  paths neither learn nor consume local terms;
 - deterministic Chinese, English, and mixed-language cases covering repeated
   Remember/Recall, contradiction, supersession, unrelated noise, restart,
   private isolation, static fallback, and evidence provenance;
-- model-assisted evaluation reports separated from deterministic correctness
-  gates.
+- model-assisted reports separated from deterministic correctness gates;
+- a frozen automatic per-receipt model-call budget and demand-gated retry
+  policy; polling an empty queue or waiting for time to pass never spends a
+  token.
 
 ### Exit criteria
 
@@ -209,11 +429,15 @@ new domain mechanisms.
   nothing;
 - binding a model affects only later jobs and never changes provider ownership;
 - realistic corpus metrics and known limitations are frozen for the candidate;
-- dictionary growth is never treated as retrieval-quality evidence; default
-  activation remains conservative unless it beats the no-activation control;
+- dictionary growth is never treated as retrieval-quality evidence; adaptive
+  lexicon remains experimental and disabled unless it materially beats the
+  fixed analyzer on a frozen corpus without regression;
 - no quality claim depends solely on synthetic marker queries.
 
-## P3: GA Candidate and External Review
+P3 may improve P2 quality but cannot become an availability dependency or a
+substitute for P2's zero-token briefing path.
+
+## P4: GA Candidate and External Review
 
 ### Goal
 
@@ -227,8 +451,15 @@ Accept the embedded feature as part of the Caelis product release.
 - Replay Memory calls: zero;
 - Recall fragment provenance coverage: 100%;
 - read-your-writes and Host restart failures: zero;
-- required Caelis tests, race tests, architecture checks, builds, docs links, and
-  release dry-run pass at the exact candidate revision;
+- canonical Session corpus projection is resumable, idempotent, sanitized, and
+  model-free;
+- documented time-decay and reinforcement behavior passes the frozen multi-age
+  corpus;
+- bounded task briefing beats the empty-context control without authority or
+  privacy violations;
+- an idle Host and an unbound Steward produce zero Memory model calls;
+- required Caelis tests, race tests, architecture checks, builds, docs links,
+  and release dry-run pass at the exact candidate revision;
 - Caelis builds and tests the imported Memory package on its supported Darwin,
   Linux, and Windows AMD64/ARM64 matrix;
 - Linux native behavior is verified in the local OrbStack Rocky environment;
@@ -242,9 +473,46 @@ release matrix, one installation, and one rollback unit.
 ### Product acceptance
 
 A clean Caelis installation starts offline, requires no Memory download or
-configuration, exposes the two tools, passes the Golden Path, and can enable or
-disable model-backed Steward behavior solely by changing its system-agent model
-binding.
+configuration, exposes the two tools, passes both Golden Paths, and can enable
+or disable model-backed Steward behavior solely by changing its system-agent
+model binding.
+
+## P5: Stateful Identity Hierarchy
+
+### Goal
+
+Support a product with persistent identity, personality, relationships, and
+work style without changing the stateless Session contract.
+
+### Entry criteria
+
+- P2 evidence and time semantics are accepted;
+- a concrete downstream identity consumer defines lifecycle and privacy needs;
+- offline experiments justify hierarchy over flat evidence plus summaries;
+- node merge, depth, fan-out, pruning, provenance, and recovery policies have
+  deterministic tests and a zero-token default implementation.
+
+### Independently reviewable slices
+
+1. **Identity capsule.** Start with fixed, byte-bounded identity, personality,
+   relationship, and work-style blocks backed by active evidence. The capsule
+   is assembled at Session start, is inspectable, and rejects overflow rather
+   than silently truncating identity.
+2. **Hierarchy experiment.** Compare flat capsule plus evidence search against
+   bounded branches on a longitudinal identity corpus. Introduce parent/child
+   structure only if it improves retrieval or update quality after accounting
+   for merge and recovery complexity.
+3. **Organization action.** A model may propose a bounded consolidation during
+   an explicit organization action. Memory validates an inspectable diff;
+   destructive or lossy projection changes require the product's confirmation
+   policy, and immutable receipt evidence remains recoverable.
+4. **Pruning and rebuild.** Fan-out, depth, and inactive leaf budgets apply to
+   derived nodes only. Pruning never serves as receipt deletion, and the
+   capsule and hierarchy rebuild without a model.
+
+Model-assisted consolidation may be an explicit bounded organization action.
+It cannot run continuously, erase receipt evidence, or become the only way to
+rebuild the hierarchy.
 
 ## Deferred standalone distribution
 

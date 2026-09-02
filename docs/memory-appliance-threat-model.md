@@ -23,7 +23,7 @@ Runtime capability                     temporary bearer authority
 Memory public API                      versioned semantic boundary
 Memory authorization layer            access enforcement before candidates
 Memory SQLite store                    canonical Memory authority
-Steward Generator output               untrusted proposal
+Steward Generator output               untrusted provider text
 Caelis Session store                   separate replay authority
 ```
 
@@ -50,7 +50,7 @@ error. There is no partially ready embedded Memory state.
 | Retry duplicates a receipt | Bind a stable Space/idempotency key to one request digest |
 | Consistency token grants access | Reauthorize the token's Space on every Recall |
 | Steward invents or widens facts | Require same-Space evidence, closed operations, byte bounds, and deterministic proposal validation |
-| Generator receives Memory authority | Pass only bounded model-facing work; keep lease, Space, View, Grant, actor, audience, and bearers outside the callback |
+| ModelGenerator receives Memory authority | Pass only bounded model-facing work; keep lease, Space, View, Grant, actor, audience, and bearers outside the callback |
 | Provider egress exposes private receipts | Provider selection and egress belong to an explicitly bound downstream Host model; zero-token static mode is the default |
 | Worker outage blocks Memory | Durable receipt and lexical Recall remain independent from Steward Jobs |
 | Error or metric exposes content | Emit typed codes, counts, sizes, and opaque identifiers only |
@@ -64,9 +64,11 @@ error. There is no partially ready embedded Memory state.
 The Memory package owns prompt-policy profiles, input/output budgets, durable
 Jobs, leases, attempt ceilings, evidence validation, and atomic application.
 The downstream Host owns provider choice, credentials, billing, retention, and
-provider-specific limits. The injected Generator has no tools and returns only
-an untrusted proposal. With no explicit model binding, no provider call occurs
-and all accepted receipts remain retrievable through the static path.
+provider-specific limits. The injected ModelGenerator has no tools, receives the
+Memory-rendered request, and returns only untrusted provider text. Memory owns
+proposal extraction and parsing. With no explicit model binding, no provider
+call occurs and all accepted receipts remain retrievable through the static
+path.
 
 ## Replay and deletion boundary
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -99,5 +100,38 @@ func TestEmbeddedRuntimeRejectsPendingRestoreGeneration(t *testing.T) {
 	if runtime, err := appliance.Open(ctx, appliance.Options{DataDir: dataDir}); err == nil {
 		_ = runtime.Close()
 		t.Fatal("Open() accepted a generation that still permits rollback")
+	}
+}
+
+func TestEmbeddedRuntimeCloseIsSafeWithConcurrentAccess(t *testing.T) {
+	runtime, err := appliance.Open(t.Context(), appliance.Options{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workers sync.WaitGroup
+	start := make(chan struct{})
+	for range 8 {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			for range 100 {
+				_ = runtime.DataPlane()
+				_ = runtime.Management()
+				_ = runtime.StewardWorker()
+				_, _ = runtime.IssueCapability(t.Context(), "invalid", memoryv1alpha1.CapabilityIssueRequest{})
+			}
+		}()
+	}
+	close(start)
+	if err := runtime.Close(); err != nil {
+		t.Fatal(err)
+	}
+	workers.Wait()
+	if runtime.DataPlane() != nil || runtime.Management() != nil || runtime.StewardWorker() != nil {
+		t.Fatal("closed runtime still exposed service planes")
+	}
+	if err := runtime.Close(); err != nil {
+		t.Fatalf("second Close() = %v", err)
 	}
 }

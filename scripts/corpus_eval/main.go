@@ -11,18 +11,20 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/caelis-labs/memory/internal/appliance"
 )
 
 type options struct {
-	sourcePath    string
-	sourceKind    string
-	outputPath    string
-	dataDir       string
-	rounds        int
-	limit         int
-	lexiconPolicy appliance.LexiconPolicy
+	sourcePath          string
+	sourceKind          string
+	outputPath          string
+	dataDir             string
+	rounds              int
+	limit               int
+	experimentalLexicon bool
+	lexiconPolicy       appliance.LexiconPolicy
 }
 
 func main() {
@@ -42,6 +44,7 @@ func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) erro
 	flags.StringVar(&opts.dataDir, "data-dir", "", "optional retained evaluation data directory")
 	flags.IntVar(&opts.rounds, "rounds", 6, "number of write, restart, and Recall rounds")
 	flags.IntVar(&opts.limit, "limit", 400, "maximum eligible source chunks")
+	flags.BoolVar(&opts.experimentalLexicon, "experimental-lexicon", false, "enable internal adaptive-lexicon evaluation")
 	flags.IntVar(&opts.lexiconPolicy.MinDocumentFrequency, "lexicon-min-docs", 3, "independent receipts required for static term activation")
 	flags.IntVar(&opts.lexiconPolicy.MinBoundaryDiversity, "lexicon-min-boundaries", 2, "distinct left and right boundaries required for activation")
 	flags.Float64Var(&opts.lexiconPolicy.MinActivationScore, "lexicon-min-score", 6, "minimum evidence score for activation")
@@ -51,6 +54,15 @@ func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) erro
 	}
 	if flags.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments")
+	}
+	lexiconTuningRequested := false
+	flags.Visit(func(item *flag.Flag) {
+		if strings.HasPrefix(item.Name, "lexicon-") {
+			lexiconTuningRequested = true
+		}
+	})
+	if lexiconTuningRequested && !opts.experimentalLexicon {
+		return fmt.Errorf("lexicon tuning flags require -experimental-lexicon")
 	}
 	if opts.sourcePath == "" {
 		return fmt.Errorf("-source is required")

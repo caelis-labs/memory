@@ -170,7 +170,7 @@ func (s *Store) claimStewardJob(
 	if err != nil {
 		return rollback(fmt.Errorf("read claimed Steward profile: %w", err))
 	}
-	request, err := readStewardWorkRequest(ctx, tx, profile.ProfileSpec, receiptID, spaceID)
+	request, err := s.readStewardWorkRequest(ctx, tx, profile.ProfileSpec, receiptID, spaceID)
 	if err != nil {
 		return rollback(err)
 	}
@@ -182,12 +182,12 @@ func (s *Store) claimStewardJob(
 		if encodedSize <= profile.MaxInputBytes {
 			break
 		}
-		if len(request.Records) > 0 {
-			request.Records = request.Records[:len(request.Records)-1]
-			continue
-		}
 		if len(request.LexiconCandidates) > 0 {
 			request.LexiconCandidates = request.LexiconCandidates[:len(request.LexiconCandidates)-1]
+			continue
+		}
+		if len(request.Records) > 0 {
+			request.Records = request.Records[:len(request.Records)-1]
 			continue
 		}
 		if len(request.Records) == 0 {
@@ -208,7 +208,7 @@ func (s *Store) claimStewardJob(
 	}, true, false, nil
 }
 
-func readStewardWorkRequest(
+func (s *Store) readStewardWorkRequest(
 	ctx context.Context,
 	db databaseExecutor,
 	profile stewardv1alpha1.ProfileSpec,
@@ -238,9 +238,11 @@ func readStewardWorkRequest(
 		}
 		request.Receipt.OccurredAt = &value
 	}
-	request.LexiconCandidates, err = readStewardLexiconCandidates(ctx, db, spaceID, receiptID)
-	if err != nil {
-		return stewardv1alpha1.WorkRequest{}, fmt.Errorf("read Steward lexicon candidates: %w", err)
+	if s.experimentalLexicon {
+		request.LexiconCandidates, err = readStewardLexiconCandidates(ctx, db, spaceID, receiptID)
+		if err != nil {
+			return stewardv1alpha1.WorkRequest{}, fmt.Errorf("read Steward lexicon candidates: %w", err)
+		}
 	}
 	if profile.MaxContextRecords == 0 {
 		return request, nil

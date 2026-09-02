@@ -194,7 +194,7 @@ func (s *Store) ApplyStewardProposal(
 		if _, err := tx.ExecContext(ctx, `DELETE FROM `+tableName+` WHERE record_id = ?`, recordID); err != nil {
 			return rollback(fmt.Errorf("replace semantic projection: %w", err))
 		}
-		activeTerms, err := readActiveLexiconTerms(ctx, tx, job.spaceID)
+		activeTerms, err := s.activeLexiconTerms(ctx, tx, job.spaceID)
 		if err != nil {
 			return rollback(fmt.Errorf("read semantic Space lexicon: %w", err))
 		}

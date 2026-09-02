@@ -26,23 +26,24 @@ import (
 // Store is the single durable authority behind the public package and optional
 // standalone process adapter.
 type Store struct {
-	db                 *sql.DB
-	lock               *ownerLock
-	dataDir            string
-	now                func() time.Time
-	random             io.Reader
-	faults             Faults
-	candidateRead      func(v1alpha1.SpaceID)
-	requestID          atomic.Uint64
-	closing            atomic.Bool
-	restorePending     atomic.Bool
-	generation         string
-	managementSum      [sha256.Size]byte
-	stewardWorkerSum   [sha256.Size]byte
-	managementMu       sync.RWMutex
-	managementRotateMu sync.Mutex
-	stewardJobMu       sync.Mutex
-	lexiconPolicy      LexiconPolicy
+	db                  *sql.DB
+	lock                *ownerLock
+	dataDir             string
+	now                 func() time.Time
+	random              io.Reader
+	faults              Faults
+	candidateRead       func(v1alpha1.SpaceID)
+	requestID           atomic.Uint64
+	closing             atomic.Bool
+	restorePending      atomic.Bool
+	generation          string
+	managementSum       [sha256.Size]byte
+	stewardWorkerSum    [sha256.Size]byte
+	managementMu        sync.RWMutex
+	managementRotateMu  sync.Mutex
+	stewardJobMu        sync.Mutex
+	lexiconPolicy       LexiconPolicy
+	experimentalLexicon bool
 }
 
 // Open acquires the data-directory owner lock, migrates SQLite, and initializes
@@ -98,14 +99,15 @@ func Open(ctx context.Context, options Options) (*Store, error) {
 	db.SetMaxOpenConns(8)
 	db.SetMaxIdleConns(8)
 	store := &Store{
-		db:            db,
-		lock:          lock,
-		dataDir:       options.DataDir,
-		now:           options.Clock,
-		random:        options.Random,
-		faults:        options.Faults,
-		candidateRead: options.CandidateRead,
-		lexiconPolicy: normalizeLexiconPolicy(options.LexiconPolicy),
+		db:                  db,
+		lock:                lock,
+		dataDir:             options.DataDir,
+		now:                 options.Clock,
+		random:              options.Random,
+		faults:              options.Faults,
+		candidateRead:       options.CandidateRead,
+		lexiconPolicy:       normalizeLexiconPolicy(options.LexiconPolicy),
+		experimentalLexicon: options.LexiconPolicy != nil,
 	}
 	if err := store.initialize(ctx); err != nil {
 		_ = store.closeResources()
