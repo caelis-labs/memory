@@ -83,7 +83,7 @@ Standalone Distribution (deferred, independent of P0-P3)
 | --- | --- | --- |
 | P0 | Implemented locally | Complete package gates, publish an exact source revision, then review the public facade and SDK conformance diff |
 | P1 | Implemented locally | Complete Caelis aggregate, race, architecture, product-regression, and platform gates against the exact Memory revision |
-| P2 | In progress | Freeze the reviewed semantic/contradiction corpus and run the explicitly selected Steward model; static real-corpus evidence is retained below |
+| P2 | In progress | Chinese lexical baseline and private lexicon growth are measured; freeze the reviewed semantic/contradiction corpus and run the explicitly selected low-cost Steward model |
 | P3 | Pending | Produce the exact-revision candidate bundle, complete the release matrix, run Rocky native acceptance, and stop for external review |
 
 The first privacy-preserving multi-round evidence uses both the local Codex
@@ -186,6 +186,13 @@ new domain mechanisms.
 - bounded Memory-owned prompt policy and proposal validation;
 - cleaned, privacy-reviewed corpora derived from local Memory Markdown and
   Caelis Session JSONL fixtures;
+- fixed `gse` base dictionary plus two- and three-rune Han fallback projection,
+  with the same analyzer used for write, Recall, correction, semantic records,
+  migration, and rebuild;
+- Space-private lexicon evidence, bounded static promotion, retirement, restart,
+  and inspection counts; no term text crosses the management boundary;
+- a reproducible parameter sweep that compares default, permissive, strict, and
+  no-activation controls against the same legacy `unicode61` baseline;
 - deterministic Chinese, English, and mixed-language cases covering repeated
   Remember/Recall, contradiction, supersession, unrelated noise, restart,
   private isolation, static fallback, and evidence provenance;
@@ -199,6 +206,8 @@ new domain mechanisms.
   nothing;
 - binding a model affects only later jobs and never changes provider ownership;
 - realistic corpus metrics and known limitations are frozen for the candidate;
+- dictionary growth is never treated as retrieval-quality evidence; default
+  activation remains conservative unless it beats the no-activation control;
 - no quality claim depends solely on synthetic marker queries.
 
 ## P3: GA Candidate and External Review

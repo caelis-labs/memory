@@ -87,6 +87,11 @@ func TestEvaluateReportsMultiRoundDurabilityWithoutSourceText(t *testing.T) {
 	if report.Final.PrivateLeakageCount != 0 || len(report.Final.Cohorts) != 3 {
 		t.Fatalf("evaluation isolation/cohorts = %+v", report.Final)
 	}
+	if report.FormatVersion != 2 || report.Configuration.RetrievalPolicy.Analyzer == "" ||
+		report.Configuration.RetrievalPolicy.ExactPhraseWeight != 4 ||
+		report.Configuration.LexiconPolicy.MinDocumentFrequency != 3 {
+		t.Fatalf("evaluation policy = format %d config %+v", report.FormatVersion, report.Configuration)
+	}
 	for _, round := range report.Rounds {
 		if round.ImmediateRetrievalAt8 != 1 || round.ImmediateRecallAt1 != 1 || round.PostRestartDurableReceiptRate != 1 || round.PostRestartRetrievalAt8 != 1 || round.PostRestartRecallAt1 != 1 || round.PrivateLeakageCount != 0 {
 			t.Fatalf("round report = %+v", round)
@@ -98,6 +103,46 @@ func TestEvaluateReportsMultiRoundDurabilityWithoutSourceText(t *testing.T) {
 	}
 	if bytes.Contains(encoded, []byte("uniquemarker")) || bytes.Contains(encoded, []byte("Fictional project")) {
 		t.Fatal("aggregate report contains source text")
+	}
+}
+
+func TestEvaluateShowsChineseSubstringLiftOverUnicode61(t *testing.T) {
+	phrases := []string{
+		"蓝鲸协议", "星河网关", "月桂索引", "松涛队列", "云杉缓存", "白鹭审计",
+		"玄武调度", "朱雀发布", "青龙存储", "琥珀追踪", "珊瑚备份", "翡翠路由",
+	}
+	chunks := make([]string, 0, len(phrases))
+	for index, phrase := range phrases {
+		chunks = append(chunks, fmt.Sprintf("第%02d组确认%s已经完成多轮验证并保留全部记录", index, phrase))
+	}
+	report, err := evaluate(t.Context(), sourceData{
+		kind: "markdown", digest: strings.Repeat("b", 64), bytes: 4096,
+		extracted: len(chunks), chunks: chunks,
+	}, options{dataDir: t.TempDir(), rounds: 3, limit: len(chunks)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Final.RecallAt5 != 1 || report.Final.ZeroResultRate != 0 {
+		t.Fatalf("Chinese retrieval = %+v", report.Final)
+	}
+	if report.Final.RecallAt5Lift <= 0 || report.Final.LegacyUnicode61.ZeroResultRate == 0 {
+		t.Fatalf("Unicode61 comparison = current r@5 %.3f legacy %+v lift %.3f",
+			report.Final.RecallAt5, report.Final.LegacyUnicode61, report.Final.RecallAt5Lift)
+	}
+}
+
+func TestEvaluationTokensIncludeBoundedHanSubstrings(t *testing.T) {
+	tokens := evaluationTokens("团队会议安排在周三并开展代码评审")
+	joined := " " + strings.Join(tokens, " ") + " "
+	for _, want := range []string{" 周三 ", " 代码评审 ", " 团队会 "} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("tokens %q do not contain %q", tokens, strings.TrimSpace(want))
+		}
+	}
+	for _, token := range tokens {
+		if len([]rune(token)) > 4 {
+			t.Fatalf("unbounded Han query token %q", token)
+		}
 	}
 }
 

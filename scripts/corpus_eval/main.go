@@ -11,15 +11,18 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/caelis-labs/memory/internal/appliance"
 )
 
 type options struct {
-	sourcePath string
-	sourceKind string
-	outputPath string
-	dataDir    string
-	rounds     int
-	limit      int
+	sourcePath    string
+	sourceKind    string
+	outputPath    string
+	dataDir       string
+	rounds        int
+	limit         int
+	lexiconPolicy appliance.LexiconPolicy
 }
 
 func main() {
@@ -39,6 +42,10 @@ func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) erro
 	flags.StringVar(&opts.dataDir, "data-dir", "", "optional retained evaluation data directory")
 	flags.IntVar(&opts.rounds, "rounds", 6, "number of write, restart, and Recall rounds")
 	flags.IntVar(&opts.limit, "limit", 400, "maximum eligible source chunks")
+	flags.IntVar(&opts.lexiconPolicy.MinDocumentFrequency, "lexicon-min-docs", 3, "independent receipts required for static term activation")
+	flags.IntVar(&opts.lexiconPolicy.MinBoundaryDiversity, "lexicon-min-boundaries", 2, "distinct left and right boundaries required for activation")
+	flags.Float64Var(&opts.lexiconPolicy.MinActivationScore, "lexicon-min-score", 6, "minimum evidence score for activation")
+	flags.Float64Var(&opts.lexiconPolicy.MaxAverageOccurrences, "lexicon-max-average-occurrences", 8, "maximum average occurrences per receipt")
 	if err := flags.Parse(arguments); err != nil {
 		return err
 	}
@@ -53,6 +60,12 @@ func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) erro
 	}
 	if opts.limit < 10 || opts.limit > 10_000 {
 		return fmt.Errorf("-limit must be within 10..10000")
+	}
+	if opts.lexiconPolicy.MinDocumentFrequency < 2 || opts.lexiconPolicy.MinDocumentFrequency > 100_000 ||
+		opts.lexiconPolicy.MinBoundaryDiversity < 1 || opts.lexiconPolicy.MinBoundaryDiversity > 8 ||
+		opts.lexiconPolicy.MinActivationScore <= 0 || opts.lexiconPolicy.MinActivationScore > 100 ||
+		opts.lexiconPolicy.MaxAverageOccurrences < 1 || opts.lexiconPolicy.MaxAverageOccurrences > 100 {
+		return fmt.Errorf("lexicon policy flags are outside their supported evaluation range")
 	}
 	source, err := loadSource(opts.sourcePath, opts.sourceKind)
 	if err != nil {

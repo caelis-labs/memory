@@ -11,8 +11,13 @@ import (
 )
 
 const (
-	maxLexicalTerms  = 256
-	maxLexicalNGrams = 512
+	maxLexicalTerms           = 256
+	maxLexicalNGrams          = 512
+	lexicalFirstTermWeight    = 2.0
+	lexicalNGramWeight        = 0.25
+	lexicalExactPhraseWeight  = 4.0
+	lexicalPrivateTermWeight  = 3.0
+	lexicalBM25TieBreakWeight = 0.001
 )
 
 var (
@@ -102,20 +107,26 @@ func lexicalRank(query, text string, privateTerms []string, bm25 float64) (float
 		}
 		weight := 1.0
 		if index == 0 {
-			weight = 2.0
+			weight = lexicalFirstTermWeight
 		}
 		score += weight
 	}
 	for _, term := range strings.Fields(queryDocument.ngrams) {
 		if _, found := textNGrams[term]; found {
-			score += 0.25
+			score += lexicalNGramWeight
 		}
 	}
 	normalizedQuery := strings.ToLower(strings.TrimSpace(query))
 	if normalizedQuery != "" && strings.Contains(strings.ToLower(text), normalizedQuery) {
-		score += 4
+		score += lexicalExactPhraseWeight
 	}
-	return -score + bm25*0.001, nil
+	for _, term := range privateTerms {
+		term = normalizeLexicalToken(term)
+		if term != "" && strings.Contains(normalizedQuery, term) && strings.Contains(strings.ToLower(text), term) {
+			score += lexicalPrivateTermWeight
+		}
+	}
+	return -score + bm25*lexicalBM25TieBreakWeight, nil
 }
 
 func fieldSet(value string) map[string]struct{} {
