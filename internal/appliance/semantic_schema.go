@@ -43,13 +43,7 @@ func createSemanticSpaceIndex(ctx context.Context, tx *sql.Tx, spaceID v1alpha1.
 		`INSERT INTO semantic_space_indexes(space_id, table_name) VALUES (?, ?)`, spaceID, tableName); err != nil {
 		return fmt.Errorf("record Space %q semantic index: %w", spaceID, err)
 	}
-	if _, err := tx.ExecContext(ctx,
-		`CREATE VIRTUAL TABLE `+tableName+` USING fts5(
-			record_id UNINDEXED,
-			revision UNINDEXED,
-			text,
-			tokenize = 'unicode61'
-		)`); err != nil {
+	if err := createSemanticFTSTable(ctx, tx, tableName); err != nil {
 		return fmt.Errorf("create Space %q semantic index: %w", spaceID, err)
 	}
 	return nil

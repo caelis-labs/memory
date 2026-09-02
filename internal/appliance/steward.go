@@ -194,8 +194,7 @@ func (s *Store) ApplyStewardProposal(
 		if _, err := tx.ExecContext(ctx, `DELETE FROM `+tableName+` WHERE record_id = ?`, recordID); err != nil {
 			return rollback(fmt.Errorf("replace semantic projection: %w", err))
 		}
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO `+tableName+`(record_id, revision, text) VALUES (?, ?, ?)`, recordID, revision, canonical.Text); err != nil {
+		if err := indexSemanticProjection(ctx, tx, tableName, recordID, revision, canonical.Text, nil); err != nil {
 			return rollback(fmt.Errorf("index semantic Revision: %w", err))
 		}
 		result.RecordID = recordID

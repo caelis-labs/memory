@@ -10,9 +10,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
-	"strings"
 	"time"
-	"unicode"
 
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 )
@@ -154,8 +152,7 @@ func (s *Store) Remember(
 		_ = tx.Rollback()
 		return v1alpha1.RememberResponse{}, s.databaseError("resolve Space index", err)
 	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO `+tableName+`(receipt_id, text) VALUES (?, ?)`, receiptID, request.Text); err != nil {
+	if err := indexReceiptProjection(ctx, tx, tableName, receiptID, request.Text, nil); err != nil {
 		_ = tx.Rollback()
 		return v1alpha1.RememberResponse{}, s.databaseError("index accepted receipt", err)
 	}
@@ -273,7 +270,10 @@ func (s *Store) Recall(
 			return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeUnauthorized, "consistency token Space is not readable", false)
 		}
 	}
-	ftsQuery := lexicalFTSQuery(request.Query)
+	ftsQuery, err := lexicalFTSQuery(request.Query, nil)
+	if err != nil {
+		return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "lexical analyzer is unavailable", true)
+	}
 	candidates := make([]recallCandidate, 0)
 	degraded := false
 	if ftsQuery == "" {
@@ -301,14 +301,15 @@ func (s *Store) Recall(
 			return v1alpha1.RecallResponse{}, s.databaseError("read Space class", err)
 		}
 		rows, err := tx.QueryContext(ctx,
-			`SELECT r.receipt_id, r.text, r.received_at, r.commit_sequence, bm25(`+tableName+`)
+			`SELECT r.receipt_id, r.text, r.received_at, r.commit_sequence,
+			 bm25(`+tableName+`, 0.0, 4.0, 2.0, 0.25)
 			 FROM `+tableName+` f
 			 JOIN receipts r ON r.receipt_id = f.receipt_id AND r.space_id = ?
 			 WHERE `+tableName+` MATCH ?
 			 AND NOT EXISTS (
 				 SELECT 1 FROM receipt_corrections c WHERE c.original_receipt_id = r.receipt_id
 			 )
-			 ORDER BY bm25(`+tableName+`), r.commit_sequence DESC, r.receipt_id
+			 ORDER BY bm25(`+tableName+`, 0.0, 4.0, 2.0, 0.25), r.commit_sequence DESC, r.receipt_id
 			 LIMIT 512`, spaceID, ftsQuery)
 		if err != nil {
 			return v1alpha1.RecallResponse{}, s.databaseError("query Space index", err)
@@ -318,10 +319,16 @@ func (s *Store) Recall(
 			var receivedAt string
 			candidate.class = class
 			var receiptID v1alpha1.ReceiptID
+			var bm25Rank float64
 			if err := rows.Scan(
-				&receiptID, &candidate.text, &receivedAt, &candidate.commitSequence, &candidate.rank); err != nil {
+				&receiptID, &candidate.text, &receivedAt, &candidate.commitSequence, &bm25Rank); err != nil {
 				_ = rows.Close()
 				return v1alpha1.RecallResponse{}, s.databaseError("read Space candidate", err)
+			}
+			candidate.rank, err = lexicalRank(request.Query, candidate.text, nil, bm25Rank)
+			if err != nil {
+				_ = rows.Close()
+				return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "lexical analyzer is unavailable", true)
 			}
 			candidate.observedAt, err = parseTime(receivedAt)
 			if err != nil {
@@ -338,7 +345,7 @@ func (s *Store) Recall(
 		if err := rows.Err(); err != nil {
 			return v1alpha1.RecallResponse{}, s.databaseError("query Space candidates", err)
 		}
-		semanticCandidates, semanticDegraded, err := s.semanticRecallCandidates(ctx, tx, spaceID, class, ftsQuery)
+		semanticCandidates, semanticDegraded, err := s.semanticRecallCandidates(ctx, tx, spaceID, class, request.Query, ftsQuery)
 		if err != nil {
 			return v1alpha1.RecallResponse{}, s.serviceError(v1alpha1.ErrorCodeDeadline, "request deadline exceeded", true)
 		}
@@ -488,23 +495,6 @@ func rememberRequestDigest(request v1alpha1.RememberRequest) (string, error) {
 	}
 	digest := sha256.Sum256(normalized)
 	return hex.EncodeToString(digest[:]), nil
-}
-
-func lexicalFTSQuery(query string) string {
-	terms := strings.Fields(query)
-	quoted := make([]string, 0, min(len(terms), 64))
-	for _, term := range terms {
-		if len(quoted) == 64 {
-			break
-		}
-		if !strings.ContainsFunc(term, func(value rune) bool {
-			return unicode.IsLetter(value) || unicode.IsNumber(value)
-		}) {
-			continue
-		}
-		quoted = append(quoted, `"`+strings.ReplaceAll(term, `"`, `""`)+`"`)
-	}
-	return strings.Join(quoted, " OR ")
 }
 
 func fitProjectedText(existing []v1alpha1.RecallFragment, value string, maxBytes int) (string, bool, bool) {

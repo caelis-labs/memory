@@ -30,7 +30,10 @@ func (s *Store) SearchReceipts(
 	if err := request.Validate(); err != nil {
 		return managementv1alpha1.SearchReceiptsResponse{}, s.serviceError(v1alpha1.ErrorCodeInvalidArgument, err.Error(), false)
 	}
-	ftsQuery := lexicalFTSQuery(request.Query)
+	ftsQuery, err := lexicalFTSQuery(request.Query, nil)
+	if err != nil {
+		return managementv1alpha1.SearchReceiptsResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "lexical analyzer is unavailable", true)
+	}
 	if ftsQuery == "" {
 		return managementv1alpha1.SearchReceiptsResponse{}, s.serviceError(v1alpha1.ErrorCodeInvalidArgument, "query has no searchable terms", false)
 	}
@@ -59,21 +62,27 @@ func (s *Store) SearchReceipts(
 			 r.received_at, r.commit_sequence, p.state,
 			 COALESCE((SELECT replacement_receipt_id FROM receipt_corrections WHERE original_receipt_id = r.receipt_id), ''),
 			 COALESCE((SELECT original_receipt_id FROM receipt_corrections WHERE replacement_receipt_id = r.receipt_id), ''),
-			 bm25(`+tableName+`)
+			 bm25(`+tableName+`, 0.0, 4.0, 2.0, 0.25)
 			 FROM `+tableName+` f
 			 JOIN receipts r ON r.receipt_id = f.receipt_id
 			 JOIN receipt_processing p ON p.receipt_id = r.receipt_id
 			 WHERE `+tableName+` MATCH ?`+activePredicate+`
-			 ORDER BY bm25(`+tableName+`), r.commit_sequence DESC, r.receipt_id
+			 ORDER BY bm25(`+tableName+`, 0.0, 4.0, 2.0, 0.25), r.commit_sequence DESC, r.receipt_id
 			 LIMIT ?`, ftsQuery, request.Limit+1)
 		if err != nil {
 			return managementv1alpha1.SearchReceiptsResponse{}, s.databaseError("query management receipt search", err)
 		}
 		for rows.Next() {
 			var candidate receiptSearchCandidate
-			if err := scanManagementReceipt(rows, &candidate.receipt, &candidate.rank); err != nil {
+			var bm25Rank float64
+			if err := scanManagementReceipt(rows, &candidate.receipt, &bm25Rank); err != nil {
 				_ = rows.Close()
 				return managementv1alpha1.SearchReceiptsResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "stored receipt metadata is invalid", false)
+			}
+			candidate.rank, err = lexicalRank(request.Query, candidate.receipt.Text, nil, bm25Rank)
+			if err != nil {
+				_ = rows.Close()
+				return managementv1alpha1.SearchReceiptsResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "lexical analyzer is unavailable", true)
 			}
 			candidates = append(candidates, candidate)
 		}
@@ -243,7 +252,7 @@ func (s *Store) CorrectReceipt(
 	if err != nil {
 		return rollback(s.databaseError("resolve correction Space index", err))
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO `+tableName+`(receipt_id, text) VALUES (?, ?)`, replacementID, request.ReplacementText); err != nil {
+	if err := indexReceiptProjection(ctx, tx, tableName, replacementID, request.ReplacementText, nil); err != nil {
 		return rollback(s.databaseError("index replacement receipt", err))
 	}
 	if _, err := tx.ExecContext(ctx,

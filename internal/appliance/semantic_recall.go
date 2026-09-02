@@ -20,6 +20,7 @@ func (s *Store) semanticRecallCandidates(
 	db databaseExecutor,
 	spaceID v1alpha1.SpaceID,
 	class v1alpha1.SpaceClass,
+	query string,
 	ftsQuery string,
 ) ([]recallCandidate, bool, error) {
 	if err := contextError(ctx); err != nil {
@@ -67,12 +68,13 @@ func (s *Store) semanticRecallCandidates(
 		return nil, false, ctx.Err()
 	}
 	rows, err := db.QueryContext(ctx,
-		`SELECT r.record_id, r.current_revision, v.text, r.updated_at, bm25(`+tableName+`)
+		`SELECT r.record_id, r.current_revision, v.text, r.updated_at,
+		 bm25(`+tableName+`, 0.0, 0.0, 4.0, 2.0, 0.25)
 		 FROM `+tableName+` f
 		 JOIN semantic_records r ON r.record_id = f.record_id AND r.space_id = ?
 		 JOIN semantic_revisions v ON v.record_id = r.record_id AND v.revision = r.current_revision
 		 WHERE `+tableName+` MATCH ? AND r.status = 'active' AND r.current_revision = f.revision
-		 ORDER BY bm25(`+tableName+`), r.updated_at DESC, r.record_id
+		 ORDER BY bm25(`+tableName+`, 0.0, 0.0, 4.0, 2.0, 0.25), r.updated_at DESC, r.record_id
 		 LIMIT 512`, spaceID, ftsQuery)
 	if err != nil {
 		if contextError(ctx) != nil {
@@ -86,7 +88,13 @@ func (s *Store) semanticRecallCandidates(
 		var recordID stewardv1alpha1.RecordID
 		var revision uint64
 		var updatedAt string
-		if err := rows.Scan(&recordID, &revision, &candidate.text, &updatedAt, &candidate.rank); err != nil {
+		var bm25Rank float64
+		if err := rows.Scan(&recordID, &revision, &candidate.text, &updatedAt, &bm25Rank); err != nil {
+			_ = rows.Close()
+			return nil, true, nil
+		}
+		candidate.rank, err = lexicalRank(query, candidate.text, nil, bm25Rank)
+		if err != nil {
 			_ = rows.Close()
 			return nil, true, nil
 		}

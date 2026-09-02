@@ -292,6 +292,10 @@ var migrations = []migration{
 			 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
 		},
 	},
+	{
+		version: 5,
+		apply:   migrateLexicalProjection,
+	},
 }
 
 func migrate(ctx context.Context, db *sql.DB, now time.Time) error {

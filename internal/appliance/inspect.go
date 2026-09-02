@@ -397,9 +397,7 @@ func (s *Store) RebuildFTS(ctx context.Context) error {
 			_ = tx.Rollback()
 			return fmt.Errorf("clear Space FTS projection: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO `+item.tableName+`(receipt_id, text)
-			 SELECT receipt_id, text FROM receipts WHERE space_id = ? ORDER BY commit_sequence`, item.spaceID); err != nil {
+		if err := rebuildReceiptProjection(ctx, tx, item.spaceID, item.tableName, nil); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("rebuild Space FTS projection: %w", err)
 		}
@@ -438,13 +436,7 @@ func (s *Store) RebuildFTS(ctx context.Context) error {
 			_ = tx.Rollback()
 			return fmt.Errorf("clear semantic Space FTS projection: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO `+item.tableName+`(record_id, revision, text)
-			 SELECT r.record_id, r.current_revision, v.text
-			 FROM semantic_records r
-			 JOIN semantic_revisions v ON v.record_id = r.record_id AND v.revision = r.current_revision
-			 WHERE r.space_id = ? AND r.status = 'active'
-			 ORDER BY r.record_id`, item.spaceID); err != nil {
+		if err := rebuildSemanticProjection(ctx, tx, item.spaceID, item.tableName, nil); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("rebuild semantic Space FTS projection: %w", err)
 		}
@@ -467,12 +459,7 @@ func createSpaceIndex(ctx context.Context, tx *sql.Tx, spaceID v1alpha1.SpaceID)
 		`INSERT INTO space_indexes(space_id, table_name) VALUES (?, ?)`, spaceID, tableName); err != nil {
 		return fmt.Errorf("record Space %q index: %w", spaceID, err)
 	}
-	if _, err := tx.ExecContext(ctx,
-		`CREATE VIRTUAL TABLE `+tableName+` USING fts5(
-			receipt_id UNINDEXED,
-			text,
-			tokenize = 'unicode61'
-		)`); err != nil {
+	if err := createReceiptFTSTable(ctx, tx, tableName); err != nil {
 		return fmt.Errorf("create Space %q index: %w", spaceID, err)
 	}
 	return createSemanticSpaceIndex(ctx, tx, spaceID)
