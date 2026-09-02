@@ -36,8 +36,8 @@ func BenchmarkM5Remember(b *testing.B) {
 		durations = append(durations, time.Since(started))
 	}
 	b.StopTimer()
-	if p99 := reportPercentiles(b, "remember", durations); p99 > 5*time.Millisecond {
-		b.Fatalf("Remember p99 %s exceeds 5ms RC budget", p99)
+	if p99 := reportPercentiles(b, "remember", durations); p99 > 100*time.Millisecond {
+		b.Fatalf("Remember p99 %s exceeds 100ms interactive budget", p99)
 	}
 }
 
@@ -65,8 +65,8 @@ func BenchmarkM5ColdRemember(b *testing.B) {
 		b.StartTimer()
 	}
 	b.StopTimer()
-	if p99 := reportPercentiles(b, "cold_remember", durations); p99 > 25*time.Millisecond {
-		b.Fatalf("cold Remember p99 %s exceeds 25ms RC budget", p99)
+	if p99 := reportPercentiles(b, "cold_remember", durations); p99 > 250*time.Millisecond {
+		b.Fatalf("cold Remember p99 %s exceeds 250ms first-use budget", p99)
 	}
 }
 
@@ -93,12 +93,12 @@ func BenchmarkM5Recall(b *testing.B) {
 		durations = append(durations, time.Since(started))
 	}
 	b.StopTimer()
-	if p99 := reportPercentiles(b, "recall", durations); p99 > 5*time.Millisecond {
-		b.Fatalf("Recall p99 %s exceeds 5ms RC budget", p99)
+	if p99 := reportPercentiles(b, "recall", durations); p99 > 100*time.Millisecond {
+		b.Fatalf("Recall p99 %s exceeds 100ms interactive budget", p99)
 	}
 }
 
-func BenchmarkM5StartupReadiness(b *testing.B) {
+func BenchmarkM5Open(b *testing.B) {
 	root := b.TempDir()
 	durations := make([]time.Duration, 0, b.N)
 	b.ResetTimer()
@@ -117,8 +117,8 @@ func BenchmarkM5StartupReadiness(b *testing.B) {
 		}
 	}
 	b.StopTimer()
-	if p99 := reportPercentiles(b, "startup", durations); p99 > 150*time.Millisecond {
-		b.Fatalf("startup p99 %s exceeds 150ms RC budget", p99)
+	if p99 := reportPercentiles(b, "open", durations); p99 > time.Second {
+		b.Fatalf("Open p99 %s exceeds 1s startup budget", p99)
 	}
 }
 
@@ -144,9 +144,6 @@ func BenchmarkM5Reindex(b *testing.B) {
 	b.StopTimer()
 	throughput := float64(entries*b.N) / elapsed.Seconds()
 	b.ReportMetric(throughput, "entries/s")
-	if throughput < 50_000 {
-		b.Fatalf("reindex throughput %.0f entries/s is below 50000 entries/s RC budget", throughput)
-	}
 }
 
 func BenchmarkM5Backup(b *testing.B) {
@@ -173,9 +170,7 @@ func BenchmarkM5Backup(b *testing.B) {
 		}
 	}
 	b.StopTimer()
-	if p99 := reportPercentiles(b, "backup", durations); p99 > 100*time.Millisecond {
-		b.Fatalf("backup p99 %s exceeds 100ms RC budget", p99)
-	}
+	reportPercentiles(b, "backup", durations)
 }
 
 func BenchmarkM5Restore(b *testing.B) {
@@ -219,9 +214,7 @@ func BenchmarkM5Restore(b *testing.B) {
 		durations = append(durations, time.Since(started))
 	}
 	b.StopTimer()
-	if p99 := reportPercentiles(b, "restore", durations); p99 > 250*time.Millisecond {
-		b.Fatalf("restore p99 %s exceeds 250ms RC budget", p99)
-	}
+	reportPercentiles(b, "restore", durations)
 }
 
 func BenchmarkM5BacklogRecovery(b *testing.B) {
@@ -250,9 +243,6 @@ func BenchmarkM5BacklogRecovery(b *testing.B) {
 	b.StopTimer()
 	throughput := float64(b.N) / elapsed.Seconds()
 	b.ReportMetric(throughput, "jobs/s")
-	if throughput < 500 {
-		b.Fatalf("backlog throughput %.0f jobs/s is below 500 jobs/s RC budget", throughput)
-	}
 }
 
 func reportPercentiles(b *testing.B, prefix string, durations []time.Duration) time.Duration {

@@ -44,6 +44,18 @@ type codexMessageContent struct {
 	Text string `json:"text"`
 }
 
+type caelisEvent struct {
+	Type       string `json:"type"`
+	Visibility string `json:"visibility"`
+	Message    *struct {
+		Role  string `json:"role"`
+		Parts []struct {
+			Kind string          `json:"kind"`
+			Text json.RawMessage `json:"text"`
+		} `json:"parts"`
+	} `json:"message"`
+}
+
 func loadSource(path, requestedKind string) (sourceData, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -88,6 +100,8 @@ func loadSource(path, requestedKind string) (sourceData, error) {
 		err = scanMarkdown(reader, add)
 	case "codex-jsonl":
 		err = scanCodexJSONL(reader, add)
+	case "caelis-jsonl":
+		err = scanCaelisJSONL(reader, add)
 	default:
 		return sourceData{}, fmt.Errorf("unsupported source format")
 	}
@@ -100,7 +114,7 @@ func loadSource(path, requestedKind string) (sourceData, error) {
 
 func resolveSourceKind(path, requested string) (string, error) {
 	switch requested {
-	case "markdown", "codex-jsonl":
+	case "markdown", "codex-jsonl", "caelis-jsonl":
 		return requested, nil
 	case "auto":
 		if strings.EqualFold(filepath.Ext(path), ".jsonl") {
@@ -108,8 +122,55 @@ func resolveSourceKind(path, requested string) (string, error) {
 		}
 		return "markdown", nil
 	default:
-		return "", fmt.Errorf("-format must be auto, markdown, or codex-jsonl")
+		return "", fmt.Errorf("-format must be auto, markdown, codex-jsonl, or caelis-jsonl")
 	}
+}
+
+func scanCaelisJSONL(reader io.Reader, add func(string)) error {
+	scanner := newEvaluationScanner(reader)
+	lineNumber := 0
+	for scanner.Scan() {
+		lineNumber++
+		var event caelisEvent
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			return fmt.Errorf("decode Caelis JSONL event %d: %w", lineNumber, err)
+		}
+		if event.Visibility != "canonical" || event.Message == nil ||
+			(event.Type != "user" && event.Type != "assistant") ||
+			(event.Message.Role != "user" && event.Message.Role != "assistant") {
+			continue
+		}
+		for _, part := range event.Message.Parts {
+			if part.Kind != "text" {
+				continue
+			}
+			text, err := decodeCaelisText(part.Text)
+			if err != nil {
+				return fmt.Errorf("decode Caelis JSONL text %d: %w", lineNumber, err)
+			}
+			for _, line := range strings.Split(text, "\n") {
+				add(line)
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("scan Caelis JSONL source: %w", err)
+	}
+	return nil
+}
+
+func decodeCaelisText(raw json.RawMessage) (string, error) {
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return text, nil
+	}
+	var envelope struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil || envelope.Text == "" {
+		return "", fmt.Errorf("unsupported canonical text part")
+	}
+	return envelope.Text, nil
 }
 
 func scanMarkdown(reader io.Reader, add func(string)) error {

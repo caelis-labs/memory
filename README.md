@@ -1,111 +1,88 @@
 # Memory
 
-Memory is an independently running memory appliance for Agents. Its stable
-model-facing surface is deliberately small:
+Memory is a Go package that gives Agent hosts a durable memory system with a
+deliberately small model-facing surface:
 
 ```text
 remember(text)
 recall(query)
 ```
 
-The appliance, rather than an Agent host, owns identity continuity, Spaces,
-Views, durable receipts, retrieval, classification, consolidation, lifecycle,
-and forgetting. The repository ships the standalone durable Core, the M2
-host-integration boundary, and the versioned owner-management foundation.
+The package owns identity continuity, Spaces, Views, durable receipts,
+retrieval, classification, consolidation, lifecycle, and forgetting. A host
+opens the package, binds those two operations, and may inject a model-backed
+Steward callback through its existing provider stack.
+
+Caelis imports Memory and runs it as part of the Caelis Host. There is no
+separate Memory download, installation, process, endpoint, readiness state, or
+user configuration. A Host that starts successfully has already opened and
+migrated its Memory database.
+
+## Packages
+
+- `appliance` exposes the narrow embedded lifecycle and direct data,
+  management, capability, and Steward planes;
+- `api/memory/*` owns versioned public contracts;
+- `sdk/go/memory` binds hidden host context to Remember and Recall;
+- `internal/appliance` owns SQLite, migrations, authorization, retrieval,
+  governance, and semantic application;
+- `conformance` owns reusable semantic and durable behavior suites.
+
+Hosts must not open `memory.db`, import `internal/*`, mirror Memory state, or
+let model arguments choose identity, Space, View, audience, retrieval policy,
+or lifecycle.
 
 ## Current capabilities
 
-M0 froze the contract and M1 provides:
-
 - immutable durable receipts with separate processing state;
 - Realm, Identity, private/shared Space, View, Grant, issuer, capability, and
-  idempotency state in a migrated SQLite authority;
-- independent per-Space FTS5 projections rebuildable from receipts;
-- owner locking, distinct owner-only management/Worker credentials, Unix Domain
-  Socket transport, and a buildable Windows named-pipe transport preview;
-- health, readiness, graceful shutdown, bootstrap, issue, issuer rotation,
-  inspect, revoke, Remember, Recall, and FTS-rebuild commands;
-- semantic conformance plus a separate-process crash/restart harness proving
-  acknowledged durability and restart idempotency.
+  idempotency state in migrated SQLite;
+- authorization-first per-Space receipt and semantic FTS;
+- immediate read-your-writes and restart durability;
+- receipt search, provenance, correction, deletion, backup/restore, and
+  diagnostics management foundations;
+- durable Steward jobs with typed `ADD`, `MERGE`, `SUPERSEDE`, and `IGNORE`
+  proposals;
+- evidence and revision validation owned by Memory;
+- a provider-neutral Steward `Generator` boundary;
+- static receipt/lexical Recall that consumes zero model tokens when no Steward
+  model is bound.
 
-The Memory-owned M2 boundary additionally provides:
+## Embedded use
 
-- exact local transport, API, and Core Profile handshake;
-- immutable service version and source revision in packaged `memoryd` binaries;
-- a public issuer plane that keeps issuer credentials outside request bodies;
-- a Go SDK for handshake, Runtime capability issuance/renewal, and native
-  sidecar manifest verification;
-- `make sidecar`, which accepts only a clean exact HEAD and emits native
-  `memoryd` and `memoryctl` executables with SHA-256 manifests and detached
-  checksums.
+```go
+runtime, err := appliance.Open(ctx, appliance.Options{DataDir: dataDir})
+if err != nil {
+    return err
+}
+defer runtime.Close()
 
-M3 Governance and Production Safety additionally provides:
+client := memory.NewClient(runtime.DataPlane(), capabilities, source, budget)
+```
 
-- versioned `memory.management.v1alpha1` wire types and Go client;
-- owner-authorized receipt search and provenance trace;
-- append-only, same-Space corrections that shadow rather than rewrite evidence;
-- idempotent hard deletion with content-free tombstones and resurrection
-  prevention;
-- secret-free capacity, storage, receipt, projection, capability, restore, and
-  rollback diagnostics;
-- recoverable management-bearer rotation plus `memoryctl` governance commands;
-- sensitive NDJSON export, streaming encrypted backup with a separate
-  owner-only key, offline verified restore, storage-generation rotation, and a
-  management-only verification state with explicit commit or rollback;
-- lossless offline upgrade preparation and supported native sidecar packaging
-  for macOS on Apple silicon (`darwin/arm64`).
+The embedding remains responsible for product configuration, model selection,
+tool projection, Session ToolResult persistence, and replay. Memory remains
+responsible for every memory-domain mutation and authorization decision.
 
-The baseline appliance remains useful with every model and Worker disabled.
-Other buildable platforms are preview-only until they receive native lifecycle
-evidence. Caelis integration is independently owned and pins an exact published
-Memory revision and sidecar digest.
+## Standalone framework
 
-The M4 Semantic Steward foundation additionally provides:
+`cmd/memoryd`, `cmd/memoryctl`, local transport, and packaging code are retained
+as a future standalone-distribution framework for non-Go hosts and ecosystem
+Plugins. They are buildable but are not the current product, are not published
+for Caelis, and are not part of the current GA critical path.
 
-- a versioned Steward protocol and typed `ADD`, `MERGE`, `SUPERSEDE`, and
-  `IGNORE` proposal vocabulary;
-- migrated Record, immutable Revision/Evidence, profile, and durable Job state;
-- deterministic same-Space validation, optimistic Revisions, governance
-  invalidation, and idempotent unknown-outcome recovery;
-- immutable prompt-policy profile versions and future-Job Space bindings through
-  the owner management plane;
-- a versioned external Worker claim/apply/fail protocol and Go SDK `Generator`
-  callback, letting downstream hosts reuse their existing provider, model, and
-  credentials;
-- appliance-owned durable leases, retry ceilings, evidence validation, atomic
-  application, and terminal poisoning controls, with no outbound model adapter
-  in `memoryd`;
-- authorization-first per-Space semantic Recall, deterministic receipt/Record
-  merge and deduplication with complete provenance;
-- receipt-only fallback with `degraded=true`, semantic projection rebuild, and
-  secret-free profile, backlog, Record, and projection diagnostics.
+Read the [specification](docs/memory-appliance-spec.md),
+[roadmap](docs/memory-appliance-roadmap.md),
+[acceptance plan](docs/memory-appliance-acceptance.md), and
+[evaluation procedure](docs/memory-appliance-evaluation.md) before extending
+the public API.
 
-`v0.5.0-rc.1` has native `darwin/arm64` candidate evidence. The GA RoadMap now
-requires `darwin`/`linux`/`windows` on both `amd64` and `arm64`, packages both
-`memoryd` and the operator-facing `memoryctl`, and pauses for external review
-before publication. Agent-facing CLI/MCP adapters are deferred; the preferred
-post-GA ecosystem surface is a publishable Plugin over the same SDK contracts.
-The transport-neutral endpoint and Windows named-pipe/ACL/lock implementations
-now cross-build on both Windows architectures; native lifecycle evidence remains
-a release gate. Linux native gates run in the local OrbStack Rocky environment,
-with the current ARM64 machine covering only `linux/arm64`.
-
-Read [the specification](docs/memory-appliance-spec.md),
-[roadmap](docs/memory-appliance-roadmap.md), and
-[acceptance plan](docs/memory-appliance-acceptance.md) before extending the API.
-Use the [memoryd operations guide](docs/memoryd-operations.md) to run the standalone
-Golden Path. The [release procedure](docs/memory-appliance-release.md) owns M5
-and GA Closure quality, native artifact, incident, upgrade, and publication gates. The
-[corpus evaluation procedure](docs/memory-appliance-evaluation.md) measures
-privacy-safe multi-round behavior with local Markdown or Session JSONL sources.
-
-Run the current gates with:
+Run the package gates with:
 
 ```sh
 make check
 make race
 make durable
-make release-candidate
 ```
 
 The repository gates set `GOWORK=off` so the module remains independently

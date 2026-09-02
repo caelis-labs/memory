@@ -33,8 +33,8 @@ func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) erro
 	flags := flag.NewFlagSet("corpus_eval", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	var opts options
-	flags.StringVar(&opts.sourcePath, "source", "", "local MEMORY.md or Codex Session JSONL source")
-	flags.StringVar(&opts.sourceKind, "format", "auto", "source format: auto, markdown, or codex-jsonl")
+	flags.StringVar(&opts.sourcePath, "source", "", "local Memory Markdown or Codex/Caelis Session JSONL source")
+	flags.StringVar(&opts.sourceKind, "format", "auto", "source format: auto, markdown, codex-jsonl, or caelis-jsonl")
 	flags.StringVar(&opts.outputPath, "output", "", "optional owner-only aggregate JSON report")
 	flags.StringVar(&opts.dataDir, "data-dir", "", "optional retained evaluation data directory")
 	flags.IntVar(&opts.rounds, "rounds", 6, "number of write, restart, and Recall rounds")

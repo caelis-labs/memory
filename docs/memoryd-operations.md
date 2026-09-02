@@ -1,7 +1,8 @@
 # memoryd Operations
 
-Status: current operator guide for the standalone durable Core, versioned owner
-management plane, and packaged local sidecar.
+Status: deferred standalone-distribution guide. These commands and transport
+contracts are retained for future non-Go consumers; they are not part of the
+current Caelis installation, release, startup, or GA acceptance path.
 
 `memoryd` runs without Caelis and remains fully useful without a model. An
 optional downstream process may claim Steward Jobs through the external Worker
@@ -24,18 +25,15 @@ GOWORK=off go build -o ./memoryctl ./cmd/memoryctl
 Starting no downstream Worker runs the durable receipt/FTS appliance with no
 model egress or semantic background work.
 
-For a host-managed native sidecar on a supported platform, build only from a
-clean exact revision:
+For standalone-framework development, build only from a clean exact revision:
 
 ```sh
 make sidecar-supported
 ```
 
-The `v0.5.0-rc.1` support matrix contains macOS on Apple silicon
-(`darwin/arm64`) only. Formal GA requires all six RoadMap platforms and both
-`memoryd` and `memoryctl`; until that evidence exists, `make sidecar` can create buildable preview
-artifacts for development, but preview buildability is not native lifecycle or
-release support evidence.
+The historical `v0.5.0-rc.1` preview covered macOS on Apple silicon only.
+`make sidecar` may still create development artifacts, but no current Memory Go
+package or Caelis acceptance claim is derived from those binaries.
 
 The target emits `memoryd-$GOOS-$GOARCH` and
 `memoryctl-$GOOS-$GOARCH`, neighboring JSON manifests, and detached `.sha256`
@@ -515,12 +513,11 @@ Rollback rotates storage generation, so cached consistency cursors fail stale;
 it does not lose an effect acknowledged before the old service stopped. Start
 the old exact artifact and rerun readiness plus the Golden Path.
 
-To disable Memory at the product layer, first remove the two tools through the
-Caelis Memory feature flag or kill switch, then stop its managed sidecar. This
-does not delete or rewrite the appliance directory. Re-enabling may reuse it
-only after the pinned manifest, digest, compatibility identity, and management
-diagnostics pass again. Erasure is the explicit deletion workflow, never a
-side effect of feature disable or binary rollback.
+An independent future consumer may stop its standalone process without deleting
+or rewriting the appliance directory. Caelis has no Memory sidecar, feature
+kill switch, or separate process lifecycle; it embeds the Go package. Erasure
+is always an explicit deletion workflow, never a side effect of stopping a
+consumer or rolling back a binary.
 
 Send `SIGTERM` or interrupt `memoryd` for a bounded graceful drain. A crash may
 leave the Socket node behind, but the process owner lock is released by the OS

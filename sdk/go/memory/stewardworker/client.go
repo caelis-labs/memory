@@ -111,6 +111,14 @@ type Generator interface {
 	Generate(context.Context, stewardv1alpha1.WorkRequest) (stewardv1alpha1.Proposal, error)
 }
 
+// Worker is the provider-neutral Steward work plane. The local transport
+// Client and the embedded appliance runtime both implement it.
+type Worker interface {
+	Claim(context.Context, time.Duration) (stewardv1alpha1.ClaimResponse, error)
+	Apply(context.Context, stewardv1alpha1.ApplyRequest) (stewardv1alpha1.ApplyResponse, error)
+	Fail(context.Context, stewardv1alpha1.FailRequest) error
+}
+
 // GenerationError classifies a model failure without persisting model output or
 // provider details. Code must contain only lowercase letters, digits, or `_`.
 type GenerationError struct {
@@ -135,9 +143,9 @@ type RunnerOptions struct {
 }
 
 // Runner claims Jobs, invokes Generator with only model-facing data, and
-// submits results. Durable retry policy remains in memoryd.
+// submits results. Durable retry policy remains in the Memory core.
 type Runner struct {
-	Client    *Client
+	Client    Worker
 	Generator Generator
 	Options   RunnerOptions
 }

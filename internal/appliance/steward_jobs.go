@@ -330,7 +330,7 @@ func (s *Store) FailStewardJob(ctx context.Context, lease StewardLease, failure 
 }
 
 // ReportStewardFailure applies the appliance-owned retry ceiling and delay to a
-// classified external Worker failure.
+// classified downstream Worker failure.
 func (s *Store) ReportStewardFailure(ctx context.Context, request stewardv1alpha1.FailRequest) error {
 	if err := s.requireMutableGeneration(); err != nil {
 		return err

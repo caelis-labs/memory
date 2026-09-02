@@ -4,8 +4,8 @@ Status: normative `memory.v1alpha1` data-plane and
 `memory.management.v1alpha1` owner-management contracts.
 
 This document owns the stable boundary between an Agent host such as Caelis and
-the independently running Memory Appliance. Internal algorithms and future
-storage design are intentionally separated into
+the Memory Go package. Process placement is an adapter choice, not a domain
+boundary. Internal algorithms and future storage design are separated into
 [Memory Appliance Internals](memory-appliance-internals.md).
 
 ## Purpose
@@ -25,7 +25,7 @@ as model arguments.
 
 ## Required properties
 
-- A successful Remember is acknowledged only after the owning service has
+- A successful Remember is acknowledged only after the owning runtime has
   durably committed its immutable receipt payload.
 - An unknown Remember outcome is retried with the same idempotency key.
 - A successful Remember is immediately visible to a following authorized Recall
@@ -61,7 +61,8 @@ The host owns:
 - actor-to-Memory binding and acquisition of a temporary capability;
 - tool admission, hidden request metadata, and model-visible projection;
 - exact ToolCall and ToolResult persistence and replay;
-- service discovery, lifecycle, version pinning, and product diagnostics;
+- package construction, data-directory placement, shutdown, and product
+  diagnostics;
 - prevention of disclosure after private memory enters model context.
 
 The Memory Appliance owns:
@@ -75,9 +76,9 @@ The Memory Appliance owns:
 - data-plane and management-plane authorization;
 - migrations, backup, restore, inspection, and deletion of appliance data.
 
-A host may depend on a versioned SDK. It must not import Memory storage, index,
-domain, or Steward implementation packages and must not maintain a compensating
-Memory journal.
+A host may import the public `appliance`, `api`, and `sdk` packages. It must not
+import `internal/*`, open the Memory database, maintain a compensating Memory
+journal, or reinterpret storage, index, domain, and Steward state.
 
 ## Core Profile
 
@@ -155,7 +156,7 @@ principal. Merely knowing a Grant, View, actor, Session, or Space reference can
 never redeem a capability.
 
 Expired, revoked, wrong-actor, wrong-operation, wrong-audience, unknown, and
-incompatible capabilities fail closed. Capabilities and endpoint credentials
+incompatible capabilities fail closed. Capabilities and optional transport credentials
 must not enter a Session, model context, ordinary diagnostic log, or API error.
 
 ## Data-plane contract
@@ -265,7 +266,7 @@ The model sees only the ordered fragment texts:
 ```
 
 There is no `snapshot_id` in v1alpha1. Hidden response metadata may include the
-endpoint instance, API version, View reference/version, evidence references,
+API version, logical binding and View reference/version, evidence references,
 response digest, degradation state, and consistency token.
 
 `max_bytes` covers the complete encoded model-visible Recall result, including
@@ -385,7 +386,8 @@ are disabled or unavailable.
 
 ## Semantic Steward extension
 
-The external Worker protocol is `memory.steward.v1alpha1`. A logical Steward is
+The Worker contract is `memory.steward.v1alpha1`. Its primary binding is a
+direct Go interface; the retained local transport is an optional adapter. A logical Steward is
 a versioned appliance prompt-policy profile plus durable receipt jobs claimed by
 downstream Workers. It is not a permanent conversation, one Agent per Identity,
 a built-in provider stack, or a second receipt authority. Profile identity and
@@ -401,23 +403,23 @@ Worker request. Binding a profile to a Space creates Jobs only for receipts
 accepted after that binding commits. Removing the binding cancels pending or
 leased work without deleting receipts or semantic history.
 
-A separately authenticated Worker claims a bounded request containing the
+A Worker claims a bounded request containing the
 captured policy, one immutable receipt, and active same-Space Record heads with
 their Evidence. It deliberately omits Space, Job, lease, capability, View,
 Grant, actor, audience, and SourceContext. Receipt and Evidence IDs support
 proposal provenance but are not authority. Claim responses carry an opaque
 lease beside the model-facing request. The Worker SDK passes only the request
 to an injected `Generator` callback and uses the lease only to apply or fail the
-result. `memoryd` never makes an outbound model-provider call.
+result. The Memory package never makes an outbound model-provider call.
 
 The appliance reclaims expired durable leases, bounds attempts and exponential
 delay, and records only stable non-sensitive failure codes. Worker processes
 contain provider panics and enforce provider-specific response limits before
 submitting the already-bounded proposal. An unknown apply response is retried
 with the identical lease and proposal. Sending private receipt text to a model
-is an explicit downstream egress and retention decision; claiming work is
-therefore restricted by a distinct owner-local Worker bearer that is neither a
-Runtime capability nor the owner-management credential.
+is an explicit downstream egress and retention decision. An embedded Worker
+receives only the same bounded work contract; a future process transport also
+authenticates it with a distinct owner-local bearer.
 
 Worker output is an untrusted proposal with exactly four operations:
 
@@ -558,23 +560,17 @@ redaction workflow; Memory hard delete must never claim to erase those copies.
 
 ## Evolution
 
-The M2 local host profile performs an exact compatibility handshake before a
-Runtime receives Memory tools. The request names `memory.local.v1alpha1`,
-`memory.v1alpha1`, and `memory.core.v1alpha1`; the service rejects any mismatch
-with `incompatible` rather than negotiating a weaker profile. A successful
-response reports the packaged service version, exact source revision, and
-diagnostic storage schema version. The host separately verifies the native
-binary SHA-256 from a pinned sidecar manifest before launch and compares the
-handshake build identity with that manifest after readiness.
+The current host profile is source-linked. Caelis pins one Go module revision,
+opens `appliance.Runtime` synchronously, and binds the SDK directly to
+`memory.v1alpha1.DataPlane`. A successful Host construction is the only
+readiness state. There is no runtime version negotiation, endpoint discovery,
+manifest, binary digest, or weaker-profile fallback in this path.
 
-Buildability is not a support claim. `v0.5.0-rc.1` contains only native
-`darwin/arm64` evidence. Formal GA requires `darwin/amd64`, `darwin/arm64`,
-`linux/amd64`, `linux/arm64`, `windows/amd64`, and `windows/arm64`. Darwin and
-Linux use owner-only Unix Domain Sockets; Windows uses an owner-restricted named
-pipe. The endpoint representation is transport-neutral to callers and all six
-implementations expose identical application routes, authentication, and
-handshake semantics. Supported packaging rejects an artifact outside the
-native-evidence matrix even when Go can cross-compile it.
+The imported Memory package is built and tested on the same Darwin, Linux, and
+Windows AMD64/ARM64 matrix as Caelis. This is one product release and rollback
+unit. The retained local transport and commands may later support standalone
+consumers, but their packaging and compatibility policy is a separate future
+contract and cannot become a prerequisite for embedded Caelis.
 
 Runtime capability issuance is a separate issuer-plane operation. Its request
 contains principal, Grant, actor, audience, operation, and TTL references while
@@ -591,7 +587,7 @@ they cannot silently widen the Core Profile. Internal semantic candidates may
 use the already-reserved `record_refs` and `degraded` response fields without
 adding an Agent operation or changing authorization.
 
-The API may become stable `v1` only after a durable standalone service and the
-Caelis Golden Path pass end to end. M0 semantic compatibility is demonstrated
-by the shared semantic suite; durable compatibility additionally requires the
-M1 crash/restart harness. Neither is inferred from matching type names.
+The API may become stable `v1` only after the durable embedded package and the
+Caelis Golden Path pass end to end. Semantic compatibility is demonstrated by
+the shared suite; durable compatibility additionally requires real SQLite
+restart evidence. Neither is inferred from matching type names.

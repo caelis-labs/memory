@@ -2,14 +2,16 @@
 
 Status: current privacy-preserving multi-round receipt evaluation plus the G4
 input boundary. It measures the model-free durable baseline; it is not a
-substitute for external-Worker model or semantic-quality evaluation.
+substitute for downstream-Generator model or semantic-quality evaluation.
 
 ## Input boundary
 
-`scripts/corpus_eval` accepts either a local Markdown memory file or a Codex
-Session JSONL. Markdown fenced code is excluded. JSONL extraction accepts only
-user `input_text` and assistant `output_text` message items; developer messages,
-reasoning, tool calls, and tool outputs are excluded.
+`scripts/corpus_eval` accepts a local Markdown memory file, a Codex rollout
+JSONL, or a Caelis Session event JSONL. Markdown fenced code is excluded. Codex
+extraction accepts only user `input_text` and assistant `output_text` message
+items. Caelis extraction accepts only canonical user/assistant `text` parts.
+Developer data, reasoning, transient events, tool calls, and tool results are
+excluded.
 
 Source text, generated queries, receipt IDs, and data-directory paths never
 enter the report. The report contains only source format, byte count, source
@@ -54,7 +56,7 @@ make ga-soak
 ```
 
 It creates exactly 100 isolated private Spaces, acknowledges 100,000 receipts,
-organizes 10,000 semantic Record heads through the external-Worker contract,
+organizes 10,000 semantic Record heads through the Steward Worker contract,
 restarts the Store, reads every receipt status, samples every Space, rebuilds
 indexes, and verifies backup/restore. The restored generation repeats the full
 receipt-status scan, lexical and semantic Recall provenance probes, and
@@ -84,6 +86,15 @@ GOWORK=off go run ./scripts/corpus_eval \
   -output /private/path/session-corpus-report.json
 ```
 
+Evaluate one canonical Caelis Session event log:
+
+```sh
+GOWORK=off go run ./scripts/corpus_eval \
+  -source /absolute/path/to/session.events.jsonl \
+  -format caelis-jsonl -rounds 8 -limit 800 \
+  -output /private/path/caelis-session-corpus-report.json
+```
+
 Compare only aggregate reports produced from the same source digest, extraction
 rules, round count, limit, Go version, and hardware class. Durable receipt rate
 proves post-restart storage survival independently of ranking. Retrieval@8 says
@@ -94,3 +105,6 @@ mislabeling budget misses as data loss. A durable receipt rate of one and zero
 private leaks are hard requirements. Retrieval, ranking, and latency remain
 descriptive until a specific corpus digest and query policy are frozen as a
 release gate.
+
+The first retained privacy-preserving result for the package path is
+[Local Memory Registry Corpus Evidence](evidence/memory-registry-corpus-2026-09-02.md).

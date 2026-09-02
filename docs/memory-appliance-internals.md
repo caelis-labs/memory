@@ -55,8 +55,8 @@ references are unioned and sorted for deterministic provenance.
 ## Steward execution
 
 A logical Steward is a versioned prompt-policy profile plus durable jobs claimed
-by external Worker processes. It is not a permanent conversation, one process
-per identity, or a model-provider stack inside `memoryd`.
+through the Worker interface. It is not a permanent conversation, one process
+per identity, or a model-provider stack inside Memory.
 
 The first proposal vocabulary is intentionally small:
 
@@ -96,7 +96,7 @@ later binding change cannot rewrite that Job snapshot. Disabling a Space removes
 its binding and moves pending or leased Jobs plus receipt processing to a stable
 failed state; existing Records and baseline receipt indexes are untouched.
 
-An authenticated external Worker atomically claims the oldest available Job,
+An authorized Worker client atomically claims the oldest available Job,
 changes its receipt status to processing, and receives an opaque lease token
 beside a bounded model-facing request. Only a lease digest is durable. An expired
 lease returns to pending and any prior Worker loses application authority. The
@@ -107,7 +107,7 @@ bearers never enter that JSON.
 
 The Go Worker SDK accepts a `Generator` callback supplied by the downstream
 host. It contains callback panics and classifies only stable non-sensitive
-failure codes before calling claim/apply/fail routes. `memoryd` owns lease
+failure codes before calling claim/apply/fail routes. The Memory core owns lease
 expiry, retry ceilings, exponential delay, proposal validation, and atomic
 canonical application; it has no outbound provider adapter. Starting without a
 Worker leaves accepted receipts on the baseline path.
@@ -154,13 +154,12 @@ digests are stored in SQLite. The raw management credential is generated once
 in an owner-only local file. Management authorization, issuer authorization,
 and Runtime capabilities remain separate.
 
-The local application transport is HTTP over an owner-only Unix Domain Socket
-on Darwin/Linux and an owner-restricted named pipe on Windows. SDK callers bind
-the same `LocalEndpoint` abstraction and application routes. Health is process
-liveness; readiness additionally reaches SQLite. This is a local implementation,
-not a promise that a future remote backend uses SQLite or the same physical
-index layout. Another backend must pass the same semantic and durable
-conformance appropriate to its milestone.
+The primary integration is direct Go interface dispatch through the public
+`appliance` facade. The retained standalone adapter uses HTTP over an owner-only
+Unix Domain Socket on Darwin/Linux and an owner-restricted named pipe on
+Windows. Transport, health, readiness, and process credentials belong only to
+that optional adapter; they are not states or dependencies of the embedded
+runtime. Both paths must pass the same semantic and durable conformance.
 
 M3 governance keeps corrections and deletion separate from receipt mutation.
 A correction adds a normal immutable receipt plus a durable same-Space relation;

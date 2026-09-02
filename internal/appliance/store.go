@@ -23,7 +23,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Store is the single durable authority behind memoryd.
+// Store is the single durable authority behind the public package and optional
+// standalone process adapter.
 type Store struct {
 	db                 *sql.DB
 	lock               *ownerLock
@@ -319,7 +320,7 @@ func (s *Store) ManagementCredentialPath() string {
 }
 
 // AuthenticateStewardWorker validates the least-authority bearer accepted only
-// by external Worker claim/apply/fail routes.
+// by transported Worker claim/apply/fail routes.
 func (s *Store) AuthenticateStewardWorker(credential string) bool {
 	if credential == "" {
 		return false

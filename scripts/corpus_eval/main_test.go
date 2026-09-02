@@ -44,6 +44,27 @@ func TestLoadSourceUnderstandsMarkdownAndCodexMessages(t *testing.T) {
 	}
 }
 
+func TestLoadSourceUnderstandsCanonicalCaelisMessages(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.events.jsonl")
+	lines := []string{
+		`{"type":"user","visibility":"canonical","message":{"role":"user","parts":[{"kind":"text","text":"User decision caelismarkeralpha remains durable."}]}}`,
+		`{"type":"assistant","visibility":"canonical","message":{"role":"assistant","parts":[{"kind":"reasoning","reasoning":"private markerignored"},{"kind":"text","text":{"text":"Assistant summary caelismarkerbravo is retained."}},{"kind":"tool_use","tool_use":{"name":"read"}}]}}`,
+		`{"type":"tool_result","visibility":"canonical","message":{"role":"tool","parts":[{"kind":"text","text":"tool markerignored"}]}}`,
+		`{"type":"assistant","visibility":"transient","message":{"role":"assistant","parts":[{"kind":"text","text":"transient markerignored"}]}}`,
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	source, err := loadSource(path, "caelis-jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(source.chunks, " ")
+	if source.kind != "caelis-jsonl" || len(source.chunks) != 2 || strings.Contains(joined, "markerignored") {
+		t.Fatalf("Caelis JSONL source shape = kind %q chunks %d", source.kind, len(source.chunks))
+	}
+}
+
 func TestEvaluateReportsMultiRoundDurabilityWithoutSourceText(t *testing.T) {
 	chunks := make([]string, 0, 18)
 	for index := range 18 {

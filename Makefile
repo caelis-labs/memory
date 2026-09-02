@@ -13,7 +13,7 @@ SIDECAR_CHECKSUM_NAME := $(SIDECAR_NAME).sha256
 MEMORYCTL_CHECKSUM_NAME := $(MEMORYCTL_NAME).sha256
 MANIFEST_SUPPORT_FLAG ?=
 
-.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported cross-build check m5-benchmark ga-soak release-candidate
+.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported cross-build check m5-benchmark ga-soak release-candidate standalone-preview
 
 docs-links:
 	GOWORK=off go run ./scripts/markdown_links
@@ -88,12 +88,14 @@ cross-build:
 	GOWORK=off GOOS="$(HOST_GOOS)" GOARCH="$(HOST_GOARCH)" go run ./scripts/artifact_checksum -verify "$(ARTIFACT_DIR)/$(MEMORYCTL_CHECKSUM_NAME)"
 
 m5-benchmark:
-	GOWORK=off go test ./internal/appliance -run '^$$' -bench '^BenchmarkM5' -benchtime=50x -benchmem
+	GOWORK=off go test ./internal/appliance -run '^$$' -bench '^BenchmarkM5' -benchtime=200x -benchmem
 
 ga-soak:
 	GOWORK=off go run ./scripts/ga_soak -output "$(if $(GA_SOAK_REPORT),$(GA_SOAK_REPORT),dist/ga-soak-report.json)"
 
-release-candidate: check durable race m5-benchmark sidecar-supported
+release-candidate: check durable race m5-benchmark
+
+standalone-preview: check durable race m5-benchmark sidecar-supported
 
 check: docs-links fmt-check whitespace-check test vet build
 	git diff --check

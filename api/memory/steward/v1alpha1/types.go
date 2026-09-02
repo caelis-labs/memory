@@ -1,4 +1,4 @@
-// Package v1alpha1 defines the versioned external Worker, proposal, and
+// Package v1alpha1 defines the versioned provider-neutral Worker, proposal, and
 // semantic-record contract. Worker output is untrusted input; only the
 // appliance may apply it.
 package v1alpha1
