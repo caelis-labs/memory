@@ -267,6 +267,31 @@ func readSpaceScope(ctx context.Context, db databaseExecutor, spaceID v1alpha1.S
 	return class, realmID, err
 }
 
+type validatedCapabilityAuthority struct {
+	principal    string
+	actor        string
+	viewVersion  uint64
+	grantExpires time.Time
+}
+
+// ValidateCapabilityAuthority authenticates one exact Grant-backed delegation
+// in a read-only transaction without creating bearer state.
+func (s *Store) ValidateCapabilityAuthority(ctx context.Context, request CapabilityAuthorityRequest) error {
+	if err := s.requireMutableGeneration(); err != nil {
+		return err
+	}
+	if request.ViewRef == "" {
+		return fmt.Errorf("%w: expected View is required", ErrCapabilityIssueInvalid)
+	}
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return fmt.Errorf("begin capability authority validation: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	_, err = s.validateCapabilityAuthority(ctx, tx, request)
+	return err
+}
+
 // IssueCapability creates random bearer authority backed by durable server-side
 // state. A Grant reference without principal authentication is insufficient.
 func (s *Store) IssueCapability(ctx context.Context, request IssueCapabilityRequest) (RuntimeCapability, error) {
@@ -299,67 +324,19 @@ func (s *Store) IssueCapability(ctx context.Context, request IssueCapabilityRequ
 		_ = tx.Rollback()
 		return RuntimeCapability{}, err
 	}
-	var storedCredential []byte
-	if err := tx.QueryRowContext(ctx,
-		`SELECT credential_digest FROM issuer_credentials WHERE principal_ref = ?`,
-		request.Authorization.PrincipalRef).Scan(&storedCredential); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return rollback(ErrCapabilityIssueUnauthorized)
-		}
-		return rollback(fmt.Errorf("read issuer credential: %w", err))
-	}
-	if subtle.ConstantTimeCompare(storedCredential, digestBytes(request.Authorization.Credential)) != 1 {
-		return rollback(ErrCapabilityIssueUnauthorized)
-	}
-	var principal, actor string
-	var viewID v1alpha1.ViewID
-	var grantExpiresRaw string
-	var revoked bool
-	if err := tx.QueryRowContext(ctx,
-		`SELECT principal_ref, actor_ref, view_id, expires_at, revoked FROM grants WHERE id = ?`,
-		request.GrantRef).Scan(&principal, &actor, &viewID, &grantExpiresRaw, &revoked); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return rollback(ErrCapabilityIssueUnauthorized)
-		}
-		return rollback(fmt.Errorf("read Grant: %w", err))
-	}
-	grantExpires, err := parseTime(grantExpiresRaw)
-	if err != nil || revoked || !grantExpires.After(s.now()) || principal != request.Authorization.PrincipalRef {
-		return rollback(ErrCapabilityIssueUnauthorized)
-	}
-	if request.ActorRef != actor {
-		return rollback(ErrCapabilityIssueUnauthorized)
-	}
-	audienceGranted, err := rowExists(ctx, tx, `SELECT EXISTS(SELECT 1 FROM grant_audiences WHERE grant_id = ? AND audience = ?)`, request.GrantRef, request.Audience)
+	authority, err := s.validateCapabilityAuthority(ctx, tx, CapabilityAuthorityRequest{
+		Authorization: request.Authorization,
+		GrantRef:      request.GrantRef,
+		ActorRef:      request.ActorRef,
+		Audience:      request.Audience,
+		Operations:    request.Operations,
+	})
 	if err != nil {
-		return rollback(fmt.Errorf("read Grant audience: %w", err))
-	}
-	if !audienceGranted {
-		return rollback(ErrCapabilityIssueUnauthorized)
-	}
-	if len(request.Operations) == 0 {
-		return rollback(fmt.Errorf("%w: at least one operation is required", ErrCapabilityIssueInvalid))
-	}
-	for _, operation := range request.Operations {
-		operationGranted, err := rowExists(ctx, tx,
-			`SELECT EXISTS(SELECT 1 FROM grant_operations WHERE grant_id = ? AND operation = ?)`, request.GrantRef, operation)
-		if err != nil {
-			return rollback(fmt.Errorf("read Grant operation: %w", err))
-		}
-		if !validOperation(operation) || !operationGranted {
-			return rollback(ErrCapabilityIssueUnauthorized)
-		}
-	}
-	var viewVersion uint64
-	if err := tx.QueryRowContext(ctx, `SELECT version FROM views WHERE id = ?`, viewID).Scan(&viewVersion); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return rollback(ErrCapabilityIssueUnauthorized)
-		}
-		return rollback(fmt.Errorf("read View: %w", err))
+		return rollback(err)
 	}
 	expiresAt := s.now().Add(ttl)
-	if grantExpires.Before(expiresAt) {
-		expiresAt = grantExpires
+	if authority.grantExpires.Before(expiresAt) {
+		expiresAt = authority.grantExpires
 	}
 	token, err := s.randomToken(32)
 	if err != nil {
@@ -370,7 +347,7 @@ func (s *Store) IssueCapability(ctx context.Context, request IssueCapabilityRequ
 		`INSERT INTO capabilities(token_digest, grant_id, principal_ref, view_version, actor_ref, audience,
 		 expires_at, created_at, label_set, label_set_digest)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		tokenDigest, request.GrantRef, principal, viewVersion, actor, request.Audience,
+		tokenDigest, request.GrantRef, authority.principal, authority.viewVersion, authority.actor, request.Audience,
 		formatTime(expiresAt), formatTime(s.now()), labels.encoded, labels.digest); err != nil {
 		return rollback(fmt.Errorf("store capability: %w", err))
 	}
@@ -384,6 +361,79 @@ func (s *Store) IssueCapability(ctx context.Context, request IssueCapabilityRequ
 		return RuntimeCapability{}, fmt.Errorf("commit capability: %w", err)
 	}
 	return RuntimeCapability{Token: v1alpha1.CapabilityToken(token), ExpiresAt: expiresAt.UTC()}, nil
+}
+
+func (s *Store) validateCapabilityAuthority(
+	ctx context.Context,
+	db databaseExecutor,
+	request CapabilityAuthorityRequest,
+) (validatedCapabilityAuthority, error) {
+	if request.Authorization.PrincipalRef == "" || request.Authorization.Credential == "" {
+		return validatedCapabilityAuthority{}, fmt.Errorf("%w: issuer authorization is required", ErrCapabilityIssueInvalid)
+	}
+	var storedCredential []byte
+	if err := db.QueryRowContext(ctx,
+		`SELECT credential_digest FROM issuer_credentials WHERE principal_ref = ?`,
+		request.Authorization.PrincipalRef).Scan(&storedCredential); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return validatedCapabilityAuthority{}, ErrCapabilityIssueUnauthorized
+		}
+		return validatedCapabilityAuthority{}, fmt.Errorf("read issuer credential: %w", err)
+	}
+	if subtle.ConstantTimeCompare(storedCredential, digestBytes(request.Authorization.Credential)) != 1 {
+		return validatedCapabilityAuthority{}, ErrCapabilityIssueUnauthorized
+	}
+	var authority validatedCapabilityAuthority
+	var viewID v1alpha1.ViewID
+	var grantExpiresRaw string
+	var revoked bool
+	if err := db.QueryRowContext(ctx,
+		`SELECT principal_ref, actor_ref, view_id, expires_at, revoked FROM grants WHERE id = ?`,
+		request.GrantRef).Scan(&authority.principal, &authority.actor, &viewID, &grantExpiresRaw, &revoked); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return validatedCapabilityAuthority{}, ErrCapabilityIssueUnauthorized
+		}
+		return validatedCapabilityAuthority{}, fmt.Errorf("read Grant: %w", err)
+	}
+	grantExpires, err := parseTime(grantExpiresRaw)
+	authority.grantExpires = grantExpires
+	if err != nil || revoked || !authority.grantExpires.After(s.now()) ||
+		authority.principal != request.Authorization.PrincipalRef {
+		return validatedCapabilityAuthority{}, ErrCapabilityIssueUnauthorized
+	}
+	if request.ActorRef != authority.actor || request.ViewRef != "" && request.ViewRef != viewID {
+		return validatedCapabilityAuthority{}, ErrCapabilityIssueUnauthorized
+	}
+	audienceGranted, err := rowExists(ctx, db,
+		`SELECT EXISTS(SELECT 1 FROM grant_audiences WHERE grant_id = ? AND audience = ?)`,
+		request.GrantRef, request.Audience)
+	if err != nil {
+		return validatedCapabilityAuthority{}, fmt.Errorf("read Grant audience: %w", err)
+	}
+	if !audienceGranted {
+		return validatedCapabilityAuthority{}, ErrCapabilityIssueUnauthorized
+	}
+	if len(request.Operations) == 0 {
+		return validatedCapabilityAuthority{}, fmt.Errorf("%w: at least one operation is required", ErrCapabilityIssueInvalid)
+	}
+	for _, operation := range request.Operations {
+		operationGranted, err := rowExists(ctx, db,
+			`SELECT EXISTS(SELECT 1 FROM grant_operations WHERE grant_id = ? AND operation = ?)`,
+			request.GrantRef, operation)
+		if err != nil {
+			return validatedCapabilityAuthority{}, fmt.Errorf("read Grant operation: %w", err)
+		}
+		if !validOperation(operation) || !operationGranted {
+			return validatedCapabilityAuthority{}, ErrCapabilityIssueUnauthorized
+		}
+	}
+	if err := db.QueryRowContext(ctx, `SELECT version FROM views WHERE id = ?`, viewID).Scan(&authority.viewVersion); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return validatedCapabilityAuthority{}, ErrCapabilityIssueUnauthorized
+		}
+		return validatedCapabilityAuthority{}, fmt.Errorf("read View: %w", err)
+	}
+	return authority, nil
 }
 
 // RotateIssuerCredential replaces one issuer digest and returns new raw

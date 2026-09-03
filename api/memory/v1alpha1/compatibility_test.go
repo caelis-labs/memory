@@ -27,6 +27,17 @@ func TestCompatibilityWireFixtures(t *testing.T) {
 }
 
 func TestCapabilityIssueWireKeepsCredentialOutOfBody(t *testing.T) {
+	authority, err := json.Marshal(CapabilityAuthorityRequest{
+		PrincipalRef: "principal:bot-a", GrantRef: "grant-a", ViewRef: "view-a", ActorRef: "actor-a",
+		Audience: AudiencePrivate, Operations: []Operation{OperationRemember, OperationRecall},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"principal_ref":"principal:bot-a","grant_ref":"grant-a","view_ref":"view-a","actor_ref":"actor-a","audience":"private","operations":["remember","recall"]}`; string(authority) != want {
+		t.Fatalf("CapabilityAuthorityRequest JSON = %s, want %s", authority, want)
+	}
+
 	request, err := json.Marshal(CapabilityIssueRequest{
 		PrincipalRef: "principal:bot-a", GrantRef: "grant-a", ActorRef: "actor-a",
 		Audience: AudiencePrivate, Operations: []Operation{OperationRemember, OperationRecall}, TTLSeconds: 600,

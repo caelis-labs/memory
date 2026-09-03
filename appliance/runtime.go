@@ -84,6 +84,30 @@ func (r *Runtime) StewardWorker() stewardworker.Worker {
 	return embeddedStewardWorker{store: r.store}
 }
 
+// ValidateCapabilityAuthority authenticates one exact Grant-backed Runtime
+// delegation without issuing or persisting a bearer capability.
+func (r *Runtime) ValidateCapabilityAuthority(
+	ctx context.Context,
+	issuerCredential string,
+	request memoryv1alpha1.CapabilityAuthorityRequest,
+) error {
+	if r == nil || r.closed.Load() {
+		return unavailableError("Memory runtime is closed")
+	}
+	err := r.store.ValidateCapabilityAuthority(ctx, core.CapabilityAuthorityRequest{
+		Authorization: managementv1alpha1.IssuerAuthorization{
+			PrincipalRef: request.PrincipalRef,
+			Credential:   issuerCredential,
+		},
+		GrantRef:   request.GrantRef,
+		ViewRef:    request.ViewRef,
+		ActorRef:   request.ActorRef,
+		Audience:   request.Audience,
+		Operations: request.Operations,
+	})
+	return capabilityAuthorityError(err)
+}
+
 // IssueCapability authenticates one persisted issuer delegation and returns
 // bounded Runtime authority for the requested operation set.
 func (r *Runtime) IssueCapability(
@@ -106,17 +130,23 @@ func (r *Runtime) IssueCapability(
 		Labels:     request.Labels,
 		TTLSeconds: request.TTLSeconds,
 	})
-	if err != nil {
-		switch {
-		case errors.Is(err, core.ErrCapabilityIssueInvalid):
-			return memoryv1alpha1.RuntimeCapability{}, serviceError(memoryv1alpha1.ErrorCodeInvalidArgument, "Memory capability request is invalid", false)
-		case errors.Is(err, core.ErrCapabilityIssueUnauthorized):
-			return memoryv1alpha1.RuntimeCapability{}, serviceError(memoryv1alpha1.ErrorCodeUnauthorized, "Memory capability request is unauthorized", false)
-		default:
-			return memoryv1alpha1.RuntimeCapability{}, err
-		}
+	if err = capabilityAuthorityError(err); err != nil {
+		return memoryv1alpha1.RuntimeCapability{}, err
 	}
 	return memoryv1alpha1.RuntimeCapability{Token: issued.Token, ExpiresAt: issued.ExpiresAt}, nil
+}
+
+func capabilityAuthorityError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, core.ErrCapabilityIssueInvalid):
+		return serviceError(memoryv1alpha1.ErrorCodeInvalidArgument, "Memory capability request is invalid", false)
+	case errors.Is(err, core.ErrCapabilityIssueUnauthorized):
+		return serviceError(memoryv1alpha1.ErrorCodeUnauthorized, "Memory capability request is unauthorized", false)
+	default:
+		return err
+	}
 }
 
 // Close releases the database and owner lock.

@@ -49,6 +49,30 @@ func TestEmbeddedRuntimeRememberRecall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	authority := memoryv1alpha1.CapabilityAuthorityRequest{
+		PrincipalRef: principal, GrantRef: "grant:test", ViewRef: "view:test", ActorRef: actor,
+		Audience:   memoryv1alpha1.AudiencePrivate,
+		Operations: []memoryv1alpha1.Operation{memoryv1alpha1.OperationRemember, memoryv1alpha1.OperationRecall},
+	}
+	beforeValidation, err := runtime.Management().Inspect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.ValidateCapabilityAuthority(ctx, bootstrap.IssuerCredentials[principal], authority); err != nil {
+		t.Fatalf("ValidateCapabilityAuthority() = %v", err)
+	}
+	wrongView := authority
+	wrongView.ViewRef = "view:other"
+	if err := runtime.ValidateCapabilityAuthority(ctx, bootstrap.IssuerCredentials[principal], wrongView); !memoryv1alpha1.IsCode(err, memoryv1alpha1.ErrorCodeUnauthorized) {
+		t.Fatalf("ValidateCapabilityAuthority(wrong View) error = %v, want unauthorized", err)
+	}
+	afterValidation, err := runtime.Management().Inspect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if afterValidation.Capabilities.Stored != beforeValidation.Capabilities.Stored {
+		t.Fatalf("authority validation stored capabilities: before=%+v after=%+v", beforeValidation.Capabilities, afterValidation.Capabilities)
+	}
 
 	issued, err := runtime.IssueCapability(ctx, bootstrap.IssuerCredentials[principal], memoryv1alpha1.CapabilityIssueRequest{
 		PrincipalRef: principal, GrantRef: "grant:test", ActorRef: actor,
@@ -119,6 +143,7 @@ func TestEmbeddedRuntimeCloseIsSafeWithConcurrentAccess(t *testing.T) {
 				_ = runtime.DataPlane()
 				_ = runtime.Management()
 				_ = runtime.StewardWorker()
+				_ = runtime.ValidateCapabilityAuthority(t.Context(), "invalid", memoryv1alpha1.CapabilityAuthorityRequest{})
 				_, _ = runtime.IssueCapability(t.Context(), "invalid", memoryv1alpha1.CapabilityIssueRequest{})
 			}
 		}()

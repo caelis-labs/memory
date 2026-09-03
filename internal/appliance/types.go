@@ -59,6 +59,17 @@ type BootstrapResponse = managementv1alpha1.BootstrapResponse
 
 type IssuerAuthorization = managementv1alpha1.IssuerAuthorization
 
+// CapabilityAuthorityRequest asks the issuer to validate one exact delegation
+// without creating bearer state.
+type CapabilityAuthorityRequest struct {
+	Authorization IssuerAuthorization  `json:"authorization"`
+	GrantRef      v1alpha1.GrantID     `json:"grant_ref"`
+	ViewRef       v1alpha1.ViewID      `json:"view_ref"`
+	ActorRef      string               `json:"actor_ref"`
+	Audience      v1alpha1.Audience    `json:"audience"`
+	Operations    []v1alpha1.Operation `json:"operations"`
+}
+
 // IssueCapabilityRequest asks the local issuer for bounded Runtime authority.
 type IssueCapabilityRequest struct {
 	Authorization IssuerAuthorization  `json:"authorization"`

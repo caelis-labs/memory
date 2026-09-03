@@ -39,6 +39,8 @@ or lifecycle.
 - immutable durable receipts with separate processing state;
 - Realm, Identity, private/shared Space, View, Grant, issuer, capability, and
   idempotency state in SQLite;
+- side-effect-free validation of one exact issuer, Grant, View, actor, audience,
+  and operation delegation before a Host reports ready;
 - exact capability-bound LabelSet partitions for downstream workspaces or
   future identities, without exposing labels to model tools;
 - authorization-first per-Space receipt and semantic FTS;

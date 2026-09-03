@@ -189,6 +189,11 @@ Grant reference. The resulting server-side capability state binds that
 principal. Merely knowing a Grant, View, actor, Session, or Space reference can
 never redeem a capability.
 
+An embedded Host may validate the same issuer delegation before admitting
+work. Validation checks the Host's expected View against the Grant-selected
+View in one read-only transaction and creates no capability or operation rows.
+It never returns a bearer or exposes topology to the model.
+
 Expired, revoked, wrong-actor, wrong-operation, wrong-audience, unknown, and
 incompatible capabilities fail closed. Capabilities and optional transport credentials
 must not enter a Session, model context, ordinary diagnostic log, or API error.

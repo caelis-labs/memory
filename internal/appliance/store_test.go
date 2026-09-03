@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -439,6 +440,80 @@ func TestIssuerRotationRecoversLostBootstrapResponse(t *testing.T) {
 	if _, err := store.RotateIssuerCredential(t.Context(), "principal:actor-bot-a"); err != nil {
 		t.Fatalf("repeated recovery rotation failed: %v", err)
 	}
+}
+
+func TestValidateCapabilityAuthorityIsSideEffectFree(t *testing.T) {
+	now := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	store, credentials := bootstrapFixture(t, Options{DataDir: t.TempDir(), Clock: func() time.Time { return now }})
+	t.Cleanup(func() { _ = store.Close() })
+	now = now.Add(2 * time.Hour)
+	if err := store.RevokeGrant(t.Context(), "grant-revoked"); err != nil {
+		t.Fatal(err)
+	}
+	valid := CapabilityAuthorityRequest{
+		Authorization: IssuerAuthorization{
+			PrincipalRef: "principal:actor-bot-a",
+			Credential:   credentials["principal:actor-bot-a"],
+		},
+		GrantRef: "grant-bot-a", ViewRef: "view-bot-a-private", ActorRef: "actor-bot-a",
+		Audience: v1alpha1.AudiencePrivate,
+		Operations: []v1alpha1.Operation{
+			v1alpha1.OperationRemember,
+			v1alpha1.OperationRecall,
+			v1alpha1.OperationReceiptStatus,
+		},
+	}
+	tests := []struct {
+		name string
+		edit func(*CapabilityAuthorityRequest)
+		want error
+	}{
+		{name: "valid"},
+		{name: "credential", edit: func(request *CapabilityAuthorityRequest) { request.Authorization.Credential = "wrong" }, want: ErrCapabilityIssueUnauthorized},
+		{name: "principal", edit: func(request *CapabilityAuthorityRequest) { request.Authorization.PrincipalRef = "principal:other" }, want: ErrCapabilityIssueUnauthorized},
+		{name: "Grant", edit: func(request *CapabilityAuthorityRequest) { request.GrantRef = "grant-missing" }, want: ErrCapabilityIssueUnauthorized},
+		{name: "View", edit: func(request *CapabilityAuthorityRequest) { request.ViewRef = "view-shared" }, want: ErrCapabilityIssueUnauthorized},
+		{name: "actor", edit: func(request *CapabilityAuthorityRequest) { request.ActorRef = "actor-other" }, want: ErrCapabilityIssueUnauthorized},
+		{name: "audience", edit: func(request *CapabilityAuthorityRequest) { request.Audience = v1alpha1.AudienceShared }, want: ErrCapabilityIssueUnauthorized},
+		{name: "operation", edit: func(request *CapabilityAuthorityRequest) { request.Operations = []v1alpha1.Operation{"unsupported"} }, want: ErrCapabilityIssueUnauthorized},
+		{name: "empty operations", edit: func(request *CapabilityAuthorityRequest) { request.Operations = nil }, want: ErrCapabilityIssueInvalid},
+		{name: "expired Grant", edit: func(request *CapabilityAuthorityRequest) { request.GrantRef = "grant-expired" }, want: ErrCapabilityIssueUnauthorized},
+		{name: "revoked Grant", edit: func(request *CapabilityAuthorityRequest) { request.GrantRef = "grant-revoked" }, want: ErrCapabilityIssueUnauthorized},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := valid
+			request.Operations = slices.Clone(valid.Operations)
+			if test.edit != nil {
+				test.edit(&request)
+			}
+			beforeCapabilities, beforeOperations := capabilityRowCounts(t, store)
+			err := store.ValidateCapabilityAuthority(t.Context(), request)
+			if test.want == nil && err != nil {
+				t.Fatalf("ValidateCapabilityAuthority() = %v", err)
+			}
+			if test.want != nil && !errors.Is(err, test.want) {
+				t.Fatalf("ValidateCapabilityAuthority() error = %v, want %v", err, test.want)
+			}
+			afterCapabilities, afterOperations := capabilityRowCounts(t, store)
+			if afterCapabilities != beforeCapabilities || afterOperations != beforeOperations {
+				t.Fatalf("authority validation persisted rows: capabilities %d -> %d, operations %d -> %d",
+					beforeCapabilities, afterCapabilities, beforeOperations, afterOperations)
+			}
+		})
+	}
+}
+
+func capabilityRowCounts(t testing.TB, store *Store) (int64, int64) {
+	t.Helper()
+	var capabilities, operations int64
+	if err := store.db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM capabilities`).Scan(&capabilities); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM capability_operations`).Scan(&operations); err != nil {
+		t.Fatal(err)
+	}
+	return capabilities, operations
 }
 
 func TestConcurrentRememberRecallRevokeAndShutdown(t *testing.T) {

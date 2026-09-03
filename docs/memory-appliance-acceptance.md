@@ -15,6 +15,7 @@ that produced it.
 | `AUTH-001` | Authorization completes before a Space index is queried |
 | `AUTH-002` | Private/shared Views cannot query or mutate an unauthorized Space |
 | `AUTH-003` | Model arguments cannot choose Identity, Space, View, Grant, actor, audience, or capability |
+| `AUTH-004` | Host readiness can validate the exact issuer, Grant, View, actor, audience, and operations without issuing a bearer or persisting capability state |
 | `LABEL-001` | A Host-issued capability fixes one canonical LabelSet; labels are absent from model tool arguments, results, and Steward model work |
 | `LABEL-002` | Remember, Recall, ReceiptStatus, consistency tokens, correction, and derived Recall match the capability LabelSet exactly, including after restart |
 | `LABEL-003` | Steward promotion and refinement inherit one LabelSet and reject records or receipt evidence from every other LabelSet |

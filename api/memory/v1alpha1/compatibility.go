@@ -22,6 +22,18 @@ type CompatibilityResponse struct {
 	SchemaVersion  int    `json:"schema_version"`
 }
 
+// CapabilityAuthorityRequest asks the issuer plane to authenticate one exact
+// immutable delegation without issuing or persisting a Runtime bearer. ViewRef
+// is the host's expected View and must match the View selected by GrantRef.
+type CapabilityAuthorityRequest struct {
+	PrincipalRef string      `json:"principal_ref"`
+	GrantRef     GrantID     `json:"grant_ref"`
+	ViewRef      ViewID      `json:"view_ref"`
+	ActorRef     string      `json:"actor_ref"`
+	Audience     Audience    `json:"audience"`
+	Operations   []Operation `json:"operations"`
+}
+
 // CapabilityIssueRequest asks the issuer plane for temporary Runtime
 // authority. The issuer credential is carried as a bearer outside this body.
 type CapabilityIssueRequest struct {
