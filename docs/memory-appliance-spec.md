@@ -46,10 +46,12 @@ retrieval strategy, or lifecycle controls as model arguments.
 
 Memory is not the canonical Session transcript, context-compaction format,
 message bus, task queue, workflow state machine, approval ledger, lock, or
-execution receipt. It does not scan host storage or physical Session logs. A
-host may project sanitized canonical Session events into the same durable
-ingestion boundary using stable host-owned effect identities; this does not
-make Memory authoritative for Session history.
+execution receipt. The `v0.5.0` Core Profile does not scan host storage or
+import Session logs. A post-v0.5 source producer may submit an already-admitted
+leaf through a separate public source-neutral tree protocol. Memory does not
+read, parse, sanitize, page, checkpoint, migrate, or delete the external source
+and does not define what an opaque source reference means. A Caelis producer may
+map one concrete Session JSONL projection to one leaf entirely outside Memory.
 
 The Core Profile does not include public memory, mixed-audience Sessions,
 private-to-shared publication, model-assisted Recall, temperature, bitemporal
@@ -57,9 +59,12 @@ queries, automatic retention, graph/vector indexes, remote federation, or a
 management UI. Those may be added without changing the two Agent operations or
 weakening the invariants above.
 
-A task-relevant briefing and a stateful identity capsule are planned product
-profiles, not `memory.v1alpha1` contracts. Their APIs must not be frozen before
-corpus, time-ranking, provenance, budget, and refinement behavior has executable
+The former global canonical Session-corpus projection, time-aware ranking
+policy, and automatic zero-model task briefing are retired. The post-v0.5
+layered tree has its own public `memory.tree.v1alpha1` data model and Worker
+protocol; it does not extend `memory.v1alpha1` or
+`memory.steward.v1alpha1`. Public Query is added only after provenance,
+isolation, budgets, invalidation, rebuild, and comparative value have executable
 acceptance evidence.
 
 ## Ownership boundary
@@ -227,9 +232,9 @@ Space, View, principal, capability, audience, or policy. In v1alpha1:
 - unknown or oversized content is rejected rather than silently truncated.
 
 `source_type` and extension labels also cannot establish evidence authority or
-select a LabelSet. A future canonical Session ingestion path that distinguishes
-observed episodes from explicit Remember inputs requires a separate trusted,
-model-hidden contract; it must not overload `SourceContext` for that purpose.
+select a LabelSet. The planned tree protocol has its own opaque source and
+projection references; it must not overload `SourceContext`, and Memory must
+not infer source semantics from either surface.
 
 ### Remember
 
@@ -449,9 +454,11 @@ immutable Receipt evidence
 ```
 
 This is not a general graph or tree. Revision order and evidence provenance are
-the only canonical edges. A tree, relation graph, hierarchy, embedding, or other
-navigation structure may later be built as a disposable projection, but cannot
-become a second mutation authority without a separately accepted milestone.
+the only canonical edges in the current extension. The planned generic layered
+tree is separate: each leaf revision contains one producer-defined ordered
+projection with opaque source provenance, and every parent summarizes and
+indexes an exact ordered child-revision set. It does not reinterpret semantic
+Records as nodes, infer source semantics, or become a second mutation authority.
 
 The Worker contract is `memory.steward.v1alpha1`. Its primary binding is a
 direct Go interface; the retained local transport is an optional adapter. A
@@ -670,11 +677,11 @@ they cannot silently widen the Core Profile. Internal semantic candidates may
 use the already-reserved `record_refs` and `degraded` response fields without
 adding an Agent operation or changing authorization.
 
-Future explicit Recall, stateless briefing, and stateful identity projections
-may apply different ranking, temporal, and abstention policies over the same
-evidence. They must not become separate receipt authorities. Any model-visible
-qualification of historical evidence is response presentation, not a new
-model-controlled request parameter or a grant of authority.
+Future `memory.tree.v1alpha1` Query and downstream identity views may navigate
+the accepted layered projection under independent depth, node, result, and byte
+budgets. They must not become separate receipt or external-source authorities.
+The new protocol cannot be implemented by silently widening Remember, Recall,
+or the Steward proposal protocol.
 
 The API may become stable `v1` only after the durable embedded package and the
 Caelis Golden Path pass end to end. Semantic compatibility is demonstrated by

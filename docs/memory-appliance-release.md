@@ -46,13 +46,26 @@ release input or repository artifact. A package candidate additionally runs
 the Caelis embedded Golden Path against the exact selected module revision.
 
 Long-running corpus and soak evidence remains separate from ordinary per-change
-tests. Run it for a GA candidate with the RoadMap's frozen dataset and retain
-the aggregate result beside the external review evidence.
+tests. Run the fixed 100-Space, 100,000-receipt, 10,000-Record soak for a GA
+candidate and retain the aggregate result beside the external review evidence.
 
-After the candidate commit is pushed, wait for the GitHub `quality` workflow at
-that exact revision. Create an annotated prerelease tag only for the approved
-revision, then create a GitHub prerelease containing source archives and the
-reviewed release notes. The Memory package publishes no standalone binaries in
+The generic public tree model, leaf protocol, layered rollups, optional node
+summaries, and tree Query are post-v0.5 milestones. They are not package
+candidate gates, Caelis Golden Path requirements, or artifacts in the
+`v0.5.0` release. A downstream Caelis Session-to-leaf projector is an
+integration concern rather than a Memory protocol or release artifact.
+
+After a release-candidate commit is pushed, wait for the GitHub `quality`
+workflow at that exact revision. Create an annotated prerelease tag only for the
+approved revision, then create a GitHub prerelease containing source archives
+and the reviewed release notes.
+
+For GA, advance `VERSION` to `0.5.0` on the final reviewed commit, rerun the
+package candidate gate plus `make ga-soak`, validate the exact Caelis consumer
+revision, push the commit, and wait for remote `quality` success at that SHA.
+Only then create the annotated `v0.5.0` tag and a non-prerelease GitHub source
+release. A local commit, local tag, earlier RC result, or tag on another SHA is
+not release authority. The Memory package publishes no standalone binaries in
 this release line.
 
 ## Version coordination
@@ -78,10 +91,12 @@ Before accepting the imported revision:
 4. Verify unbound Steward mode makes zero model calls.
 5. Bind the system-managed Memory Steward and verify a downstream Caelis model
    callback produces an appliance-validated semantic Record.
-6. Run the Caelis quality, architecture, race, documentation, build, and
+6. Verify Caelis uses the final ModelGenerator surface, the deprecated pre-GA
+   Generator bridge is absent, and the supported RC-to-GA schema floor is exact.
+7. Run the Caelis quality, architecture, race, documentation, build, and
    release-matrix gates selected by the integration change.
-7. Verify Linux natively in the local OrbStack Rocky environment.
-8. Complete external review and resolve or explicitly accept every finding
+8. Verify Linux natively in the local OrbStack Rocky environment.
+9. Complete external review and resolve or explicitly accept every finding
    before the Caelis GA tag.
 
 The Caelis release procedure owns platform archives, installers, R2 mirroring,
@@ -96,7 +111,8 @@ files to those archives beyond the code already linked into the Caelis binary.
 | SQLite corruption or schema initialization failure | Memory package owner | stop Host startup, preserve files, verify backup or rebuild the unreleased development data |
 | Steward Worker or model outage | Caelis integration owner | remove the Steward binding; retain static receipt Recall |
 | capability or Space-boundary defect | Memory security owner | revoke affected Grant and block the candidate |
-| Session projection or Replay leak | Caelis product owner | preserve canonical history and block the candidate |
+| Session Replay leak | Caelis product owner | preserve canonical history and block the candidate |
+| post-v0.5 leaf/tree projection leak or stale ancestor | producer and Memory owners | disable tree Query, preserve the producer source and committed leaf history, invalidate derived projections, and rebuild after repair |
 | imported revision regression | Caelis release manager | revert the module revision and rebuild one Caelis rollback release |
 
 No diagnostic or remediation may log receipt text, prompts, response bodies,

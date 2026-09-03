@@ -67,26 +67,36 @@ that produced it.
 | `STW-008` | With no eligible new evidence or explicit organization action, Steward makes zero model calls regardless of elapsed wall-clock time |
 | `COST-002` | Automatic Steward work has a frozen per-receipt model-call budget; any additional model retry waits for an active task or explicit bounded organization action |
 
-## Product-foundation acceptance
+## Generic layered-tree acceptance (post-v0.5.0)
+
+These IDs apply to P3-P5 and do not gate the flat `v0.5.0` release.
 
 | ID | Acceptance |
 | --- | --- |
-| `CORPUS-001` | Every eligible local Caelis Session is projected from checkpointed canonical Session Service events, never by scanning physical JSONL |
-| `CORPUS-002` | Projection is resumable and idempotent and preserves bounded source provenance without duplicating facts after restart |
-| `CORPUS-003` | System/developer prompts, hidden reasoning, credentials, approvals, transient progress, and unsanitized tool payloads are excluded with aggregate reason counts |
-| `CORPUS-004` | Explicit Remember and observational Session evidence are distinguishable through a trusted model-hidden ingestion boundary; untrusted `SourceContext` labels cannot establish source authority |
-| `TIME-001` | Evaluation records the exact bounded active-window, source-intent, reinforcement, admission, and result-budget parameters used by each product projection |
-| `TIME-002` | On a frozen corpus whose age range can be exercised in a bounded test, recent supported facts outrank stale keyword-only facts while explicit historical lookup can still return old evidence |
-| `TIME-003` | When explicit Recall returns non-current evidence, the model-visible result qualifies its temporal status; automatic briefing omits stale or unresolved evidence unless the task explicitly requests history |
-| `RETR-001` | A bounded model-free keyphrase/association projection improves the frozen non-literal task set over exact lexical retrieval without violating result budgets or private isolation |
-| `RETR-002` | Explicit Recall and automatic briefing use separately frozen ranking and abstention policies rather than one universal score |
-| `BRIEF-001` | A new stateless Session can obtain a byte-bounded task-relevant briefing with evidence provenance and zero model calls |
-| `BRIEF-002` | A briefing contains no permission, authorization, imperative instruction, or persistent Session identity and is treated only as advisory context |
-| `BRIEF-003` | The frozen task-context benchmark improves over an empty-context control for similar tasks, stable preferences, and prior decisions without increasing private leakage |
-| `BRIEF-004` | Empty briefing is a valid result, and the candidate does not increase frozen harmful-context or false-memory errors over the empty-context control |
-| `COST-001` | Ingestion, sanitization, indexing, time ranking, retrieval, deduplication, and default briefing generation consume zero model tokens |
+| `TREE-API-001` | `memory.tree.v1alpha1` defines source-neutral Tree, Leaf, Item, NodeRef, Revision, state, digest, budget, and provenance types plus `CommitLeaf`, `RetractLeaf`, `GetNode`, and explicitly gated refinement/query operations |
+| `TREE-API-002` | The protocol contains no Session, JSONL, event, path, checkpoint, sanitizer, provider, model, or credential semantics and passes conformance with two unrelated producers |
+| `TREE-API-003` | Management creates a Tree under one exact partition, and distinct capability operations independently authorize commit, retract, exact read, refine, and query |
+| `TREE-API-004` | `memory.tree.worker.v1alpha1` exposes bounded provider-neutral claim, apply, and fail operations without widening the existing Steward protocol |
+| `LEAF-001` | One leaf revision contains one ordered producer projection with opaque SourceRef, SourceVersion, ProjectionRef, item references, and exact content digests |
+| `LEAF-002` | Memory treats every source and projection reference as opaque, branches on none of their contents, and never reads or mutates the external source |
+| `LEAF-003` | The producer, not Memory, owns source parsing, admission, sanitization, versioning, and retraction; Memory owns shape, digest, byte-budget, idempotency, revision, and authority validation |
+| `LEAF-004` | Commit uses an expected head, canonical request digest, and idempotency key; replay has one effect and changed payload under the same key conflicts |
+| `LEAF-005` | Authorization completes before node access, and every leaf is bound to one exact `(SpaceID, LabelSetDigest)` partition selected outside the request |
+| `LEAF-006` | A producer revision or retraction creates the specified immutable leaf history and invalidates only the affected ancestor path |
+| `LEAF-007` | A downstream Caelis conformance example maps one concrete Session JSONL projection to one leaf without adding any Session knowledge to Memory |
+| `LEAF-008` | Retraction preserves owner-auditable history, while owner deletion retains only content-free tombstones, prevents delayed producer retries from resurrecting content, and removes leaf text plus every transitively derived summary/index payload before retrieval resumes |
+| `TREE-001` | The same ordered same-partition children and policy produce the same fan-out-16 topology; no model chooses parents, edges, or roots |
+| `TREE-002` | Every immutable parent revision records exact child revision references and their ordered child-set digest |
+| `TREE-003` | Every parent summary assertion and index entry has bounded child provenance; model output remains an untrusted proposal for an already fixed build |
+| `TREE-004` | A changed or invalid child makes affected ancestors unavailable before any retrieval can observe stale summaries or indexes |
+| `TREE-005` | Crash and retry at leaf, build, apply, head, index, and dirty-queue boundaries produce at most one accepted effect per input digest |
+| `TREE-006` | Explicit retrieval authorizes first and independently bounds depth, visited nodes, candidate children, returned items, and encoded bytes; empty and partial trees are valid |
+| `TREE-007` | Rebuilding from the same committed leaf revisions and policy reproduces topology, child-set digests, deterministic indexes, and partition roots without reopening any external source |
+| `TREE-008` | Before public `Query` or a default identity view ships, bounded tree traversal materially beats scanning all authorized leaves on a frozen longitudinal corpus without privacy, abstention, harmful-context, latency, storage, or rebuild regression |
+| `TREE-009` | Explicit refinement of the same child-set appends at most one summary revision for its policy/input digest and cannot change topology, deterministic index entries, partition, or source provenance |
+| `TREE-COST-001` | Reports record summarizer calls, input/output tokens, latency, and failures per materialized node revision; idle time and unchanged child sets make zero calls |
 | `EXP-LEX-001` | Default runtime and schema initialization do not learn, read, rebuild for, or expose adaptive lexicon terms; focused experiments require an explicit internal option |
-| `EXP-RET-001` | Embedding, graph, hierarchy, or adaptive retrieval can enter a default path only after a same-corpus blind holdout shows material end-to-end gain and records dependency, latency, storage, rebuild, privacy, and rollback cost |
+| `EXP-RET-001` | Embedding, graph, or adaptive retrieval can enter a default path only after a same-corpus blind holdout shows material end-to-end gain and records dependency, latency, storage, rebuild, privacy, and rollback cost |
 
 ## Future identity acceptance
 
@@ -95,10 +105,10 @@ when a downstream product ships persistent identity behavior.
 
 | ID | Acceptance |
 | --- | --- |
-| `IDENT-001` | A fixed byte-bounded identity capsule is evidence-backed, inspectable, and separate from an ordinary stateless Session briefing |
+| `IDENT-001` | A fixed byte-bounded identity view is evidence-backed, inspectable, and separate from ordinary tree retrieval |
 | `IDENT-002` | A product maps identity and work context to opaque LabelSets without introducing Bot, tenant, user, or workspace types into Memory |
-| `IDENT-003` | Tree or graph memory must beat the flat Record-head-plus-search control on a frozen longitudinal corpus before becoming default |
-| `IDENT-004` | Refinement and promotion affect only derived flat projections; immutable evidence and Revision history remain attributable and support deterministic model-free rebuild |
+| `IDENT-003` | An identity view selects only accepted tree nodes and leaf evidence from exact authorized LabelSets; it cannot add another ownership or authorization system |
+| `IDENT-004` | Refinement and promotion affect only derived projections; immutable receipts, committed leaf revisions, and node history remain attributable and rebuildable |
 
 ## Realistic corpus acceptance
 
@@ -121,7 +131,7 @@ their own partition and invisible from the target partition.
 Performance acceptance uses user-perceived behavior, not workstation
 microsecond targets. The reproducible package corpus applies a broad 750ms p95
 Recall ceiling; the exact candidate also records p50/p95/p99 for embedded Open,
-Remember, Recall, and briefing on a representative user machine. The candidate
+Remember, and Recall on a representative user machine. The candidate
 fails when Memory crosses the interaction ceiling, introduces an observable
 startup stall, blocks interaction past the Host's existing deadline, or shows a
 material unexplained regression against the previous accepted candidate.
@@ -145,10 +155,13 @@ least three Remember/Recall rounds and one Host restart. Cases cover:
 - provenance and Session Replay.
 
 Quality reports keep separate tuning and blind holdout partitions and compare
-empty-context, exact-lexical, best model-free, and model-assisted variants where
-applicable. They include rejected parameter points and measure stale-fact
-suppression, current-fact retention, contradiction errors, correct abstention,
-and harmful briefing context in addition to Retrieval@k and ranking metrics.
+the current flat Recall control, authorized leaf scanning, deterministic tree
+traversal, and optional summary-assisted traversal where applicable. Tree
+reports measure leaf request fidelity, ordered-item and content-digest integrity,
+child-set completeness, summary provenance, stale-parent exclusion, traversal
+Recall@k, visited nodes, bytes, depth, rebuild consistency, isolation, model
+calls, and tokens. They also include rejected parameter points and measure
+contradiction errors, correct abstention, and harmful returned context.
 Public long-conversation benchmarks may supplement this corpus but cannot
 replace product-shaped Session, privacy, authority, cost, and abstention cases.
 
@@ -168,7 +181,7 @@ their thresholds.
 | `GA-005` | Upgrade from the supported pre-GA Memory schema retains acknowledged facts and authority |
 | `GA-006` | A clean offline Caelis installation completes the full Golden Path with no Memory download or configuration |
 | `GA-007` | An external reviewer maps every finding to a fix, acceptance ID, or explicitly accepted risk before GA authorization |
-| `GA-008` | `CORPUS-001..004`, `TIME-001..003`, `RETR-001..002`, `BRIEF-001..004`, and `COST-001..002` pass at the exact candidate revision |
+| `GA-008` | The checked-in 224-case multilingual release corpus and fixed 100-Space, 100,000-receipt, 10,000-Record GA soak pass at the exact candidate revision and retain aggregate evidence |
 
 Standalone command buildability does not satisfy a GA artifact gate. Independent
 `memoryd` publication has its own deferred acceptance plan when a concrete

@@ -57,6 +57,70 @@ across a semantic candidate and overlapping receipt Evidence, or between
 semantic candidates; equal independent receipts remain separate. Evidence and
 Record references are unioned and sorted for deterministic provenance.
 
+## Planned generic layered tree
+
+The post-v0.5 tree is a separate source-neutral data model. It does not turn the
+existing flat semantic Records into tree nodes:
+
+```text
+downstream-owned source
+  -> downstream-projected public Leaf request
+  -> immutable partition-bound Leaf revision
+  -> ordered fan-out-16 child groups
+  -> parent revisions containing bounded summaries and child indexes
+  -> explicit bounded Query to cited leaf Items
+```
+
+The producer owns the source format, parsing, admission, sanitization,
+checkpointing, migration, versioning, and source deletion. Memory receives only
+opaque SourceRef, SourceVersion, and ProjectionRef values plus ordered bounded
+Items. It does not define or inspect those opaque values. A Caelis producer may
+map one concrete Session JSONL projection to one leaf, but the public protocol
+contains no Session or JSONL concept.
+
+`memory.tree.v1alpha1` owns Tree, Leaf, Item, NodeRef, Revision, state, digest,
+budget, and provenance types plus `CommitLeaf`, `RetractLeaf`, `GetNode`,
+explicit `RequestRefinement`, and, after its evaluation gate, `Query`.
+`memory.tree.worker.v1alpha1` owns the provider-neutral `ClaimBuild`,
+`ApplyProposal`, and `FailBuild` contract.
+Management creation, inspection, rebuild, and export use a distinct
+owner-authorized surface. Tree creation fixes one exact Space/LabelSet
+partition and topology/index policy. Issued capabilities grant distinct commit,
+retract, exact-read, and query operations.
+
+The base tables retain immutable leaf revisions and ordered Items. A canonical
+request digest, idempotency key, expected head, and Memory-assigned stable slot
+govern each commit. Parent topology is deterministic and partitioned by exact
+`(SpaceID, LabelSetDigest)`. An immutable parent revision names an ordered exact
+set of child revisions and its digest. Its summary and term-to-child index are
+derived data with child provenance, not evidence authority. A summarizer may
+propose bounded text and additional terms only after Memory has fixed the child
+set; it cannot select parents, edges, roots, authority, or lifecycle.
+An explicit refinement job may replace only the bounded summary blocks and
+cited expansion terms for the same child-set digest under a new summary-policy
+reference. It appends a revision and cannot rewrite topology or deterministic
+index entries.
+
+A producer revision or retraction immediately invalidates the affected ancestor
+heads and removes them from retrieval. The dirty path is rebuilt bottom-up.
+Parent heads, summaries, indexes, and roots are disposable and reconstructible
+from committed leaf and child revisions without reopening an external source.
+Accepted summaries may be reused only for the exact child-set and policy digest;
+otherwise the parent remains degraded until new Worker output arrives.
+
+Retraction keeps immutable leaf content for owner-authorized audit. Deletion is
+a separate management operation: it replaces the leaf with a content-free
+tombstone, removes Item text, and purges every summary/index payload with
+transitive provenance to that leaf before any tree query resumes. IDs, digests,
+and idempotency evidence may remain, but deleted content may not.
+
+Tree retrieval authorizes before reading any tree index and independently
+bounds depth, visited nodes, candidate children, returned Items, and bytes. It
+is explicit, has no automatic task-briefing side effect, and applies no recency,
+decay, active-window, or universal relevance policy. It is a separately
+versioned public protocol, never a hidden extension to Remember/Recall or the
+semantic Steward contract.
+
 ## Steward execution
 
 A logical Steward is a versioned prompt-policy profile plus durable jobs claimed

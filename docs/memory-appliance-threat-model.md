@@ -14,6 +14,10 @@ retained but deferred adapter and is not a Caelis runtime dependency.
 - Steward Jobs, evidence, proposals, and semantic Records;
 - backup, migration, deletion, and storage-generation state.
 
+Post-v0.5 tree work additionally protects admitted generic leaf revisions,
+parent summaries and indexes, immutable child provenance, dirty queues, and
+partition roots. These assets are not part of the v0.5 GA surface.
+
 ## Current trust boundaries
 
 ```text
@@ -58,6 +62,37 @@ error. There is no partially ready embedded Memory state.
 | Restore reuses an invalid causal cursor | Rotate storage generation and return a stale-token error |
 | Corrupt backup replaces live data | Authenticate, integrity-check, migrate, and stage fully before atomic replacement |
 | Rollback loses acknowledged writes | Keep a restored generation unavailable to embedded Open until explicit commit |
+
+## Post-v0.5 layered tree boundary
+
+The tree accepts already-admitted leaf requests from a trusted downstream
+producer through a public source-neutral protocol. The producer owns source
+format, parsing, admission, sanitization, checkpointing, migration, versioning,
+and source deletion. Memory neither knows nor verifies those domain semantics.
+It validates capability, exact partition, structure, sizes, digests,
+idempotency, and immutable revision rules.
+
+The external source remains producer-owned authority. An accepted leaf revision
+is the durable base input to Memory's tree; parent summaries, indexes, active
+heads, and roots are derived projections. A Caelis producer may map one Session
+JSONL projection to one leaf, but that mapping adds no Session boundary to
+Memory.
+
+| Threat | Required control |
+| --- | --- |
+| A producer admits secret or instruction-bearing content | Keep source admission and sanitization in the producer, bind the request to a preselected exact partition, and never treat stored text as authority or instructions |
+| Malicious leaf content poisons an ancestor summary | Bound every Worker input and proposal, require exact child citations, and treat summarizer output as untrusted |
+| A parent aggregates another Space or LabelSet | Authorize before building or querying, require exact partition equality on every child edge, and verify it again at proposal apply |
+| A changed or deleted child leaves a stale ancestor searchable | Invalidate the complete ancestor path before advancing the child head, remove stale heads from indexes, and rebuild bottom-up |
+| Leaf deletion leaves source text in historical summaries or a retry resurrects it | Purge leaf Item text and every transitively derived summary/index payload before retrieval resumes; retain content-free tombstones, digests, and idempotency evidence that reject delayed replay |
+| Producer retry or source-reference reuse silently changes a leaf | Bind canonical request digest, opaque source/version/projection references, prior head, and idempotency key; fail closed when the same key names another digest |
+| A caller uses opaque references to smuggle authority | Never branch on SourceRef, SourceVersion, ProjectionRef, or ItemRef contents; authority comes only from the authenticated capability |
+| Fan-out or traversal exhausts Host resources | Fix fan-out, bound dirty work, and independently cap depth, visited nodes, candidate children, returned Items, bytes, summarizer calls, and retries |
+| A derived summary is mistaken for source evidence | Mark summaries as derived and retain exact node, child-revision, leaf, Item, and opaque source provenance in every result |
+
+These controls gate P3-P5. The tree uses separately versioned public contracts;
+until each stage passes, it is not a default product path and current flat
+Recall remains the only accepted availability path.
 
 ## Steward boundary
 

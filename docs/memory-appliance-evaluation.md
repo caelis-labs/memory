@@ -10,8 +10,11 @@ evidence, not the reviewed semantic-quality gate.
 
 `scripts/corpus_eval` report format 3 accepts a local Markdown memory file, a Codex rollout
 JSONL, or a Caelis Session event JSONL. It is an offline evaluation reader, not
-the production Session ingestion path; production uses canonical Session
-Service events and a durable checkpoint. Markdown fenced code is excluded. Codex
+part of the Memory tree protocol. Its format-specific extractors act as local
+test producers: they convert source data into text before calling Memory. The
+future tree evaluator likewise submits canonical `memory.tree.v1alpha1` leaf
+requests; source parsing, filtering, and fidelity remain producer-specific
+tests outside Memory. Markdown fenced code is excluded. Codex
 extraction accepts only user `input_text` and assistant `output_text` message
 items. Caelis extraction accepts only canonical user/assistant `text` parts.
 Developer data, reasoning, transient events, tool calls, and tool results are
@@ -70,11 +73,11 @@ make corpus-gate
 ```
 
 The 24-case realistic Chinese/mixed suite continues to cover semantic Record
-provenance. Neither deterministic lexical suite is evidence of paraphrase or
-model quality. G4 acceptance still requires at least 200 reviewed semantic
-cases and the fixed 100-Space, 100,000-receipt, 10,000-Record soak; neither a
-private local source nor a template-expanded corpus may be presented as
-sufficient semantic-quality evidence.
+provenance. Neither deterministic lexical suite is evidence of paraphrase,
+model quality, the generic leaf protocol, or layered-tree behavior. Any optional
+Steward semantic-quality claim still requires at least 200 reviewed cases. The
+fixed 100-Space, 100,000-receipt, 10,000-Record soak remains a separate v0.5 GA
+gate; neither evidence set substitutes for the other.
 
 The optional Steward adapter accepts only an HTTP loopback Ollama origin. It
 ignores `GenerationRequest.JSONSchema`, uses only Ollama's schema-free JSON
@@ -97,8 +100,9 @@ receipt-status scan, lexical and semantic Recall provenance probes, and
 cross-Space leakage probes rather than accepting aggregate counts alone. The default report is
 `dist/ga-soak-report.json`; it contains only counts, environment identity,
 durations, byte sizes, and health flags. Synthetic scale evidence and the
-separate reviewed 200-case quality corpus are both required because neither can
-substitute for the other.
+separate reviewed 200-case quality corpus answer different claims; only the
+scale report gates the flat v0.5 release, while the reviewed corpus gates any
+Steward semantic-quality claim.
 
 ## Local commands
 
@@ -202,41 +206,51 @@ The current prompt/parser path and local Gemma real-corpus sample is
 
 ## Product-quality evaluation ladder
 
-Receipt reachability is necessary but does not prove that Memory helps an
-Agent. Product-foundation experiments therefore use a frozen tuning partition
-and a blind holdout partition, keep the exact-lexical implementation as the
-control, and evaluate four independently attributable conditions:
+Receipt reachability is necessary but does not prove that a hierarchy improves
+retrieval. Post-v0.5 tree experiments therefore use a frozen tuning partition
+and blind holdout partition and evaluate four independently attributable
+conditions:
 
-1. empty context;
-2. current exact lexical Recall;
-3. the best bounded zero-token candidate, ranking, and briefing pipeline;
-4. an optional Steward or later experimental retriever.
+1. the current flat receipt/Record Recall control;
+2. scanning every authorized committed leaf within the same result budget;
+3. bounded traversal over deterministic parent indexes without summaries;
+4. the same topology with optional model-proposed summaries and index terms.
 
-Every report includes all tried parameter points, not only the winner. It
-records the dataset revision, sanitization policy, analyzer and expansion
-versions, temporal functions, source-intent rules, result budgets, latency,
-storage, rebuild time, and model-call/token cost when applicable. A tuning gain
-that disappears on the blind holdout is reported as rejected evidence.
+Every report includes all tried topology and traversal parameters, not only the
+winner. It records dataset revision, producer and projection revisions, leaf
+request digests, fan-out, node and byte budgets, analyzer version, summary
+policy, latency, storage, rebuild time, and model-call/token cost. A tuning gain
+that disappears on the blind holdout is rejected evidence.
 
-The product metrics are deliberately broader than question-answer retrieval:
+The tree metrics are deliberately broader than question-answer retrieval:
 
-- Retrieval@k, Recall@k, MRR, zero-result rate, and result-budget truncation;
-- current-fact retention and stale keyword-only suppression by age cohort;
-- correction, supersession, contradiction, and repeated-support errors;
-- correct abstention when evidence is weak, unrelated, private, or unresolved;
-- harmful-context and false-memory rate in the assembled task briefing;
-- task outcome against the empty-context control for similar work, stable
-  preferences, and accepted technical decisions;
-- private leakage, provenance coverage, model calls, tokens, latency, database
-  growth, and deterministic rebuild.
+- leaf request fidelity, ordered-item and content-digest integrity, revision
+  conflicts, and replay idempotency;
+- child-set completeness, deterministic topology/root digests, and bottom-up
+  rebuild equality;
+- summary assertion and index-entry provenance coverage;
+- stale-parent exclusion after leaf revision, retraction, or projection-policy
+  change;
+- Retrieval@k, Recall@k, MRR, zero-result rate, visited nodes, depth, bytes, and
+  result-budget truncation;
+- correction, supersession, contradiction, repeated-support, abstention,
+  harmful-context, private leakage, and cross-partition edge errors;
+- model calls and tokens per materialized node revision, latency, database
+  growth, and recovery time.
 
 Long-conversation or memory QA benchmarks may be used as secondary comparison
 sets. They cannot substitute for local product cases because conversational QA
-does not by itself test Session sanitization, authority, briefing harm,
-zero-token operation, or stateful-identity boundaries.
+does not by itself test the public leaf contract, tree authority, stale-parent
+invalidation, rebuild, or identity-view boundaries. A downstream Session
+projector separately owns tests proving that one concrete Session JSONL becomes
+one correct admitted leaf; those tests do not change Memory semantics.
 
-Embedding, graph, hierarchy, and adaptive-lexicon experiments use the same
+Embedding, graph, and adaptive-lexicon experiments use the same
 partitions and budgets. They remain non-default unless blind-holdout task
 benefit is material after operational cost and false-positive regressions are
 included, and the report names a deterministic rollback to the prior accepted
 projection.
+
+The dated evidence reports linked above remain historical flat/Steward
+evidence. They must not be cited as proof of the generic leaf protocol or
+layered-tree acceptance.

@@ -63,30 +63,36 @@ a material quality gain over the fixed analyzer.
 
 ## Product direction
 
-The product target is a private persistent corpus, not merely two keyword
-tools. Caelis will project sanitized canonical Session content into Memory,
-Memory will rank evidence with explicit time authority, and an ordinary
-stateless Session will receive a short task-relevant briefing assembled without
-model calls. That briefing is evidence for context only: it is not an
-instruction, authorization, or durable identity.
+`v0.5.0` closes the current embedded package: immutable receipt evidence,
+authorization-first Recall, exact LabelSet partitions, flat semantic Records,
+and the optional Steward boundary. It does not include a global Session-corpus
+importer, time-aware ranking policy, or automatic task briefing.
 
-One immutable evidence authority serves three deliberately different
-projections: explicit Recall, the stricter stateless briefing, and a future
-bounded identity capsule. Session observations do not silently become explicit
-user preferences, and old historical evidence is not presented as current just
-because a keyword matches. The current derived-memory baseline is deliberately
-flat: a Record has one active head, immutable numbered Revisions, and receipt
-Evidence. `ADD` promotes evidence into a Record; `MERGE` and `SUPERSEDE` refine
-it. Downstream products decide when to request that work. Embeddings, trees,
-graphs, and hierarchies remain evaluation-gated experiments rather than public
-API concepts.
+The next product line is a generic layered memory tree with its own versioned
+public data model and protocol. A downstream producer commits an immutable leaf
+revision containing ordered projected items, opaque source/version references,
+and a content digest. Memory does not read, parse, sanitize, page, checkpoint,
+or otherwise understand the producer's source. In the first Caelis integration,
+one producer-defined leaf corresponds to the projection of one concrete Session
+JSONL; that mapping remains entirely outside Memory.
 
-A later stateful identity profile may maintain personality, relationships, and
-working style through a bounded capsule assembled from the same labeled flat
-records. Background ingestion, indexing, bounded time ranking, and deterministic
-organization are algorithm-first; no idle model billing is acceptable. See the
-[roadmap](docs/memory-appliance-roadmap.md) for the staged product and acceptance
-boundary.
+Each parent contains an ordered set of child revision references plus a bounded
+summary and index derived only from those children. Parent topology is
+deterministic and partition-local. A summarizer may propose text and index terms
+through a bounded public Worker protocol. Explicit refinement may append a new
+summary revision for the same child set, but neither operation can choose
+children, move a node across Space or LabelSet boundaries, or authorize
+persistence. Memory
+validates and versions every accepted projection. Replacing or retracting a
+leaf dirties exactly one ancestor chain, which can be rebuilt from committed
+leaf and child revisions.
+
+Tree construction and traversal are post-`v0.5.0` milestones. They use a new
+source-neutral protocol namespace rather than silently extending
+`memory.v1alpha1` or `memory.steward.v1alpha1`. The current `remember(text)` and
+`recall(query)` contracts remain the stable baseline. See the
+[roadmap](docs/memory-appliance-roadmap.md) for the staged data model,
+algorithms, and acceptance boundary.
 
 ## Embedded use
 

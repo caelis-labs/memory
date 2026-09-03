@@ -14,7 +14,7 @@ code as a future standalone distribution framework. Building, publishing,
 installing, supervising, or version-matching those binaries is not part of the
 current Caelis integration or GA critical path.
 
-## Current delivery slice: LabelSet and flat organization foundation
+## Current v0.5 baseline: LabelSet and flat organization
 
 This slice is intentionally limited to the Memory repository.
 
@@ -34,9 +34,9 @@ In scope:
 Out of scope:
 
 - Caelis workspace-label construction or Runtime integration;
-- Session corpus import, automatic briefing, retention, decay, and forgetting;
+- the public tree protocol, leaf commits, and layered tree construction;
 - user-visible label configuration or Agent tool arguments;
-- a memory tree, general relation graph, embedding, or hierarchical traversal;
+- tree traversal, a general relation graph, embedding, or hierarchy-aware Recall;
 - another scheduler, automatic organization trigger, or model-provider stack.
 
 The slice is accepted when the default empty LabelSet works without caller
@@ -58,8 +58,14 @@ Caelis Host
 Memory package
   -> SQLite schema baseline, receipts, indexes, topology, authorization
   -> static zero-token retrieval
-  -> time-aware ranking and bounded task briefing (planned foundation)
   -> durable Steward jobs and deterministic proposal application
+
+Post-v0.5 tree path
+  downstream source-specific producer
+    -> memory.tree.v1alpha1 generic leaf revision
+    -> deterministic parent topology
+    -> memory.tree.worker.v1alpha1 summaries and indexes
+    -> bounded memory.tree.v1alpha1 query
 ```
 
 Caelis may import public `api`, `sdk`, and `appliance` packages. It never imports
@@ -75,128 +81,225 @@ after Runtime work drains.
 
 ## Product vision
 
-The product is a private persistent corpus, not merely two keyword tools. It
-has two consumption profiles that share evidence, authorization, storage, and
-retrieval without becoming two Memory systems.
+`v0.5.0` remains the flat durable control: immutable receipts, rebuildable
+per-Space lexical indexes, flat semantic Record heads, and exact provenance.
+The next product line adds a separate generic layered memory tree without
+changing those authorities or pretending that one global corpus is canonical.
 
-### Stateless Session profile
+The former plan for a global canonical Session-corpus projection, a
+time-aware ranking policy, and an automatically injected zero-model task
+briefing is retired. None of those mechanisms is a release or future milestone.
 
-An ordinary Session has no durable personality or autonomous identity. Before
-work begins, the Host may supply bounded task text and receive a short
-task-relevant briefing containing such evidence as similar prior tasks, stable
-user preferences, and previously accepted technical decisions. The briefing:
+### Public leaf model
 
-- is length-bounded and evidence-backed;
-- is advisory context, never an instruction, authority, permission, or
-  decision;
-- does not give the Session a persistent identity;
-- is assembled by deterministic retrieval and ranking in the default path;
-- is an assembly-time context input, not a third model-visible Memory tool.
+Memory does not understand Session, JSONL, event paging, checkpoints, source
+migrations, or sanitization. A downstream producer owns all source-specific
+interpretation and submits an already-admitted leaf through a new public
+source-neutral protocol. The first Caelis producer maps one concrete Session
+JSONL projection to one leaf, but neither `Session` nor `JSONL` appears in the
+Memory protocol.
 
-The public briefing API is deliberately not frozen until corpus projection,
-ranking inputs, and response budgets have executable acceptance tests.
+The first `memory.tree.v1alpha1` leaf revision contains:
 
-### Stateful identity profile
+```text
+TreeID / LeafID / Revision
+SourceRef              opaque producer-owned logical source identity
+SourceVersion          opaque producer-owned immutable source version
+ProjectionRef          opaque producer-owned projection-policy version
+Items[]                ordered ItemRef, text, and content digest
+ContentDigest          digest of the complete canonical leaf request
+Slot                   stable Memory-assigned position in the tree
+State                  active, retracted, or conflicted
+```
 
-A future Bot-like product may map its opaque identity and workspace concepts to
-one or more exact LabelSets while retaining a stable `MemoryIdentity` for hard
-continuity. Memory does not gain a Bot type. The canonical derived structure
-remains flat Records with immutable Revisions and evidence links; any personality,
-relationship, or work-style hierarchy is a downstream projection until measured
-evidence justifies promoting another structure.
+The producer is accountable for projecting, sanitizing, bounding, versioning,
+and retracting source content. Memory validates protocol shape, byte budgets,
+digests, idempotency, expected head, partition authority, and immutable revision
+rules; it never infers what the source fields mean. The same idempotency key and
+request digest returns the original revision. Changing an existing key's digest
+conflicts. A new accepted revision advances the leaf head and dirties only its
+ancestor path.
 
-### Corpus ingestion
+### Layered parent nodes
 
-All eligible local Caelis Session content is a product corpus source, but the
-Memory database is not the canonical Session log. Production ingestion reads a
-checkpointed canonical Session projection through the Session Service API and
-submits stable, idempotent Memory inputs. It never scans physical `*.jsonl`
-files or depends on their layout.
+Every parent is derived only from an ordered, same-partition child set:
 
-The projection retains durable user and assistant facts with source provenance.
-It excludes system and developer prompts, hidden reasoning, credentials,
-approval payloads, transient progress, and raw tool input/output unless a
-separately reviewed sanitizer converts them into safe durable facts. Import is
-resumable, bounded, and model-free. A local JSONL reader may remain an offline
-evaluation utility but is not a production ingestion path.
+```text
+NodeID / Revision
+Level
+ChildRefs[]           exact child NodeID and Revision pairs
+ChildSetDigest        ordered digest of ChildRefs and policy version
+SummaryBlocks[]       bounded derived text -> exact child refs
+IndexEntries[]        bounded term -> child refs
+IndexState            ready or invalidated
+SummaryState          pending, ready, degraded, or invalidated
+```
 
-### Time and authority
+The topology builder, not a model, selects children. The first implementation
+uses a fixed fan-out of 16 and stable Memory-assigned leaf-slot order. Slots are
+never reused or compacted; a retracted leaf retains a content-free tombstone
+revision. Parent identity is derived from tree, level, and slot group, so an old
+leaf update changes one ancestor path instead of reparenting later leaves. The
+builder creates one parent for each complete child group and one frontier group
+per level. Parent revisions and edges are immutable; only node heads and the
+bounded dirty queue advance. The root is a derived pointer, not another
+evidence authority. Owner-authorized content erasure is the sole exception: it
+removes affected text/index payloads while retaining content-free revision and
+edge tombstones.
 
-Receipt occurrence, receipt arrival, later reinforcement, correction, and
-supersession remain separate signals. No year-scale decay curve is a foundation
-requirement. A later forgetting milestone starts with immediately testable,
-bounded active windows per LabelSet; overflow may become dormant without
-deleting evidence. Explicit Remember and evidence-backed promoted Records do not
-expire merely because wall-clock time passed.
+Nodes never cross `(SpaceID, LabelSetDigest)`. Child references are checked
+before a summary job is created and again before its result is applied. A
+parent whose child revision changes is unavailable for retrieval until the new
+revision's deterministic index is ready; its summary may still be pending. The
+previous revision remains audit evidence but cannot silently represent the new
+subtree.
 
-### Model-cost contract
+The deterministic parent index is built from the same fixed analyzer as the
+leaf index. It maps each retained term to the exact immediate children that
+contain it and applies fixed per-child and per-node term limits. It never copies
+a child's opaque source metadata into ranking. An accepted summary proposal may
+add cited expansion terms, but failure to obtain a summary leaves the
+deterministic index usable.
 
-Receipt ingestion, sanitization, indexing, time decay, candidate retrieval,
-deduplication, and default briefing generation consume zero model tokens.
-Starting or idling Caelis with no Memory work consumes zero model tokens. A
-model-backed Steward runs only after an explicit model binding and only for new
-eligible evidence or an explicit bounded organization action analogous to
-`/dream`; it never wakes solely because wall-clock time passed.
+### Public protocols
 
-Automatic model work has a frozen per-receipt call budget. A network or model
-failure cannot create an unattended retry loop: any retry that spends another
-model call waits for a later active task or an explicit organization action.
+The tree surface is a system-facing package contract, not another Agent tool:
 
-Memory owns the prompt, input budget, proposal parser, evidence checks, and
-apply policy. The downstream Host supplies only its existing provider/model
-callback and accounting. Algorithmic organization remains authoritative;
-model output is optional untrusted advice.
+```text
+memory.tree.v1alpha1
+  CommitLeaf / RetractLeaf / GetNode / RequestRefinement / Query
 
-### Product convergence rules
+memory.tree.worker.v1alpha1
+  ClaimBuild / ApplyProposal / FailBuild
 
-Memory keeps one evidence authority and derives bounded products from it. It
-does not create separate authoritative stores for episodic, semantic, hot,
-warm, or cold memory. The planned products are:
+memory.tree.management.v1alpha1
+  CreateTree / DeleteLeaf / DeleteTree
+  InspectTree / RebuildProjection / ExportTree
+```
 
-- explicit Recall, which searches evidence on demand and may answer an
-  explicitly historical query;
-- a stateless task briefing, which admits only current, sufficiently supported
-  evidence and may be empty;
-- a future identity capsule, which projects a small stable root for one
-  stateful identity before any hierarchical expansion is justified.
+`CommitLeaf` accepts only the generic leaf model above. It contains no path,
+Session ID, event sequence, checkpoint, sanitizer rule, provider, model, or
+credential field. A producer may encode its own stable identity and version in
+opaque references, but Memory does not branch on their contents.
 
-Those products may use different ranking, temporal, and abstention policies.
-There is no universal `relevance * recency * confidence` score: a recent
-incidental mention must not outrank an explicit durable decision merely because
-it is newer, while an old unsupported preference must not enter an automatic
-briefing merely because one keyword matches. Correction and supersession are
-state transitions, not negative score weights.
+The intended request/response shapes are:
 
-Explicit Remember and sanitized Session observation are also different forms
-of evidence. A Session projection records what occurred; it does not silently
-upgrade every conversation sentence into an accepted preference or decision.
-Because `SourceContext` is untrusted audit metadata, any source class that
-affects ranking or admission must come from a host-authenticated, model-hidden
-ingestion boundary defined and tested in P2.
+```text
+CommitLeafRequest
+  tree_ref, leaf_ref?
+  expected_revision?
+  source_ref, source_version, projection_ref
+  items[] { item_ref, text, content_digest }
+  idempotency_key
+CommitLeafResponse
+  leaf_node_ref, revision, content_digest, deduplicated_retry
 
-Skills, executable procedures, routines, credentials, files, and Session logs
-retain their existing product owners. Memory may recall evidence about them but
-does not become their registry, scheduler, or canonical store.
+RetractLeafRequest
+  tree_ref, leaf_id, expected_revision, reason_code, idempotency_key
+RetractLeafResponse
+  leaf_node_ref, revision, deduplicated_retry
 
-### Retrieval evolution ladder
+RequestRefinementRequest
+  tree_ref, node_ref, expected_revision, summary_policy_ref, idempotency_key
+RequestRefinementResponse
+  build_ref, target_node_ref, deduplicated_retry
 
-Retrieval evolves behind the same narrow Remember/Recall surface:
+BuildWork
+  build_ref, operation = summarize | refine
+  target_node_ref, base_summary_ref?, level, child_set_digest
+  children[] { exact_node_ref, kind, bounded_content, index }
+BuildProposal
+  summary_blocks[] { text, exact_child_refs[] }
+  index_entries[] { term, exact_child_refs[] }
 
-1. the current fixed multilingual lexical analyzer is the durable control;
-2. P2 may add bounded model-free phrase, association, temporal, contradiction,
-   and abstention projections when each beats that control on a blind holdout;
-3. an explicitly bound Steward may add evidence-backed semantic Records, but
-   static retrieval and briefing remain complete without it;
-4. embeddings, relation graphs, or hierarchical indexes remain experiments
-   until they produce material end-to-end benefit over the best zero-token
-   baseline without unacceptable privacy, latency, storage, rebuild, or
-   dependency cost.
+QueryRequest
+  tree_ref, query
+  max_depth, max_nodes, max_children, max_items, max_bytes
+  result_mode = leaf_items | allow_derived_summaries
+QueryResponse
+  results[] { kind, text, node_ref, leaf_item_refs[], source_refs[] }
+  visited_nodes, truncated, degraded
+```
 
-Every derived index is disposable and rebuildable from authorized evidence.
-An experiment cannot add a user-facing model/provider setting, change the
-Remember/Recall arguments, or become required for startup. Promotion requires
-the same frozen corpus, a held-out set, parameter-trajectory evidence, and a
-documented rollback to the previous accepted retriever.
+Space, LabelSet, actor, audience, View, Grant, lease, provider, model, and
+credentials stay outside model-facing payloads. The authenticated binding
+selects the writable/readable partition; a `tree_ref` is only an object
+reference within that authority. `reason_code` is a bounded lifecycle category,
+not arbitrary source content.
+
+Management creates a Tree under one exact Space and LabelSet and fixes its
+topology/index policy version. Issued capabilities grant distinct tree commit,
+retract, read, refine, or query operations; ordinary Remember/Recall authority
+does not implicitly grant them. This makes the protocol safe for at-least-once
+producers without requiring Memory to understand their checkpoint or
+transaction model.
+`RetractLeaf` is reversible lifecycle state and retains historical content for
+owner audit. Owner-authorized `DeleteLeaf` is erasure: it keeps only a
+content-free tombstone and removes leaf text plus every derived summary/index
+payload whose provenance reaches that leaf before retrieval resumes.
+
+The current `memory.v1alpha1` Remember/Recall and
+`memory.steward.v1alpha1` Record proposal protocols remain unchanged. Tree work
+must not reinterpret a Receipt or semantic Record as a tree node.
+
+### Summary and index execution
+
+Leaf indexing and parent topology are deterministic. A downstream summarizer
+may propose a parent summary and additional index terms through the public
+Worker protocol. The proposal receives only the fixed child revisions selected
+by Memory and returns bounded text plus exact child citations. It cannot choose
+topology, Space, LabelSet, visibility, lifecycle, deletion, or publication.
+
+Memory owns the prompt profile, input/output budgets, parser, child-set digest,
+lease, retry ceiling, and atomic application. The Host owns provider, model,
+credential, billing, and scheduling. One node revision has at most one accepted
+summary effect. Summarizer failure leaves the node pending or degraded and never
+blocks current receipt Recall or Host startup. There is no zero-model promise
+for tree summarization: cost is measured per materialized node revision and is
+incurred only by producer-triggered dirty work or an explicit Host action,
+never by wall clock time alone.
+
+`RequestRefinement` may create a new summary revision for the same exact child
+set under a new summary-policy reference. The Worker receives the current
+summary as an optional base and may improve only summary blocks and cited
+expansion terms. It cannot change child edges, deterministic index entries, or
+the node's partition. A stale target or unchanged request is rejected or
+deduplicated.
+
+### Tree retrieval and authority
+
+Tree retrieval is explicit; it does not inject an automatic task briefing. The
+query path authorizes the exact Space and LabelSet before reading any tree
+index. It starts from the current partition root, scores only exact immediate
+children named by matching parent index entries, and descends best-first until
+the budget or leaf result limit is reached. Every hop revalidates the active
+node revision and partition before returning leaf items or clearly marked
+derived summaries with complete node and opaque source provenance. Initial
+traversal is lexical with stable node-reference tie-breaks; there is no recency,
+decay, active-window, or universal relevance score.
+
+Budgets independently bound depth, visited nodes, candidate children, returned
+items, and encoded bytes. Empty and partially materialized trees are valid: the
+caller can continue using the current flat Recall path. Query does not become a
+default product path until it demonstrates material benefit over searching all
+authorized leaves.
+
+### Rebuild and lifecycle
+
+Accepted leaf revisions are the tree's durable base layer; parent summary,
+index, edge-head, and root tables are disposable projections. Memory can rebuild
+all upper levels from leaf revisions without rereading an external source or
+calling a summarizer for deterministic indexes. Restoring summary text may
+reuse an accepted proposal for the same child-set/policy digest or leave the
+parent degraded until a Worker supplies one.
+
+The producer remains authoritative for source correction, replacement,
+redaction, and deletion and expresses each through `CommitLeaf` or
+`RetractLeaf`; erasure additionally invokes owner-authorized `DeleteLeaf`.
+Memory never mutates or reopens the external source. Skills,
+procedures, credentials, files, and Session logs retain their existing owners.
+Embeddings and general relation graphs remain separate experiments rather than
+hidden dependencies of the tree.
 
 ## Golden Paths
 
@@ -216,17 +319,22 @@ documented rollback to the previous accepted retriever.
 9. Remove the binding and prove later receipts remain available through the
    static path without model calls.
 
-### Product-foundation path
+### Public layered-tree path (post-v0.5.0)
 
-1. Import eligible canonical history from multiple local Sessions through one
-   resumable cursor.
-2. Start an unrelated new Session with a natural-language task, without asking
-   the model to guess Recall keywords.
-3. Assemble one short authorized briefing that cites similar tasks, relevant
-   preferences, and current decisions.
-4. Prefer recent supported evidence over stale keyword-only evidence while
-   retaining explicit historical lookup.
-5. Repeat the path offline with no Steward binding and observe zero model calls.
+1. A producer projects any owned source into bounded ordered leaf items and
+   commits one revision through `memory.tree.v1alpha1`.
+2. Memory validates capability, exact Space/LabelSet partition, request digest,
+   idempotency, expected head, and byte budgets without interpreting the source.
+3. Replaying the same request is idempotent; a new source version advances the
+   leaf, while key reuse with another digest conflicts.
+4. Memory deterministically groups 16 ordered same-partition child revisions,
+   builds their bounded index, and optionally accepts one cited summary
+   proposal for that exact child-set digest.
+5. An explicit authorized query traverses bounded parent indexes and returns
+   leaf items or marked summaries with complete node and opaque source
+   provenance.
+6. A producer revision or retraction invalidates only the affected ancestor
+   path, which is rebuilt bottom-up from committed child revisions.
 
 Future product concepts may select another opaque `BindingRef`. Bot, user,
 tenant, workspace, and product identity do not enter the Memory API.
@@ -235,11 +343,14 @@ tenant, workspace, and product identity do not enter the Memory API.
 
 ```text
 P0 Package Boundary
-  -> P1 Embedded Caelis Feature
-    -> P2 Product Foundation
-      -> P3 Optional Steward Quality
-        -> P4 GA Candidate and External Review
-          -> P5 Stateful Identity Hierarchy
+  -> P0.1 LabelSet and Flat Record Baseline
+    -> P1 Embedded Caelis Feature
+      -> P2 v0.5.0 GA Closure
+        -> P3 Public Tree Model and Leaf Protocol
+          -> P4 Layered Rollup Tree
+            -> P5 Tree Retrieval and Identity Views
+
+Optional Steward Quality (cross-cutting, non-blocking for the static path)
 
 Standalone Distribution (deferred, independent of P0-P5)
 ```
@@ -249,22 +360,27 @@ Standalone Distribution (deferred, independent of P0-P5)
 | Architecture | P0 | Public embedded facade over the durable authority |
 | Context partition | P0.1 | Capability-bound LabelSet and flat derived-memory structure |
 | Construction and integration | P1 | Default Caelis Remember/Recall works without a sidecar |
-| Product foundation | P2 | Sanitized Session corpus, time-aware ranking, and bounded task briefing make Memory useful without exact tool keywords |
-| Optional enhancement | P3 | Memory-owned Steward policy adds measured value without becoming a cost or availability dependency |
-| Release acceptance | P4 | Caelis release matrix and external review accept the feature |
-| Future identity | P5 | Downstream identity composition uses LabelSets and measured projections without polluting the stateless path |
+| Release closure | P2 | The current flat embedded package reaches v0.5.0 GA without adding a new product mechanism |
+| Public tree foundation | P3 | A source-neutral protocol commits immutable, partition-bound leaf revisions |
+| Hierarchical organization | P4 | Same-partition child revisions roll up into deterministic summary and index nodes |
+| Retrieval and product views | P5 | Explicit bounded tree traversal proves value before public Query or an identity view ships |
 
-## Implementation status — 2026-09-02
+## Implementation status — 2026-09-03
 
 | Milestone | State | Remaining independent review slice |
 | --- | --- | --- |
-| P0 | Complete at package scope | Public facade, SDK conformance, default-path lexicon retirement, close concurrency, and CI package checks are implemented; external review remains part of P4 |
+| P0 | Complete at package scope | Public facade, SDK conformance, default-path lexicon retirement, close concurrency, and CI package checks are implemented; external review remains part of P2 |
 | P0.1 | Complete in Memory | LabelSet baseline, exact data-plane and Steward partitioning, flat-structure contract, and the 224-case multilingual package gate are complete; Caelis workspace injection is the next slice |
-| P1 | Technical integration complete | Default embedded tools, persistence, replay, and system-managed Steward binding exist; product usefulness is not yet accepted |
-| P2 | Planned, now GA-critical | Implement canonical Session corpus projection, deterministic time-aware ranking, and a bounded model-free task briefing |
-| P3 | In progress, non-blocking for static operation | Memory-owned prompt/parser and an initial 64-case low-cost study exist; Caelis adapter cutover and at least 200 reviewed cases remain |
-| P4 | Not accepted | Product-foundation gates, native Windows acceptance, exact-revision cross-platform gates, and external review remain |
-| P5 | Vision only | Define downstream identity composition only after P2/P3 establish evidence, pruning, and cost behavior |
+| P1 | Technical integration complete | Default embedded tools, persistence, Replay safety, and system-managed Steward binding exist |
+| P2 | Release closure, not yet accepted | Freeze the v0.5 schema and API, remove the deprecated pre-GA Generator surface, pass the exact downstream/platform matrix, and complete external review and formal release acceptance |
+| P3 | Planned after v0.5.0 | Freeze the source-neutral public tree data model, leaf protocol, and conformance suite; a Caelis Session projector is a downstream integration |
+| P4 | Planned after P3 | Deliver deterministic fan-out, immutable parent revisions, cited summaries/indexes, invalidation, and bottom-up rebuild |
+| P5 | Deferred until P4 evidence | Prove bounded tree traversal beats authorized leaf scanning before shipping public Query or building identity views |
+
+Optional Steward quality remains in progress and non-blocking for static
+operation. Existing prompt/parser work and corpus reports may inform tree
+summary evaluation, but they are not evidence that the tree has been built or
+accepted.
 
 The retained evidence reports remain bounded experiments, not GA product
 claims. See [Local Memory Registry Corpus Evidence](evidence/memory-registry-corpus-2026-09-02.md),
@@ -359,188 +475,191 @@ future standalone distribution work with these reviews.
 - removal of sidecar composition leaves no runtime resolver, manifest pin,
   endpoint, downloader, supervisor, readiness diagnostic, or artifact setting.
 
-## P2: Product Foundation
+## P2: v0.5.0 GA Closure
 
 ### Goal
 
-Make Memory useful before an Agent guesses an exact Recall keyword, without
-introducing a background token bill.
+Publish the current flat embedded package as a precise, supportable `v0.5.0`
+baseline. This milestone adds no Session import, ranking policy, briefing, tree,
+or other new product mechanism.
 
 ### Independently reviewable slices
 
-1. **Canonical Session corpus projection.** Caelis reads checkpointed canonical
-   Session events through the Session Service, applies a reviewed sanitizer,
-   and submits stable idempotent inputs. Restart resumes from a durable cursor;
-   no production code reads physical Session JSONL.
-2. **Bounded active-memory admission.** Memory combines the fixed analyzer with
-   deterministic correction, supersession, reinforcement, and per-LabelSet
-   active-window rules. Evaluation varies small count-based bounds on real
-   Session corpora; no multi-year curve blocks the first useful slice.
-3. **Task briefing.** A package-owned bounded request/response produces a short
-   advisory context for a new stateless Session from task text and authorized
-   evidence. It has provenance and a byte budget, carries no authority, and
-   makes no model call.
-4. **Corpus evaluation.** Frozen Chinese, English, and mixed-language tuning
-   and blind holdout cases cover similar historical tasks, durable preferences,
-   changed decisions, older facts, contradictory evidence, sparse/non-literal
-   task wording, correct abstention, and harmful irrelevant context. Every
-   report compares the empty-context, exact-lexical, best model-free, and any
-   model-assisted variants and preserves the parameter trajectory rather than
-   only the winning run.
-
-Each slice is independently committable and reviewable. Do not freeze the
-briefing public API before slices 1 and 2 establish the real inputs and ranking
-contract.
+1. **Compatibility floor.** Freeze the current schema and public API, document
+   upgrade from the final release candidate, and reject unsupported older
+   pre-release data explicitly.
+2. **Pre-GA cleanup.** Remove the deprecated Generator surface and any stale
+   product claim or integration seam that would become permanent at GA.
+3. **Exact-revision validation.** Pass package conformance, full race tests,
+   fixed corpus, GA soak, documentation links, diff checks, and downstream
+   Caelis tests against the exact candidate commit.
+4. **Platform and product acceptance.** Complete the supported native matrix,
+   Rocky Linux offline path, clean-install Golden Path, and external review.
+5. **Formal release.** Advance `VERSION`, verify remote quality for the exact
+   commit, create an annotated `v0.5.0` tag, and publish the source release.
 
 ### Exit criteria
 
-- every eligible local Session is projected or has a recorded, non-sensitive
-  exclusion reason;
-- explicit Remember and observational Session evidence remain distinguishable
-  through a trusted, model-hidden source boundary; `SourceContext` labels do
-  not establish authority;
-- re-import and crash recovery create no duplicate facts;
-- excluded content and one identity's private evidence never appear in another
-  authorized result;
-- bounded active-window ranking meets its frozen corpus thresholds and reports
-  all tested count parameters;
-- the frozen non-literal set improves over exact lexical retrieval without an
-  embedding model or unacceptable false-positive growth;
-- a historical Recall result is visibly qualified, while an unqualified stale
-  or unresolved candidate is omitted from an automatic briefing;
-- the briefing fits its byte budget, cites its evidence, contains no authority
-  or imperative policy, and improves a frozen task-context benchmark over an
-  empty-context control without increasing harmful-context or false-memory
-  errors;
-- all four slices consume zero model tokens.
-
-## P3: Optional Steward Quality
-
-### Goal
-
-Prove that an explicitly bound low-cost model materially improves organization
-or non-literal retrieval without weakening the static path.
-
-### Deliverables
-
-- explicit Steward model binding through Caelis' existing provider stack;
-- unbound mode deterministically disables later semantic Jobs while retaining
-  receipt Recall;
-- bounded Memory-owned prompt rendering, input construction, proposal parsing,
-  and proposal validation; native JSON Schema may optimize a provider but is
-  never required for correctness;
-- cleaned, privacy-reviewed evaluation corpora derived from local Memory
-  Markdown and canonical Session projections;
-- fixed `gse` base dictionary plus two- and three-rune Han fallback projection,
-  with the same analyzer used for write, Recall, correction, semantic records,
-  schema initialization, and rebuild;
-- adaptive lexicon learning retained only behind an internal evaluation option;
-  default Open, schema initialization, Remember, Recall, correction, deletion, and Steward
-  paths neither learn nor consume local terms;
-- deterministic Chinese, English, and mixed-language cases covering repeated
-  Remember/Recall, contradiction, supersession, unrelated noise, restart,
-  private isolation, static fallback, and evidence provenance;
-- model-assisted reports separated from deterministic correctness gates;
-- a frozen automatic per-receipt model-call budget and demand-gated retry
-  policy; polling an empty queue or waiting for time to pass never spends a
-  token.
-
-### Exit criteria
-
-- every accepted receipt remains reachable in static mode;
-- malformed, cross-Space, cross-LabelSet, stale-revision, or unsupported
-  proposals mutate nothing;
-- binding a model affects only later jobs and never changes provider ownership;
-- realistic corpus metrics and known limitations are frozen for the candidate;
-- dictionary growth is never treated as retrieval-quality evidence; adaptive
-  lexicon remains experimental and disabled unless it materially beats the
-  fixed analyzer on a frozen corpus without regression;
-- no quality claim depends solely on synthetic marker queries.
-
-P3 may improve P2 quality but cannot become an availability dependency or a
-substitute for P2's zero-token briefing path.
-
-## P4: GA Candidate and External Review
-
-### Goal
-
-Accept the embedded feature as part of the Caelis product release.
-
-### Hard gates
-
-- acknowledged receipt loss: zero;
-- idempotent retry duplicate effects: zero;
-- unauthorized candidate access or private/shared leakage: zero;
-- Replay Memory calls: zero;
-- Recall fragment provenance coverage: 100%;
-- read-your-writes and Host restart failures: zero;
-- canonical Session corpus projection is resumable, idempotent, sanitized, and
-  model-free;
-- documented bounded active-window and reinforcement behavior passes the frozen
-  corpus;
-- bounded task briefing beats the empty-context control without authority or
-  privacy violations;
-- an idle Host and an unbound Steward produce zero Memory model calls;
-- required Caelis tests, race tests, architecture checks, builds, docs links,
-  and release dry-run pass at the exact candidate revision;
-- Caelis builds and tests the imported Memory package on its supported Darwin,
-  Linux, and Windows AMD64/ARM64 matrix;
-- Linux native behavior is verified in the local OrbStack Rocky environment;
+- acknowledged receipt loss, duplicate retry effects, Replay Memory calls, and
+  unauthorized candidate access are all zero;
+- Recall provenance coverage is 100%, and read-your-writes and restart tests
+  pass;
+- the schema/API compatibility floor and RC-to-GA upgrade are frozen;
+- no deprecated pre-GA Generator contract remains public;
+- Memory and the exact Caelis consumer revision pass their required
+  architecture, test, race, build, documentation, offline, and platform gates;
+- the fixed 100-Space, 100,000-receipt, 10,000-Record soak report is retained;
 - an external reviewer maps every finding to code, test, acceptance ID, or an
-  explicitly accepted risk before formal GA.
+  explicitly accepted risk;
+- remote quality succeeds for the exact release commit before the annotated
+  tag and public release are created.
 
-Memory has no separate runtime artifact gate in this milestone. The exact
-Memory source version is compiled into the Caelis binary, so Caelis has one
-release matrix, one installation, and one rollback unit.
+The generic layered tree begins after this milestone and never retroactively
+blocks `v0.5.0`.
 
-### Product acceptance
+## Cross-cutting: Optional Steward Quality
 
-A clean Caelis installation starts offline, requires no Memory download or
-configuration, exposes the two tools, passes both Golden Paths, and can enable
-or disable model-backed Steward behavior solely by changing its system-agent
-model binding.
+The existing provider-neutral Steward remains an optional enhancement to the
+flat baseline and a possible execution mechanism for future tree summaries.
+Memory continues to own bounded prompts, parsing, validation, leases, retries,
+and atomic proposal application; the Host continues to own provider, model,
+credentials, billing, and scheduling.
 
-## P5: Stateful Identity Composition
+Every accepted receipt remains reachable without a model. Malformed,
+cross-Space, cross-LabelSet, stale-revision, or unsupported proposals mutate
+nothing. The existing 64-case study and any later 200-case reviewed study are
+useful evidence for prompt quality, but neither they nor dictionary growth
+constitute tree acceptance. A model-backed quality claim must retain its own
+frozen corpus, cost, latency, abstention, and regression evidence.
+
+## P3: Public Tree Model and Leaf Protocol
 
 ### Goal
 
-Support a product with persistent identity, personality, relationships, and
-work style through LabelSets and a bounded capsule without changing the
-stateless Session contract or replacing the flat Memory authority.
+Publish a source-neutral tree data model that can durably accept immutable leaf
+revisions without understanding the producer's storage or domain.
+
+### Independently reviewable slices
+
+1. **Types.** Add `api/memory/tree/v1alpha1` types for Tree, Leaf, Item, NodeRef,
+   immutable Revision, opaque SourceRef/SourceVersion/ProjectionRef, state,
+   content digest, and budgets.
+2. **Data plane.** Add `CommitLeaf`, `RetractLeaf`, and `GetNode` behind existing
+   capability authority. The request selects no Space, LabelSet, slot, provider,
+   or model; those remain Host-bound or Memory-assigned.
+3. **Revision semantics.** Freeze canonical request hashing, idempotency,
+   expected-head conflict, stable Memory-assigned slot, immutable history, and
+   retraction behavior.
+4. **Storage and migration.** Add an additive migration from the v0.5 schema
+   floor and persist leaf heads, immutable revisions, ordered items, and the
+   rebuildable deterministic leaf index in separate tree tables. With no Tree,
+   the current Remember/Recall storage and behavior remain byte-for-byte
+   unaffected.
+5. **Conformance and producer guide.** Test at least two unrelated synthetic
+   producers and document the Caelis mapping as an example only: one concrete
+   Session JSONL projection becomes one leaf before crossing the Memory API.
+6. **Owner lifecycle.** Add tree creation and leaf/tree deletion to the
+   management protocol. Retraction preserves immutable history; deletion keeps
+   only content-free audit and idempotency evidence and purges transitive
+   derived content.
+
+### Exit criteria
+
+- the protocol contains no Session, JSONL, event, path, checkpoint, sanitizer,
+  provider, or model semantics;
+- identical requests return one leaf revision, while changed digests under the
+  same idempotency key or stale expected heads fail closed;
+- every leaf revision retains exact ordered item and opaque source provenance;
+- authorization occurs before node reads or writes, and no node crosses an
+  exact `(SpaceID, LabelSetDigest)` partition;
+- restart, backup, restore, retraction, index loss, and rebuild preserve leaf
+  history and active-head semantics;
+- owner deletion makes leaf text and every transitively derived summary/index
+  payload unrecoverable through Memory while retaining content-free tombstones;
+- the Caelis example proves a downstream projector can represent one concrete
+  Session JSONL as one leaf without Memory importing or interpreting it.
+
+## P4: Layered Rollup Tree
+
+### Goal
+
+Roll immutable leaf revisions into a bounded hierarchy whose parents summarize
+and index only their exact child revisions.
+
+### Independently reviewable slices
+
+1. **Rollup schema.** Add separate parent revision, child edge, build job, dirty
+   queue, and partition root tables. Do not reinterpret current semantic
+   Records as tree nodes or change their public wire semantics.
+2. **Deterministic topology.** Use fan-out 16, stable Memory-assigned slot order,
+   non-reused tombstone slots, complete child groups, and one frontier group per
+   level. Models never choose topology.
+3. **Deterministic index.** Build bounded term-to-child references without a
+   model and make every entry attributable to its child revision.
+4. **Public summary/refinement protocol.** Add `RequestRefinement` plus
+   `api/memory/tree/worker/v1alpha1` claim, apply, and fail operations. An
+   optional summarizer receives only a frozen child set and optional base
+   summary, then returns bounded summary blocks, index terms, and citations.
+   Memory verifies the child digest and applies at most one effect for a build
+   input.
+5. **Invalidation and rebuild.** Child changes remove stale ancestors from
+   retrieval immediately, enqueue only the affected path, and reconstruct the
+   hierarchy bottom-up after restart or full index loss.
+
+### Exit criteria
+
+- identical authorized leaves and policy produce identical topology, child-set
+  digests, indexes, and roots across rebuilds;
+- every parent edge is immutable, same-partition, and names an exact child
+  revision;
+- every summary assertion and index entry retains bounded child provenance;
+- stale or degraded parents are excluded from retrieval until their exact
+  replacement revision is ready;
+- crash and retry at every build boundary have at most one accepted effect;
+- no model binding is required for leaf commit, topology, indexing,
+  invalidation, or rebuild; summary cost is reported per materialized revision.
+
+## P5: Tree Retrieval and Identity Views
+
+### Goal
+
+Complete the public tree protocol with an explicit bounded query path only
+after it demonstrates material benefit over scanning all authorized leaves.
+Do not inject an automatic task briefing.
 
 ### Entry criteria
 
-- P2 evidence and time semantics are accepted;
-- a concrete downstream identity consumer defines lifecycle and privacy needs;
-- the flat Record-head-plus-search control has accepted longitudinal evidence;
-- capsule admission, refinement, provenance, and recovery policies have
-  deterministic tests and a zero-token default implementation.
+- P3 and P4 correctness, isolation, rebuild, and cost gates are accepted;
+- a frozen longitudinal corpus represents real multi-Session tasks;
+- a concrete downstream consumer defines its query and privacy needs.
 
 ### Independently reviewable slices
 
-1. **Identity mapping.** The downstream product maps its own identity and work
-   context to opaque LabelSets. Memory does not acquire Bot, workspace, or
-   social-relationship product types.
-2. **Identity capsule.** Start with fixed, byte-bounded identity, personality,
-   relationship, and work-style blocks backed by active evidence. The capsule
-   is assembled at Session start, is inspectable, and rejects overflow rather
-   than silently truncating identity.
-3. **Optional structure experiment.** Compare the flat capsule plus evidence
-   search against
-   bounded branches on a longitudinal identity corpus. Introduce parent/child
-   structure only if it improves retrieval or update quality after accounting
-   for merge and recovery complexity.
-4. **Organization action.** A model may propose a bounded consolidation during
-   an explicit organization action. Memory validates an inspectable diff;
-   destructive or lossy projection changes require the product's confirmation
-   policy, and immutable receipt evidence remains recoverable.
-5. **Bounded lifecycle and rebuild.** Active-record and capsule budgets affect
-   derived state only. Dormancy or projection pruning never serves as receipt
-   deletion, and the flat record set and capsule rebuild without a model.
+1. **Traversal engine.** Authorize the exact partition first, then bound
+   depth, visited nodes, candidate children, returned leaf Items, and bytes.
+2. **Comparative evaluation.** Compare deterministic tree traversal and the
+   optional summary-assisted variant against an authorized all-leaf scan on
+   recall, abstention, harmful context, latency, storage, rebuild, and cost.
+3. **Public query contract.** Add `Query` to `memory.tree.v1alpha1` only after
+   the traversal gate passes. Freeze result kinds, provenance, budgets,
+   degraded state, pagination, compatibility, and empty-result semantics
+   without extending `memory.v1alpha1` implicitly.
+4. **Identity views.** A downstream product may map its identity and work
+   context to opaque LabelSets and bounded views. Memory does not acquire Bot,
+   workspace, relationship, or social product types.
+5. **Lifecycle audit.** Verify producer revision/retraction, owner deletion,
+   export, and reauthorization across leaf Items, parent summaries, and roots.
 
-Model-assisted consolidation may be an explicit bounded organization action.
-It cannot run continuously, erase receipt evidence, or become the only way to
-rebuild identity context.
+### Exit criteria
+
+- tree traversal materially beats the bounded all-leaf control without privacy,
+  abstention, harmful-context, latency, storage, or rebuild regression;
+- every returned leaf Item or derived summary carries complete source and
+  node provenance;
+- empty, partial, degraded, and rebuilding trees have explicit behavior and do
+  not disrupt current flat Recall;
+- identity views remain downstream composition over exact LabelSets rather
+  than a second Memory authority.
 
 ## Deferred standalone distribution
 
