@@ -7,11 +7,13 @@ import (
 	"time"
 )
 
-// schemaBaselineID distinguishes the current unreleased development schema
-// from the historical numbered migration chain. Until Memory has a published
-// compatibility floor, old development databases are rebuilt instead of
-// migrated forward.
-const schemaBaselineID = "memory-development-baseline-1"
+// schemaBaselineID is the first published database compatibility floor. Future
+// schema changes migrate forward from this baseline instead of requiring a
+// rebuild. The final v0.5.0 schema is byte-for-byte identical to the last
+// prerelease baseline, so that upgrade only promotes its metadata marker.
+const schemaBaselineID = "memory-v0.5.0"
+
+const preGASchemaBaselineID = "memory-development-baseline-1"
 
 var baselineSchema = []string{
 	`CREATE TABLE metadata (
@@ -334,10 +336,17 @@ func initializeSchema(ctx context.Context, db *sql.DB, now time.Time) error {
 		var baseline string
 		err := db.QueryRowContext(ctx,
 			`SELECT value FROM metadata WHERE key = 'schema_baseline'`).Scan(&baseline)
-		if count != 1 || version != CurrentSchemaVersion || err != nil || baseline != schemaBaselineID {
-			return fmt.Errorf("database uses an unsupported unreleased schema; remove the development data directory and restart")
+		if count != 1 || version != CurrentSchemaVersion || err != nil {
+			return fmt.Errorf("database uses an unsupported schema; migrate from a supported release or rebuild development data")
 		}
-		return nil
+		switch baseline {
+		case schemaBaselineID:
+			return nil
+		case preGASchemaBaselineID:
+			return promotePreGASchemaBaseline(ctx, db)
+		default:
+			return fmt.Errorf("database uses an unsupported schema; migrate from a supported release or rebuild development data")
+		}
 	}
 
 	tx, err := db.BeginTx(ctx, nil)
@@ -358,6 +367,23 @@ func initializeSchema(ctx context.Context, db *sql.DB, now time.Time) error {
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit schema baseline: %w", err)
+	}
+	return nil
+}
+
+func promotePreGASchemaBaseline(ctx context.Context, db *sql.DB) error {
+	result, err := db.ExecContext(ctx,
+		`UPDATE metadata SET value = ? WHERE key = 'schema_baseline' AND value = ?`,
+		schemaBaselineID, preGASchemaBaselineID)
+	if err != nil {
+		return fmt.Errorf("promote pre-GA schema baseline: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("inspect pre-GA schema promotion: %w", err)
+	}
+	if rows != 1 {
+		return fmt.Errorf("promote pre-GA schema baseline: metadata changed concurrently")
 	}
 	return nil
 }

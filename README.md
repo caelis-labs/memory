@@ -63,36 +63,31 @@ a material quality gain over the fixed analyzer.
 
 ## Product direction
 
-`v0.5.0` closes the current embedded package: immutable receipt evidence,
-authorization-first Recall, exact LabelSet partitions, flat semantic Records,
-and the optional Steward boundary. It does not include a global Session-corpus
-importer, time-aware ranking policy, or automatic task briefing.
+`v0.5.0` is a governed evidence and semantic-memory kernel: immutable receipt
+evidence, authorization-first Recall, exact LabelSet partitions, flat semantic
+Records, and an optional Steward boundary. It is independently useful, but is
+not presented as a complete cognitive-memory system. It does not include a
+global Session-corpus importer, time-aware ranking policy, or automatic task
+briefing.
 
-The next product line is a generic layered memory tree with its own versioned
-public data model and protocol. A downstream producer commits an immutable leaf
-revision containing ordered projected items, opaque source/version references,
-and a content digest. Memory does not read, parse, sanitize, page, checkpoint,
-or otherwise understand the producer's source. In the first Caelis integration,
-one producer-defined leaf corresponds to the projection of one concrete Session
-JSONL; that mapping remains entirely outside Memory.
+Post-GA work separates two new layers. A source-neutral Corpus ledger accepts
+immutable Leaf revisions and ordered Items from arbitrary downstream producers.
+Memory never reads, parses, sanitizes, checkpoints, or otherwise understands a
+producer's source. A concrete Session JSONL may be projected to one Leaf by a
+Caelis integration, but that mapping stays entirely outside Memory.
 
-Each parent contains an ordered set of child revision references plus a bounded
-summary and index derived only from those children. Parent topology is
-deterministic and partition-local. A summarizer may propose text and index terms
-through a bounded public Worker protocol. Explicit refinement may append a new
-summary revision for the same child set, but neither operation can choose
-children, move a node across Space or LabelSet boundaries, or authorize
-persistence. Memory
-validates and versions every accepted projection. Replacing or retracting a
-leaf dirties exactly one ancestor chain, which can be rebuilt from committed
-leaf and child revisions.
+An optional projection substrate builds direct lexical indexes, rollup
+hierarchies, summary artifacts, dense indexes, or graphs over the Corpus
+ledger. Rollup manifests, summaries, indexes, and active projection snapshots
+are distinct objects: none replaces Leaf evidence. Topology and query choices
+such as fan-out, stable slots, a single root, or root-first traversal remain
+evaluation parameters instead of public compatibility commitments.
 
-Tree construction and traversal are post-`v0.5.0` milestones. They use a new
-source-neutral protocol namespace rather than silently extending
-`memory.v1alpha1` or `memory.steward.v1alpha1`. The current `remember(text)` and
-`recall(query)` contracts remain the stable baseline. See the
-[roadmap](docs/memory-appliance-roadmap.md) for the staged data model,
-algorithms, and acceptance boundary.
+Corpus and projection protocols are post-`v0.5.0` milestones. They do not
+silently extend `memory.v1alpha1` or `memory.steward.v1alpha1`, and disabling
+them cannot affect current `remember(text)` / `recall(query)` behavior. See the
+[roadmap](docs/memory-appliance-roadmap.md) for the staged authority model and
+acceptance boundary.
 
 ## Embedded use
 

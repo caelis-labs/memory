@@ -10,9 +10,9 @@ evidence, not the reviewed semantic-quality gate.
 
 `scripts/corpus_eval` report format 3 accepts a local Markdown memory file, a Codex rollout
 JSONL, or a Caelis Session event JSONL. It is an offline evaluation reader, not
-part of the Memory tree protocol. Its format-specific extractors act as local
+part of a Memory Corpus protocol. Its format-specific extractors act as local
 test producers: they convert source data into text before calling Memory. The
-future tree evaluator likewise submits canonical `memory.tree.v1alpha1` leaf
+future Corpus evaluator likewise submits canonical source-neutral LeafRevision
 requests; source parsing, filtering, and fidelity remain producer-specific
 tests outside Memory. Markdown fenced code is excluded. Codex
 extraction accepts only user `input_text` and assistant `output_text` message
@@ -57,7 +57,7 @@ This exercises realistic corpus shape, accumulation, restart, consistency, and
 authorization behavior while keeping evaluation deterministic. Queries are
 lexical and evidence-bound. Paraphrase quality, model proposals, consolidation,
 and semantic ranking require a separately frozen appliance prompt-policy
-profile, downstream Generator/model, and labeled corpus.
+profile, downstream ModelGenerator/model, and labeled corpus.
 
 The checked-in release corpus is the reproducible static-path candidate gate.
 It expands three digest-frozen, de-identified fixture batches into 224 cases:
@@ -74,7 +74,7 @@ make corpus-gate
 
 The 24-case realistic Chinese/mixed suite continues to cover semantic Record
 provenance. Neither deterministic lexical suite is evidence of paraphrase,
-model quality, the generic leaf protocol, or layered-tree behavior. Any optional
+model quality, the Corpus protocol, or projection behavior. Any optional
 Steward semantic-quality claim still requires at least 200 reviewed cases. The
 fixed 100-Space, 100,000-receipt, 10,000-Record soak remains a separate v0.5 GA
 gate; neither evidence set substitutes for the other.
@@ -206,42 +206,48 @@ The current prompt/parser path and local Gemma real-corpus sample is
 
 ## Product-quality evaluation ladder
 
-Receipt reachability is necessary but does not prove that a hierarchy improves
-retrieval. Post-v0.5 tree experiments therefore use a frozen tuning partition
-and blind holdout partition and evaluate four independently attributable
-conditions:
+Receipt or Leaf reachability is necessary but does not prove that a hierarchy
+improves retrieval. Post-v0.5 Corpus experiments therefore use a frozen tuning
+partition and blind holdout partition and isolate at least these conditions:
 
-1. the current flat receipt/Record Recall control;
-2. scanning every authorized committed leaf within the same result budget;
-3. bounded traversal over deterministic parent indexes without summaries;
-4. the same topology with optional model-proposed summaries and index terms.
+1. the current Fact Memory receipt/Record Recall control;
+2. direct lexical search over authorized committed Items;
+3. direct seeds plus collapsed cross-level deterministic artifacts;
+4. controlled expansion from deterministic rollup artifacts;
+5. the same candidate strategy with optional model-proposed summaries and
+   cited expansion terms.
 
-Every report includes all tried topology and traversal parameters, not only the
-winner. It records dataset revision, producer and projection revisions, leaf
-request digests, fan-out, node and byte budgets, analyzer version, summary
-policy, latency, storage, rebuild time, and model-call/token cost. A tuning gain
-that disappears on the blind holdout is rejected evidence.
+This ordering prevents a direct-index gain from being attributed to a tree and
+does not assume root-first traversal. Every report includes all tried topology,
+candidate, and expansion parameters, not only the winner. It records dataset,
+producer, protocol, schema, topology, analyzer, index, model, summary, and query
+policy revisions; Leaf request digests; candidate and byte budgets; projection
+generation and coverage; latency; storage; rebuild time; and model-call/token
+cost. A tuning gain that disappears on the blind holdout is rejected evidence.
 
-The tree metrics are deliberately broader than question-answer retrieval:
+The Corpus and projection metrics are deliberately broader than
+question-answer retrieval:
 
-- leaf request fidelity, ordered-item and content-digest integrity, revision
-  conflicts, and replay idempotency;
-- child-set completeness, deterministic topology/root digests, and bottom-up
-  rebuild equality;
-- summary assertion and index-entry provenance coverage;
-- stale-parent exclusion after leaf revision, retraction, or projection-policy
-  change;
-- Retrieval@k, Recall@k, MRR, zero-result rate, visited nodes, depth, bytes, and
-  result-budget truncation;
-- correction, supersession, contradiction, repeated-support, abstention,
-  harmful-context, private leakage, and cross-partition edge errors;
-- model calls and tokens per materialized node revision, latency, database
-  growth, and recovery time.
+- Leaf request fidelity, ordered-Item and content-digest integrity, revision
+  conflicts, consistency, and replay idempotency;
+- direct Item index rebuild equality and usefulness with optional projections
+  disabled;
+- manifest completeness, deterministic structural/index artifact digests, and
+  generation activation atomicity;
+- summary assertion and expansion-entry support coverage;
+- stale-artifact exclusion after Leaf revision, retraction, redaction, erasure,
+  or projection-policy change;
+- Retrieval@k, Recall@k, MRR, zero-result rate, candidate artifacts, expansion,
+  bytes, and result-budget truncation;
+- correction, supersession, contradiction, repeated support, abstention,
+  harmful context, private leakage, and cross-partition reference errors;
+- materializer/model calls and tokens per generation, latency, database growth,
+  and recovery time.
 
 Long-conversation or memory QA benchmarks may be used as secondary comparison
 sets. They cannot substitute for local product cases because conversational QA
-does not by itself test the public leaf contract, tree authority, stale-parent
-invalidation, rebuild, or identity-view boundaries. A downstream Session
+does not by itself test the public Corpus contract, projection authority,
+stale-artifact invalidation, rebuild, or identity-view boundaries. A downstream Session
 projector separately owns tests proving that one concrete Session JSONL becomes
 one correct admitted leaf; those tests do not change Memory semantics.
 
@@ -252,5 +258,5 @@ included, and the report names a deterministic rollback to the prior accepted
 projection.
 
 The dated evidence reports linked above remain historical flat/Steward
-evidence. They must not be cited as proof of the generic leaf protocol or
-layered-tree acceptance.
+evidence. They must not be cited as proof of the Corpus protocol or any
+projection acceptance.

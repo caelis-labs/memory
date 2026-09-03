@@ -65,7 +65,7 @@ func (c *Client) Apply(ctx context.Context, request stewardv1alpha1.ApplyRequest
 	return response, err
 }
 
-// Fail reports one stable, non-sensitive Generator failure. Memory owns retry
+// Fail reports one stable, non-sensitive model-generation failure. Memory owns retry
 // delay and the terminal-attempt ceiling.
 func (c *Client) Fail(ctx context.Context, request stewardv1alpha1.FailRequest) error {
 	var response stewardv1alpha1.FailResponse
@@ -103,14 +103,6 @@ func (c *Client) do(ctx context.Context, path string, input, output any) error {
 		return fmt.Errorf("decode Steward Worker response: %w", err)
 	}
 	return nil
-}
-
-// Generator is the pre-GA direct-proposal callback retained only so a host can
-// update to ModelGenerator after publishing the next Memory prerelease.
-// Deprecated: use ModelGenerator. This compatibility path is removed before
-// GA after Caelis no longer imports the older SDK contract.
-type Generator interface {
-	Generate(context.Context, stewardv1alpha1.WorkRequest) (stewardv1alpha1.Proposal, error)
 }
 
 // ModelGenerator is the only target model integration point. Memory supplies
@@ -153,12 +145,10 @@ type RunnerOptions struct {
 }
 
 // Runner claims Jobs, invokes ModelGenerator with only model-facing data, and
-// submits results. Generator is a temporary pre-GA compatibility input; exactly
-// one callback must be supplied. Durable retry policy remains in Memory.
+// submits results. Durable retry policy remains in Memory.
 type Runner struct {
 	Client         Worker
 	ModelGenerator ModelGenerator
-	Generator      Generator
 	Options        RunnerOptions
 }
 
@@ -167,8 +157,8 @@ func (r Runner) Validate() error {
 	if r.Client == nil {
 		return fmt.Errorf("Steward Worker client is required")
 	}
-	if (r.ModelGenerator == nil) == (r.Generator == nil) {
-		return fmt.Errorf("exactly one Steward model Generator is required")
+	if r.ModelGenerator == nil {
+		return fmt.Errorf("Steward ModelGenerator is required")
 	}
 	if r.Options.LeaseDuration < time.Second || r.Options.LeaseDuration > 10*time.Minute || r.Options.LeaseDuration%time.Second != 0 {
 		return fmt.Errorf("Steward Worker lease must be whole seconds within 1s..10m")
@@ -199,37 +189,27 @@ func (r Runner) RunOnce(ctx context.Context) (found bool, err error) {
 	if err := claim.Work.Profile.Validate(); err != nil {
 		return true, fmt.Errorf("memoryd returned an invalid Steward profile: %w", err)
 	}
-	var proposal stewardv1alpha1.Proposal
-	if r.ModelGenerator != nil {
-		generationRequest, prepareErr := PrepareGeneration(*claim.Work)
-		if prepareErr != nil {
-			return true, r.Client.Fail(ctx, stewardv1alpha1.FailRequest{
-				Lease: *claim.Lease, Code: "input_invalid", Retryable: false,
-			})
-		}
-		generationResponse, generateErr := callModelGenerator(ctx, r.ModelGenerator, generationRequest)
-		if generateErr != nil {
-			code, retryable := classifyGenerationError(generateErr)
-			return true, r.Client.Fail(ctx, stewardv1alpha1.FailRequest{Lease: *claim.Lease, Code: code, Retryable: retryable})
-		}
-		if len(generationResponse.Text) > generationRequest.MaxOutputBytes {
-			return true, r.Client.Fail(ctx, stewardv1alpha1.FailRequest{
-				Lease: *claim.Lease, Code: "output_too_large", Retryable: false,
-			})
-		}
-		proposal, prepareErr = ParseProposal(generationResponse.Text, generationResponse.ParseMode)
-		if prepareErr != nil {
-			return true, r.Client.Fail(ctx, stewardv1alpha1.FailRequest{
-				Lease: *claim.Lease, Code: "output_invalid", Retryable: false,
-			})
-		}
-	} else {
-		var generateErr error
-		proposal, generateErr = callGenerator(ctx, r.Generator, *claim.Work)
-		if generateErr != nil {
-			code, retryable := classifyGenerationError(generateErr)
-			return true, r.Client.Fail(ctx, stewardv1alpha1.FailRequest{Lease: *claim.Lease, Code: code, Retryable: retryable})
-		}
+	generationRequest, prepareErr := PrepareGeneration(*claim.Work)
+	if prepareErr != nil {
+		return true, r.Client.Fail(ctx, stewardv1alpha1.FailRequest{
+			Lease: *claim.Lease, Code: "input_invalid", Retryable: false,
+		})
+	}
+	generationResponse, generateErr := callModelGenerator(ctx, r.ModelGenerator, generationRequest)
+	if generateErr != nil {
+		code, retryable := classifyGenerationError(generateErr)
+		return true, r.Client.Fail(ctx, stewardv1alpha1.FailRequest{Lease: *claim.Lease, Code: code, Retryable: retryable})
+	}
+	if len(generationResponse.Text) > generationRequest.MaxOutputBytes {
+		return true, r.Client.Fail(ctx, stewardv1alpha1.FailRequest{
+			Lease: *claim.Lease, Code: "output_too_large", Retryable: false,
+		})
+	}
+	proposal, prepareErr := ParseProposal(generationResponse.Text, generationResponse.ParseMode)
+	if prepareErr != nil {
+		return true, r.Client.Fail(ctx, stewardv1alpha1.FailRequest{
+			Lease: *claim.Lease, Code: "output_invalid", Retryable: false,
+		})
 	}
 	apply := stewardv1alpha1.ApplyRequest{Lease: *claim.Lease, Proposal: proposal}
 	_, err = r.Client.Apply(ctx, apply)
@@ -284,16 +264,6 @@ func callModelGenerator(ctx context.Context, generator ModelGenerator, request G
 	defer func() {
 		if recover() != nil {
 			response = GenerationResponse{}
-			err = &GenerationError{Code: "generator_panic", Retryable: true}
-		}
-	}()
-	return generator.Generate(ctx, request)
-}
-
-func callGenerator(ctx context.Context, generator Generator, request stewardv1alpha1.WorkRequest) (proposal stewardv1alpha1.Proposal, err error) {
-	defer func() {
-		if recover() != nil {
-			proposal = stewardv1alpha1.Proposal{}
 			err = &GenerationError{Code: "generator_panic", Retryable: true}
 		}
 	}()

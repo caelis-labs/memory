@@ -57,69 +57,83 @@ across a semantic candidate and overlapping receipt Evidence, or between
 semantic candidates; equal independent receipts remain separate. Evidence and
 Record references are unioned and sorted for deterministic provenance.
 
-## Planned generic layered tree
+## Planned Corpus ledger and projection substrate
 
-The post-v0.5 tree is a separate source-neutral data model. It does not turn the
-existing flat semantic Records into tree nodes:
+Post-v0.5 Corpus Memory is a separate source-neutral ledger. It does not turn
+flat semantic Records into nodes and does not require a hierarchy:
 
 ```text
 downstream-owned source
-  -> downstream-projected public Leaf request
-  -> immutable partition-bound Leaf revision
-  -> ordered fan-out-16 child groups
-  -> parent revisions containing bounded summaries and child indexes
-  -> explicit bounded Query to cited leaf Items
+  -> already-admitted public LeafRevision request
+  -> immutable partition-bound Items
+  -> direct per-partition lexical index and QueryCorpus
+  -> optional versioned projections
 ```
 
-The producer owns the source format, parsing, admission, sanitization,
-checkpointing, migration, versioning, and source deletion. Memory receives only
-opaque SourceRef, SourceVersion, and ProjectionRef values plus ordered bounded
-Items. It does not define or inspect those opaque values. A Caelis producer may
-map one concrete Session JSONL projection to one leaf, but the public protocol
-contains no Session or JSONL concept.
+The producer owns source format, parsing, admission, sanitization,
+checkpointing, migration, and source versioning. Memory receives opaque
+SourceRef, SourceVersion, and ProjectionRef values plus ordered bounded Items;
+it defines no meaning for those values. A Caelis producer may map one concrete
+Session JSONL projection to one Leaf, but the protocol contains no Session or
+JSONL concept.
 
-`memory.tree.v1alpha1` owns Tree, Leaf, Item, NodeRef, Revision, state, digest,
-budget, and provenance types plus `CommitLeaf`, `RetractLeaf`, `GetNode`,
-explicit `RequestRefinement`, and, after its evaluation gate, `Query`.
-`memory.tree.worker.v1alpha1` owns the provider-neutral `ClaimBuild`,
-`ApplyProposal`, and `FailBuild` contract.
-Management creation, inspection, rebuild, and export use a distinct
-owner-authorized surface. Tree creation fixes one exact Space/LabelSet
-partition and topology/index policy. Issued capabilities grant distinct commit,
-retract, exact-read, and query operations.
+`memory.corpus.v1alpha1` is the working namespace for Corpus, Leaf,
+LeafRevision, Item, state, digest, consistency, budget, provenance, commit,
+lifecycle, and query contracts. Provider-neutral materialization work uses a
+separate `memory.materializer.v1alpha1` namespace. Owner-authorized projection,
+inspection, rebuild, generation activation, export, and purge operations use
+`memory.corpus.management.v1alpha1`. These names and operations are P3
+candidates, not additions to the v0.5 public surface.
 
-The base tables retain immutable leaf revisions and ordered Items. A canonical
-request digest, idempotency key, expected head, and Memory-assigned stable slot
-govern each commit. Parent topology is deterministic and partitioned by exact
-`(SpaceID, LabelSetDigest)`. An immutable parent revision names an ordered exact
-set of child revisions and its digest. Its summary and term-to-child index are
-derived data with child provenance, not evidence authority. A summarizer may
-propose bounded text and additional terms only after Memory has fixed the child
-set; it cannot select parents, edges, roots, authority, or lifecycle.
-An explicit refinement job may replace only the bounded summary blocks and
-cited expansion terms for the same child-set digest under a new summary-policy
-reference. It appends a revision and cannot rewrite topology or deterministic
-index entries.
+The base tables retain immutable LeafRevisions and ordered Items. A canonical
+request digest, idempotency key, expected head, and commit sequence govern each
+accepted effect. The direct Item lexical index is disposable and rebuildable
+from the ledger, but it is implemented before any hierarchy so its benefit can
+be measured independently.
 
-A producer revision or retraction immediately invalidates the affected ancestor
-heads and removes them from retrieval. The dirty path is rebuilt bottom-up.
-Parent heads, summaries, indexes, and roots are disposable and reconstructible
-from committed leaf and child revisions without reopening an external source.
-Accepted summaries may be reused only for the exact child-set and policy digest;
-otherwise the parent remains degraded until new Worker output arrives.
+One optional `rollup_hierarchy` projection separates four structures:
 
-Retraction keeps immutable leaf content for owner-authorized audit. Deletion is
-a separate management operation: it replaces the leaf with a content-free
-tombstone, removes Item text, and purges every summary/index payload with
-transitive provenance to that leaf before any tree query resumes. IDs, digests,
-and idempotency evidence may remain, but deleted content may not.
+```text
+RollupManifest
+  exact ordered ChildRefs, ChildSetDigest, TopologyPolicyRef
+SummaryArtifactRevision
+  ManifestRef, bounded SummaryBlocks, exact SupportRefs, model/policy provenance
+IndexArtifactRevision
+  ManifestRef, deterministic postings, optional cited expansion entries
+ProjectionSnapshot
+  active Generation, root or forest refs, CoveredCommitSequence, health
+```
 
-Tree retrieval authorizes before reading any tree index and independently
-bounds depth, visited nodes, candidate children, returned Items, and bytes. It
-is explicit, has no automatic task-briefing side effect, and applies no recency,
-decay, active-window, or universal relevance policy. It is a separately
-versioned public protocol, never a hidden extension to Remember/Recall or the
-semantic Steward contract.
+The manifest fixes structural inputs; summary and index artifacts are derived;
+the snapshot publishes a coherent generation. None is evidence authority. A
+summarizer may propose bounded text and cited expansion terms only after Memory
+has fixed a manifest. It cannot select children, partition, lifecycle, erasure,
+or publication. Refinement appends a new SummaryArtifactRevision for the same
+manifest and never rewrites deterministic index artifacts.
+
+Fan-out, clustering, stable slots, root versus forest shape, balancing, and
+traversal strategy remain independently versioned experiment policy. The
+public Corpus model does not assume a universal Node, one ancestor chain, or
+root-first descent. Protocol, schema, topology, analyzer, summary, index, model,
+and query policies version independently.
+
+A Leaf revision, retraction, redaction, or erasure invalidates all dependent
+artifacts before they can be returned. Materializers create a new generation
+from exact input digests and atomically advance the ProjectionSnapshot only
+when its declared state is coherent. A crash leaves the previous complete
+generation active. Retraction preserves owner-auditable history; redaction and
+erasure remove Item content and every transitive derived payload while keeping
+only minimum content-free anti-resurrection evidence.
+
+QueryCorpus authorizes before reading any index and can operate using only the
+direct Item index. A hierarchy experiment uses direct high-recall seeds,
+collapsed cross-level candidates, and controlled expansion, then revalidates
+active Leaf evidence before disclosure. Responses report the projection
+generation and covered commit sequence, direct/hierarchical/mixed source,
+observed consistency, degraded/truncated state, and bounded provenance.
+Optional projection failure or disablement never affects direct Corpus query or
+Fact Memory Recall. No automatic task briefing, recency, decay, active-window,
+or universal importance policy belongs to this core contract.
 
 ## Steward execution
 
@@ -185,18 +199,16 @@ core owns lease expiry, retry ceilings, exponential delay, proposal validation,
 and atomic canonical application; it has no outbound provider adapter. Starting
 without a Worker leaves accepted receipts on the baseline path.
 
-The older `Generator(WorkRequest) -> Proposal` callback remains only as a
-pre-GA source-compatibility bridge for the currently published Caelis import.
-New consumers use `ModelGenerator(GenerationRequest) -> GenerationResponse`.
-After Caelis pins the next Memory prerelease and switches to the new callback,
-the direct-proposal bridge is removed before GA.
+The sole public integration point is
+`ModelGenerator(GenerationRequest) -> GenerationResponse`; the pre-GA direct
+proposal callback is not part of the GA API.
 
-Memory has no released database compatibility floor yet. A fresh database is
-created from one current development baseline; it contains no provider or model
-columns because those concepts belong to the downstream callback. A database
-created by an older unreleased schema is rejected with an explicit instruction
-to remove the development data directory and rebuild it. Forward migrations
-begin only after a published release establishes a real compatibility promise.
+`memory-v0.5.0` is the first published database compatibility floor. The final
+prerelease schema is byte-identical and is promoted by updating its baseline
+metadata while retaining receipts, capabilities, and derived state. Every
+other older development schema is rejected. Future schema changes require an
+explicit forward migration. Provider and model columns remain absent because
+those concepts belong to the downstream callback.
 
 Later operations such as RELATE, PROMOTE, DEMOTE, ARCHIVE, and model-enhanced
 Recall require independent evidence and acceptance cases.

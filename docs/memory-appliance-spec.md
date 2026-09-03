@@ -48,7 +48,7 @@ Memory is not the canonical Session transcript, context-compaction format,
 message bus, task queue, workflow state machine, approval ledger, lock, or
 execution receipt. The `v0.5.0` Core Profile does not scan host storage or
 import Session logs. A post-v0.5 source producer may submit an already-admitted
-leaf through a separate public source-neutral tree protocol. Memory does not
+LeafRevision through a separate public source-neutral Corpus protocol. Memory does not
 read, parse, sanitize, page, checkpoint, migrate, or delete the external source
 and does not define what an opaque source reference means. A Caelis producer may
 map one concrete Session JSONL projection to one leaf entirely outside Memory.
@@ -60,12 +60,12 @@ management UI. Those may be added without changing the two Agent operations or
 weakening the invariants above.
 
 The former global canonical Session-corpus projection, time-aware ranking
-policy, and automatic zero-model task briefing are retired. The post-v0.5
-layered tree has its own public `memory.tree.v1alpha1` data model and Worker
-protocol; it does not extend `memory.v1alpha1` or
-`memory.steward.v1alpha1`. Public Query is added only after provenance,
-isolation, budgets, invalidation, rebuild, and comparative value have executable
-acceptance evidence.
+policy, and automatic zero-model task briefing are retired. Post-v0.5 Corpus
+Memory has its own source-neutral ledger and optional projection protocols; it
+does not extend `memory.v1alpha1` or `memory.steward.v1alpha1`. A direct Item
+index precedes hierarchy experiments. No rollup or other projection becomes a
+default until provenance, isolation, budgets, invalidation, rebuild, and
+comparative value have executable acceptance evidence.
 
 ## Ownership boundary
 
@@ -232,7 +232,7 @@ Space, View, principal, capability, audience, or policy. In v1alpha1:
 - unknown or oversized content is rejected rather than silently truncated.
 
 `source_type` and extension labels also cannot establish evidence authority or
-select a LabelSet. The planned tree protocol has its own opaque source and
+select a LabelSet. The planned Corpus protocol has its own opaque source and
 projection references; it must not overload `SourceContext`, and Memory must
 not infer source semantics from either surface.
 
@@ -454,11 +454,12 @@ immutable Receipt evidence
 ```
 
 This is not a general graph or tree. Revision order and evidence provenance are
-the only canonical edges in the current extension. The planned generic layered
-tree is separate: each leaf revision contains one producer-defined ordered
-projection with opaque source provenance, and every parent summarizes and
-indexes an exact ordered child-revision set. It does not reinterpret semantic
-Records as nodes, infer source semantics, or become a second mutation authority.
+the only canonical edges in the current extension. The planned source-neutral
+Corpus ledger is separate: each LeafRevision contains one producer-defined
+ordered projection with opaque source provenance. Optional rollup manifests,
+summary artifacts, index artifacts, and projection snapshots may organize that
+ledger, but none is mandatory or a second evidence authority. They do not
+reinterpret semantic Records as nodes or infer source semantics.
 
 The Worker contract is `memory.steward.v1alpha1`. Its primary binding is a
 direct Go interface; the retained local transport is an optional adapter. A
@@ -610,7 +611,8 @@ two files defeats the confidentiality boundary.
 
 Restore is offline and must acquire the same owner lock as `memoryd`. It fully
 authenticates the encrypted stream, verifies SQLite integrity and foreign keys,
-requires the current development schema baseline, binds the operator-provided
+requires a supported schema at or forward-migrated from the published
+`memory-v0.5.0` floor, binds the operator-provided
 management credential, and rotates `storage_generation` before atomically
 replacing the database. Any failure before replacement leaves the current database usable.
 An existing database is first copied to a consistent owner-only rollback image.
@@ -677,11 +679,13 @@ they cannot silently widen the Core Profile. Internal semantic candidates may
 use the already-reserved `record_refs` and `degraded` response fields without
 adding an Agent operation or changing authorization.
 
-Future `memory.tree.v1alpha1` Query and downstream identity views may navigate
-the accepted layered projection under independent depth, node, result, and byte
-budgets. They must not become separate receipt or external-source authorities.
-The new protocol cannot be implemented by silently widening Remember, Recall,
-or the Steward proposal protocol.
+Future Corpus Query and downstream identity views may search accepted Leaf
+Items directly or use an independently versioned projection under bounded
+candidate, expansion, result, byte, and time budgets. RollupManifest,
+SummaryArtifactRevision, IndexArtifactRevision, and ProjectionSnapshot are
+derived artifacts, not receipt, Leaf, or external-source authorities. New
+protocols cannot be implemented by silently widening Remember, Recall, or the
+Steward proposal protocol.
 
 The API may become stable `v1` only after the durable embedded package and the
 Caelis Golden Path pass end to end. Semantic compatibility is demonstrated by

@@ -101,9 +101,47 @@ func TestHistoricalUnreleasedSchemaRequiresDevelopmentDatabaseRebuild(t *testing
 		t.Fatal(err)
 	}
 	_, err = Open(t.Context(), Options{DataDir: dataDir})
-	if err == nil || !strings.Contains(err.Error(), "unsupported unreleased schema") {
+	if err == nil || !strings.Contains(err.Error(), "unsupported schema") {
 		t.Fatalf("Open historical development schema error = %v", err)
 	}
+}
+
+func TestFinalPrereleaseBaselinePromotesWithoutDataLoss(t *testing.T) {
+	dataDir := t.TempDir()
+	store, auth := newGoldenStore(t, dataDir, time.Now)
+	receipt, err := store.Remember(t.Context(), auth, v1alpha1.RememberRequest{
+		Text: "the GA schema promotion preserves accepted evidence", IdempotencyKey: "ga-schema-promotion",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(t.Context(),
+		`UPDATE metadata SET value = ? WHERE key = 'schema_baseline'`, preGASchemaBaselineID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = Open(t.Context(), Options{DataDir: dataDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	var baseline string
+	if err := store.db.QueryRowContext(t.Context(),
+		`SELECT value FROM metadata WHERE key = 'schema_baseline'`).Scan(&baseline); err != nil {
+		t.Fatal(err)
+	}
+	if baseline != schemaBaselineID {
+		t.Fatalf("promoted schema baseline = %q, want %q", baseline, schemaBaselineID)
+	}
+	response, err := store.Recall(t.Context(), auth, testRecall("schema promotion", receipt.ConsistencyToken))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertHasText(t, response, "the GA schema promotion preserves accepted evidence")
 }
 
 func TestSchemaBaselineFailureRollsBackAllDomainTables(t *testing.T) {

@@ -48,12 +48,16 @@ the Caelis embedded Golden Path against the exact selected module revision.
 Long-running corpus and soak evidence remains separate from ordinary per-change
 tests. Run the fixed 100-Space, 100,000-receipt, 10,000-Record soak for a GA
 candidate and retain the aggregate result beside the external review evidence.
+The v0.5.0 records are [Architecture Review Resolution](evidence/memory-v0.5.0-architecture-review-2026-09-03.md)
+and [GA Soak Evidence](evidence/memory-v0.5.0-ga-soak-2026-09-03.md).
 
-The generic public tree model, leaf protocol, layered rollups, optional node
-summaries, and tree Query are post-v0.5 milestones. They are not package
-candidate gates, Caelis Golden Path requirements, or artifacts in the
-`v0.5.0` release. A downstream Caelis Session-to-leaf projector is an
-integration concern rather than a Memory protocol or release artifact.
+The Corpus ledger, Leaf protocol, direct Item query, and optional projection
+substrate are post-v0.5 milestones. They are not package candidate gates,
+Caelis Golden Path requirements, or artifacts in the `v0.5.0` release. A
+downstream Caelis Session-to-Leaf projector is one integration concern rather
+than a Memory protocol or release artifact. Future hierarchy, summary, dense,
+or graph projections remain independently disableable and cannot affect flat
+Recall.
 
 After a release-candidate commit is pushed, wait for the GitHub `quality`
 workflow at that exact revision. Create an annotated prerelease tag only for the
@@ -67,6 +71,13 @@ Only then create the annotated `v0.5.0` tag and a non-prerelease GitHub source
 release. A local commit, local tag, earlier RC result, or tag on another SHA is
 not release authority. The Memory package publishes no standalone binaries in
 this release line.
+
+`memory-v0.5.0` is the first published schema compatibility floor. The final
+prerelease baseline `memory-development-baseline-1` has the same schema and is
+promoted in place by changing only its metadata marker; accepted data must
+survive that transition. Every other older development baseline remains
+unsupported. Any post-GA Corpus or projection table is introduced only by an
+explicit additive migration from this floor.
 
 ## Version coordination
 
@@ -108,11 +119,11 @@ files to those archives beyond the code already linked into the Caelis binary.
 | Incident | Accountable owner | First response |
 | --- | --- | --- |
 | storage exhaustion or projection drift | Memory package owner | preserve receipts, inspect capacity, rebuild disposable projections |
-| SQLite corruption or schema initialization failure | Memory package owner | stop Host startup, preserve files, verify backup or rebuild the unreleased development data |
+| SQLite corruption or schema initialization failure | Memory package owner | stop Host startup, preserve files, verify backup, and follow the supported migration or recovery procedure |
 | Steward Worker or model outage | Caelis integration owner | remove the Steward binding; retain static receipt Recall |
 | capability or Space-boundary defect | Memory security owner | revoke affected Grant and block the candidate |
 | Session Replay leak | Caelis product owner | preserve canonical history and block the candidate |
-| post-v0.5 leaf/tree projection leak or stale ancestor | producer and Memory owners | disable tree Query, preserve the producer source and committed leaf history, invalidate derived projections, and rebuild after repair |
+| post-v0.5 Corpus projection leak or stale artifact | producer and Memory owners | disable the affected projection, preserve producer source and committed Leaf history, invalidate derived generations, and rebuild after repair |
 | imported revision regression | Caelis release manager | revert the module revision and rebuild one Caelis rollback release |
 
 No diagnostic or remediation may log receipt text, prompts, response bodies,

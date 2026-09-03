@@ -98,8 +98,7 @@ type LexiconCandidate struct {
 }
 
 // WorkRequest is the bounded structured input used by the Memory Worker SDK to
-// prepare one downstream model request. A deprecated pre-GA callback may still
-// receive it directly until its host updates. It deliberately contains no Job,
+// prepare one downstream model request. It deliberately contains no Job,
 // Space, lease, bearer, or provider config.
 type WorkRequest struct {
 	Protocol          string             `json:"protocol"`
@@ -281,7 +280,7 @@ type ApplyResponse struct {
 	Result ApplyResult `json:"result"`
 }
 
-// FailRequest reports a stable, non-sensitive Generator failure. The appliance
+// FailRequest reports a stable, non-sensitive model-generation failure. The appliance
 // owns retry delay and the terminal-attempt ceiling.
 type FailRequest struct {
 	Lease     Lease  `json:"lease"`

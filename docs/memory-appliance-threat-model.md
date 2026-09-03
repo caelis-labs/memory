@@ -14,9 +14,9 @@ retained but deferred adapter and is not a Caelis runtime dependency.
 - Steward Jobs, evidence, proposals, and semantic Records;
 - backup, migration, deletion, and storage-generation state.
 
-Post-v0.5 tree work additionally protects admitted generic leaf revisions,
-parent summaries and indexes, immutable child provenance, dirty queues, and
-partition roots. These assets are not part of the v0.5 GA surface.
+Post-v0.5 Corpus work additionally protects admitted LeafRevisions and Items,
+direct indexes, manifests, summary/index artifacts, projection generations,
+and exact support provenance. These assets are not part of the v0.5 GA surface.
 
 ## Current trust boundaries
 
@@ -27,7 +27,7 @@ Runtime capability                     temporary bearer authority
 Memory public API                      versioned semantic boundary
 Memory authorization layer            access enforcement before candidates
 Memory SQLite store                    canonical Memory authority
-Steward Generator output               untrusted provider text
+Steward ModelGenerator output          untrusted provider text
 Caelis Session store                   separate replay authority
 ```
 
@@ -63,36 +63,37 @@ error. There is no partially ready embedded Memory state.
 | Corrupt backup replaces live data | Authenticate, integrity-check, migrate, and stage fully before atomic replacement |
 | Rollback loses acknowledged writes | Keep a restored generation unavailable to embedded Open until explicit commit |
 
-## Post-v0.5 layered tree boundary
+## Post-v0.5 Corpus and projection boundary
 
-The tree accepts already-admitted leaf requests from a trusted downstream
+The Corpus ledger accepts already-admitted LeafRevision requests from a trusted downstream
 producer through a public source-neutral protocol. The producer owns source
 format, parsing, admission, sanitization, checkpointing, migration, versioning,
 and source deletion. Memory neither knows nor verifies those domain semantics.
 It validates capability, exact partition, structure, sizes, digests,
 idempotency, and immutable revision rules.
 
-The external source remains producer-owned authority. An accepted leaf revision
-is the durable base input to Memory's tree; parent summaries, indexes, active
-heads, and roots are derived projections. A Caelis producer may map one Session
-JSONL projection to one leaf, but that mapping adds no Session boundary to
-Memory.
+The external source remains producer-owned authority. An accepted LeafRevision
+is Memory's durable Corpus evidence. RollupManifests,
+SummaryArtifactRevisions, IndexArtifactRevisions, and ProjectionSnapshots are
+derived projections. A Caelis producer may map one Session JSONL projection to
+one Leaf, but that mapping adds no Session boundary to Memory.
 
 | Threat | Required control |
 | --- | --- |
 | A producer admits secret or instruction-bearing content | Keep source admission and sanitization in the producer, bind the request to a preselected exact partition, and never treat stored text as authority or instructions |
-| Malicious leaf content poisons an ancestor summary | Bound every Worker input and proposal, require exact child citations, and treat summarizer output as untrusted |
-| A parent aggregates another Space or LabelSet | Authorize before building or querying, require exact partition equality on every child edge, and verify it again at proposal apply |
-| A changed or deleted child leaves a stale ancestor searchable | Invalidate the complete ancestor path before advancing the child head, remove stale heads from indexes, and rebuild bottom-up |
-| Leaf deletion leaves source text in historical summaries or a retry resurrects it | Purge leaf Item text and every transitively derived summary/index payload before retrieval resumes; retain content-free tombstones, digests, and idempotency evidence that reject delayed replay |
+| Malicious Leaf content poisons a summary artifact | Bound every Worker input and proposal, require exact support citations, and treat summarizer output as untrusted |
+| A manifest references another Space or LabelSet | Authorize before building or querying, require exact partition equality on every reference, and verify it again at artifact apply |
+| A changed or deleted Leaf leaves a stale artifact searchable | Invalidate every dependent artifact before advancing its visible generation; atomically publish only coherent ProjectionSnapshots |
+| Leaf erasure leaves source text in historical artifacts or a retry resurrects it | Purge Item text and every transitively derived payload before retrieval resumes; retain only content-free tombstones, digests, and idempotency evidence that reject delayed replay |
 | Producer retry or source-reference reuse silently changes a leaf | Bind canonical request digest, opaque source/version/projection references, prior head, and idempotency key; fail closed when the same key names another digest |
 | A caller uses opaque references to smuggle authority | Never branch on SourceRef, SourceVersion, ProjectionRef, or ItemRef contents; authority comes only from the authenticated capability |
-| Fan-out or traversal exhausts Host resources | Fix fan-out, bound dirty work, and independently cap depth, visited nodes, candidate children, returned Items, bytes, summarizer calls, and retries |
-| A derived summary is mistaken for source evidence | Mark summaries as derived and retain exact node, child-revision, leaf, Item, and opaque source provenance in every result |
+| Projection or query work exhausts Host resources | Bound materialization work and independently cap candidates, expansion, returned Items, bytes, summarizer calls, time, and retries; keep topology parameters versioned |
+| A derived summary is mistaken for source evidence | Mark summaries as derived and retain exact manifest, support, LeafRevision, Item, and opaque source provenance in every result |
 
-These controls gate P3-P5. The tree uses separately versioned public contracts;
-until each stage passes, it is not a default product path and current flat
-Recall remains the only accepted availability path.
+These controls gate P3-P5. Corpus and projection work uses separately versioned
+public contracts. Optional projections may be disabled independently; current
+flat Recall and the future direct Corpus query remain separate availability
+paths.
 
 ## Steward boundary
 
