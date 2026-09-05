@@ -13,7 +13,10 @@ SIDECAR_CHECKSUM_NAME := $(SIDECAR_NAME).sha256
 MEMORYCTL_CHECKSUM_NAME := $(MEMORYCTL_NAME).sha256
 MANIFEST_SUPPORT_FLAG ?=
 
-.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported cross-build check corpus-gate m5-benchmark ga-soak release-candidate standalone-preview
+WINDOWS_REGRESSION_PACKAGES = ./internal/appliance ./appliance
+WINDOWS_REGRESSION_RUN = ^Test(SQLiteFileDSN|OpenPingsSQLiteOnNativeTempDir|SyncDirectorySucceedsOnNativeTempDir|DurableRestartAndIdempotency|LabelSetPartitionSurvivesRestart|EmbeddedRuntimeRememberRecall|OwnerLockRejectsSecondProcessOwner|ManagementCredentialRotationRevokesOldBearerAcrossRestart)$$
+
+.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported cross-build check corpus-gate m5-benchmark ga-soak release-candidate standalone-preview windows-regression
 
 docs-links:
 	GOWORK=off go run ./scripts/markdown_links
@@ -27,6 +30,9 @@ whitespace-check:
 
 test:
 	GOWORK=off go test ./...
+
+windows-regression:
+	GOWORK=off go test -count=1 -timeout 15m $(WINDOWS_REGRESSION_PACKAGES) -run '$(WINDOWS_REGRESSION_RUN)'
 
 durable:
 	GOWORK=off go test -count=1 ./internal/systemtest

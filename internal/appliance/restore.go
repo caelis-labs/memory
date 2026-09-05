@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -555,7 +556,7 @@ func syncDirectory(path string) error {
 		return fmt.Errorf("open data directory for sync: %w", err)
 	}
 	defer directory.Close()
-	if err := directory.Sync(); err != nil {
+	if err := directory.Sync(); err != nil && runtime.GOOS != "windows" && !errors.Is(err, os.ErrInvalid) {
 		return fmt.Errorf("sync data directory: %w", err)
 	}
 	return nil

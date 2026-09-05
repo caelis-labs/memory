@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,6 +21,55 @@ import (
 
 func TestSemanticConformance(t *testing.T) {
 	conformance.RunSemantic(t, newConformanceFixture)
+}
+
+func TestSQLiteFileDSNWindowsDriveLetterHasEmptyAuthority(t *testing.T) {
+	query := url.Values{}
+	query.Set("_txlock", "immediate")
+	dsn := sqliteFileDSN(`C:\Users\15528\.caelis\memory\appliance\memory.db`, query)
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Host != "" {
+		t.Fatalf("authority = %q, dsn = %q", parsed.Host, dsn)
+	}
+	if parsed.Path != "/C:/Users/15528/.caelis/memory/appliance/memory.db" {
+		t.Fatalf("path = %q, dsn = %q", parsed.Path, dsn)
+	}
+	if parsed.Query().Get("_txlock") != "immediate" {
+		t.Fatalf("query = %q", parsed.RawQuery)
+	}
+}
+
+func TestSQLiteFileDSNUnixAbsoluteHasEmptyAuthority(t *testing.T) {
+	query := url.Values{}
+	query.Set("_txlock", "immediate")
+	dsn := sqliteFileDSN("/home/user/.caelis/memory/appliance/memory.db", query)
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Host != "" {
+		t.Fatalf("authority = %q, dsn = %q", parsed.Host, dsn)
+	}
+	if parsed.Path != "/home/user/.caelis/memory/appliance/memory.db" {
+		t.Fatalf("path = %q, dsn = %q", parsed.Path, dsn)
+	}
+}
+
+func TestOpenPingsSQLiteOnNativeTempDir(t *testing.T) {
+	store, err := Open(t.Context(), Options{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+}
+
+func TestSyncDirectorySucceedsOnNativeTempDir(t *testing.T) {
+	if err := syncDirectory(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestDurableRestartAndIdempotency(t *testing.T) {
@@ -126,7 +176,7 @@ func TestCredentialAndDatabasePathsRejectSymlinks(t *testing.T) {
 				t.Fatal(err)
 			}
 			if err := os.Symlink(target, filepath.Join(dataDir, filename)); err != nil {
-				t.Fatal(err)
+				t.Skipf("symlink unavailable: %v", err)
 			}
 			if store, err := Open(t.Context(), Options{DataDir: dataDir}); err == nil {
 				_ = store.Close()

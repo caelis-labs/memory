@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -78,8 +79,7 @@ func Open(ctx context.Context, options Options) (*Store, error) {
 			return nil, fmt.Errorf("secure SQLite path: %w", err)
 		}
 	}
-	dsnURL := url.URL{Scheme: "file", Path: dbPath}
-	query := dsnURL.Query()
+	query := url.Values{}
 	query.Add("_pragma", "foreign_keys(1)")
 	query.Add("_pragma", "journal_mode(WAL)")
 	query.Add("_pragma", "synchronous(FULL)")
@@ -90,8 +90,7 @@ func Open(ctx context.Context, options Options) (*Store, error) {
 	// upgrade when Remember and Steward commit concurrently. Read-only
 	// transactions remain deferred because the driver honors TxOptions.ReadOnly.
 	query.Set("_txlock", "immediate")
-	dsnURL.RawQuery = query.Encode()
-	db, err := sql.Open("sqlite", dsnURL.String())
+	db, err := sql.Open("sqlite", sqliteFileDSN(dbPath, query))
 	if err != nil {
 		_ = lock.close()
 		return nil, fmt.Errorf("open SQLite: %w", err)
@@ -118,6 +117,25 @@ func Open(ctx context.Context, options Options) (*Store, error) {
 		return nil, fmt.Errorf("secure SQLite database: %w", err)
 	}
 	return store, nil
+}
+
+// sqliteFileDSN builds a SQLite URI DSN whose authority is empty. Windows
+// drive-letter paths must be file:///C:/...; putting C:\... in url.URL.Path
+// emits file://C:%5C... which SQLite rejects as an invalid URI authority.
+func sqliteFileDSN(dbPath string, query url.Values) string {
+	path := strings.ReplaceAll(filepath.ToSlash(dbPath), `\`, "/")
+	if windowsDrivePath(path) && !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return (&url.URL{Scheme: "file", Path: path, RawQuery: query.Encode()}).String()
+}
+
+func windowsDrivePath(slashPath string) bool {
+	if len(slashPath) < 3 || slashPath[1] != ':' || slashPath[2] != '/' {
+		return false
+	}
+	drive := slashPath[0]
+	return (drive >= 'A' && drive <= 'Z') || (drive >= 'a' && drive <= 'z')
 }
 
 func (s *Store) initialize(ctx context.Context) error {

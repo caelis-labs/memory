@@ -31,7 +31,11 @@ make corpus-gate
 The gate covers public API shape, embedded facade behavior, the current SQLite
 schema baseline, durable Remember/Recall, authorization, governance, Steward
 application, command buildability, formatting, documentation links, and
-whitespace. `corpus-gate` separately names the checked-in release baseline: 64
+whitespace. GitHub `quality` additionally runs native Windows amd64 embedded
+Open regression (`windows-regression`); Darwin/Linux `make check` and
+Windows cross-compilation are not that evidence.
+
+`corpus-gate` separately names the checked-in release baseline: 64
 Chinese cases, 64 English cases, and 96 cases spanning Spanish, French, German,
 Japanese, Korean, and Arabic. It writes four durable batches, restarts between
 batches, and gates per-cohort Recall@1/5, zero-result count, provenance, and a
@@ -72,7 +76,8 @@ release. A local commit, local tag, earlier RC result, or tag on another SHA is
 not release authority. The Memory package publishes no standalone binaries in
 this release line.
 
-`memory-v0.5.0` is the first published schema compatibility floor. The final
+The current package version is `0.5.1`. `memory-v0.5.0` remains the first
+published schema compatibility floor. The final
 prerelease baseline `memory-development-baseline-1` has the same schema and is
 promoted in place by changing only its metadata marker; accepted data must
 survive that transition. Every other older development baseline remains
