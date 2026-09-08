@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,6 +37,12 @@ type Management interface {
 	BindStewardProfile(context.Context, managementv1alpha1.BindStewardProfileRequest) (managementv1alpha1.BindStewardProfileResponse, error)
 	DisableSteward(context.Context, managementv1alpha1.DisableStewardRequest) (managementv1alpha1.DisableStewardResponse, error)
 	GetStewardConfiguration(context.Context) (managementv1alpha1.StewardConfiguration, error)
+	// Backup writes one consistent owner-created SQLite image. The caller
+	// owns the destination and must protect it as sensitive data.
+	Backup(context.Context, io.Writer) error
+	// CommitRestore accepts a restored generation after the embedding has
+	// verified its cross-component recovery boundary.
+	CommitRestore(context.Context) error
 }
 
 // Runtime is one synchronously opened durable Memory component.
@@ -74,6 +81,28 @@ func (r *Runtime) Management() Management {
 		return nil
 	}
 	return r.store
+}
+
+// Backup writes one consistent Memory-owned snapshot without exposing the
+// appliance database or its storage layout to an embedding.
+func (r *Runtime) Backup(ctx context.Context, output io.Writer) error {
+	if r == nil || r.closed.Load() {
+		return unavailableError("Memory runtime is closed")
+	}
+	if output == nil {
+		return serviceError(memoryv1alpha1.ErrorCodeInvalidArgument, "backup output is required", false)
+	}
+	return r.store.Backup(ctx, output)
+}
+
+// CommitRestore accepts the current restored generation and removes the
+// appliance-owned rollback image. It is deliberately explicit so a host can
+// verify its own independent stores before reopening admission.
+func (r *Runtime) CommitRestore(ctx context.Context) error {
+	if r == nil || r.closed.Load() {
+		return unavailableError("Memory runtime is closed")
+	}
+	return r.store.CommitRestore(ctx)
 }
 
 // StewardWorker returns the appliance-owned Steward work plane.

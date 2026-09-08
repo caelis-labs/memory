@@ -185,6 +185,24 @@ func (s *Store) CreateBackupSnapshot(ctx context.Context) (*BackupSnapshot, erro
 	return &BackupSnapshot{file: file, path: path, size: info.Size()}, nil
 }
 
+// Backup writes one consistent owner-created snapshot to the supplied
+// destination. The destination is outside the appliance and remains the
+// caller's responsibility.
+func (s *Store) Backup(ctx context.Context, output io.Writer) error {
+	if output == nil {
+		return s.serviceError(v1alpha1.ErrorCodeInvalidArgument, "backup output is required", false)
+	}
+	snapshot, err := s.CreateBackupSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+	defer snapshot.Close()
+	if _, err := io.Copy(output, snapshot); err != nil {
+		return fmt.Errorf("write backup snapshot: %w", err)
+	}
+	return nil
+}
+
 func verifySQLiteFile(ctx context.Context, path string, foreignKeys bool) error {
 	database, err := sql.Open("sqlite", path)
 	if err != nil {
