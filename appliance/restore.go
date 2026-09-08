@@ -25,7 +25,8 @@ type RestoreOptions struct {
 
 // OfflineRestoreOptions describes an owner-authorized restore without
 // exposing the local management credential to an embedding. The appliance
-// reads and authenticates its own owner credential while it holds the
+// reads the owner-only credential from its protected path before entering the
+// underlying offline operation, which then authenticates it while holding the
 // data-directory lock.
 type OfflineRestoreOptions struct {
 	DataDir  string
