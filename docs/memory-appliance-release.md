@@ -76,7 +76,7 @@ release. A local commit, local tag, earlier RC result, or tag on another SHA is
 not release authority. The Memory package publishes no standalone binaries in
 this release line.
 
-The current package version is `0.5.1`. `memory-v0.5.0` remains the first
+The current package version is `0.5.2`. `memory-v0.5.0` remains the first
 published schema compatibility floor. The final
 prerelease baseline `memory-development-baseline-1` has the same schema and is
 promoted in place by changing only its metadata marker; accepted data must
