@@ -9,11 +9,14 @@ stated in the [release notes](../memory-v0.6-release.md).
 
 - Reviewed PR: [#2](https://github.com/caelis-labs/memory/pull/2).
 - External review baseline: `c5652ec4dd2164265e2d457061e00dab4cae3af1`.
-- Final source manifest: [release source](memory-v0.6-release-source.json),
+- Repaired implementation checkpoint: [release source](memory-v0.6-release-source.json),
   178 files; SHA-256
   `a8001fb40d556b9608b1d028ef3bb6a78e9b9c02beb49a5160920b8b168e6463`.
-- The earlier candidate source/delivery manifests and tests remain historical
-  evidence; their source hashes must not be attributed to this final revision.
+- This checkpoint and its delivery snapshot predate the subsequent CI,
+  release-please, security-policy and release-documentation changes. Those
+  additions preserve the Go implementation, tests, fixtures and dependencies.
+  Earlier candidate source/delivery manifests are also historical evidence;
+  none of these whole-tree hashes identifies the later automation revision.
 
 ## Review closure
 
@@ -82,10 +85,20 @@ The prior PR head's quality run
 passed all nine jobs, including native Windows. It does not qualify the repaired
 source. The repaired source at `130b729e6a918d3ccc785f9ffadd8746d8aab5a9` then passed
 [all nine quality jobs](https://github.com/caelis-labs/memory/actions/runs/34986041895),
-including native Windows embedded Open. Final documentation and evidence updates
-still require their PR checks, and the merged commit requires its own push run. Before tagging,
-verify the `main` push workflow's exact commit, all jobs, peeled annotated tag,
-formal non-prerelease GitHub state, source archives and public Go module download.
+including native Windows embedded Open. The final evidence commit
+`88bcee5c7c12e2a016afd58b3ac39478fa2f4335` passed
+[all nine PR jobs](https://github.com/caelis-labs/memory/actions/runs/34988916676)
+before PR #2 merged as `cba337f44655225eb65cd4599ffc29841617e23c`; their source
+trees are identical.
+
+The subsequent release automation change adopts protected-PR qualification and
+removes duplicate full `main` push checks. Its own workflow/script/security/docs
+PR requires full checks. The bot's metadata-only release PR then checks version
+consistency without rerunning native tests. Verify the resulting tag resolves
+to that merged release PR, its implementation tree matches the fully tested
+tree, GitHub state is formal/non-prerelease, and public source archives and the
+Go module download work. See the
+[current procedure](../memory-appliance-release.md#automated-source-releases).
 
 ## Performance rerun disposition
 

@@ -150,3 +150,9 @@ GOWORK=off go run ./scripts/facts_consumer_gate
 
 The repository gates set `GOWORK=off` so the module remains independently
 buildable even when cloned beside a parent development workspace.
+
+## Security and releases
+
+Report vulnerabilities privately using the [security policy](SECURITY.md).
+The [release procedure](docs/memory-appliance-release.md) describes required PR
+checks and the release-please workflow that maintains versioned source releases.

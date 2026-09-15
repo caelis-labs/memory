@@ -1,9 +1,8 @@
 name: quality
 
 on:
-  push:
-    branches: [main]
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -13,7 +12,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      full: ${{ steps.scope.outputs.full }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Test release metadata classification
+        run: node --test scripts/ci_scope.test.mjs
+      - name: Classify and validate release-only changes
+        id: scope
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/ci_scope.mjs
+
   standalone-preview-buildability:
+    needs: changes
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -26,14 +44,22 @@ jobs:
           - { goos: windows, goarch: amd64 }
           - { goos: windows, goarch: arm64 }
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      # Keep every required matrix context present for metadata-only PRs.
+      - name: Validated release metadata
+        if: needs.changes.outputs.full == 'false'
+        run: echo 'Release metadata validated; cross-build is unchanged.'
+      - if: needs.changes.outputs.full == 'true'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - if: needs.changes.outputs.full == 'true'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
           cache: true
       - name: Cross-build preview executables
+        if: needs.changes.outputs.full == 'true'
         run: make cross-build GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} ARTIFACT_DIR=dist/${{ matrix.goos }}-${{ matrix.goarch }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - if: needs.changes.outputs.full == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: memory-preview-${{ github.sha }}-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/${{ matrix.goos }}-${{ matrix.goarch }}/*
@@ -41,21 +67,39 @@ jobs:
           retention-days: 14
 
   portable-core:
+    needs: changes
+    if: always()
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - name: Require successful change classification
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          FULL: ${{ needs.changes.outputs.full }}
+        run: |
+          test "${CHANGES_RESULT}" = success
+          case "${FULL}" in true|false) ;; *) exit 1 ;; esac
+      - if: needs.changes.outputs.full == 'true'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - if: needs.changes.outputs.full == 'true'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
           cache: true
-      - run: make check
-      - run: make durable
-      - run: make race
-      - run: make corpus-gate facts-gate facts-consumer-gate
+      - if: needs.changes.outputs.full == 'true'
+        run: make check
+      - if: needs.changes.outputs.full == 'true'
+        run: make durable
+      - if: needs.changes.outputs.full == 'true'
+        run: make race
+      - if: needs.changes.outputs.full == 'true'
+        run: make corpus-gate facts-gate facts-consumer-gate
       - name: Pure-Go embedded path
+        if: needs.changes.outputs.full == 'true'
         run: CGO_ENABLED=0 GOWORK=off go test ./appliance ./internal/appliance
 
   native-windows-amd64-embedded-open:
+    needs: changes
+    if: needs.changes.outputs.full == 'true'
     runs-on: windows-2022
     timeout-minutes: 20
     steps:
@@ -72,6 +116,8 @@ jobs:
         run: go test -count=1 -timeout 15m ./internal/appliance ./appliance -run '^Test(SQLiteFileDSN|OpenPingsSQLiteOnNativeTempDir|SyncDirectorySucceedsOnNativeTempDir|DurableRestartAndIdempotency|LabelSetPartitionSurvivesRestart|EmbeddedRuntimeRememberRecall|OwnerLockRejectsSecondProcessOwner|ManagementCredentialRotationRevokesOldBearerAcrossRestart)$'
 
   native-darwin-arm64-package-check:
+    needs: changes
+    if: needs.changes.outputs.full == 'true'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
