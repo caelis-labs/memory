@@ -1,7 +1,13 @@
 # Memory Appliance Specification
 
-Status: normative `memory.v1alpha1` data-plane and
-`memory.management.v1alpha1` owner-management contracts.
+Status: normative `memory.v1alpha1` evidence data-plane and
+`memory.management.v1alpha1` owner-management contracts. The additive v0.6
+`memory.facts.v1alpha1` contract is owned by
+[Current facts and trusted evidence](memory-v0.6-facts.md), with
+[governance](memory-v0.6-governance.md), [Steward](memory-v0.6-steward.md), and
+[explicit migration](memory-v0.6-migration.md). Those lifecycle rules supersede
+historical v0.5 implementation descriptions below; old evidence Recall semantics
+are unchanged.
 
 This document owns the stable boundary between an Agent host such as Caelis and
 the Memory Go package. Process placement is an adapter choice, not a domain
@@ -60,7 +66,9 @@ management UI. Those may be added without changing the two Agent operations or
 weakening the invariants above.
 
 The former global canonical Session-corpus projection, time-aware ranking
-policy, and automatic zero-model task briefing are retired. Post-v0.5 Corpus
+policy, and automatic task-context injection are retired. v0.6's bounded fact
+background is instead an explicit host-requested deterministic view of current
+Records, not automatic injection or a separate editable profile. Future Corpus
 Memory has its own source-neutral ledger and optional projection protocols; it
 does not extend `memory.v1alpha1` or `memory.steward.v1alpha1`. A direct Item
 index precedes hierarchy experiments. No rollup or other projection becomes a
@@ -453,8 +461,9 @@ immutable Receipt evidence
   -> exact Receipt evidence references
 ```
 
-This is not a general graph or tree. Revision order and evidence provenance are
-the only canonical edges in the current extension. The planned source-neutral
+This is not a general graph or tree. v0.6 additionally records actual Steward
+read dependencies and bounded fact-exception links for validation and forgetting;
+none is a general-purpose graph/projection platform. The planned source-neutral
 Corpus ledger is separate: each LeafRevision contains one producer-defined
 ordered projection with opaque source provenance. Optional rollup manifests,
 summary artifacts, index artifacts, and projection snapshots may organize that
@@ -480,6 +489,9 @@ leased work without deleting receipts or semantic history.
 
 A Worker claims a bounded request containing the captured policy, one immutable
 receipt, and active same-Space, same-LabelSet Record heads with their Evidence.
+v0.6 chooses subject/key matches, lexical matches, then recent heads and records
+the exact returned dependency set. Trusted host-source attribution is included
+when submitted through Evidence; legacy SourceContext never confers trust.
 It deliberately omits Space, Job, lease, capability, View, Grant, actor,
 audience, and SourceContext. Receipt and Evidence IDs support proposal
 provenance but are not authority. Claim responses carry an opaque lease beside
@@ -489,7 +501,9 @@ only to apply or fail the result. The Memory package never makes an outbound
 model-provider call.
 
 The Worker SDK renders the complete operation shapes in provider instructions
-and strictly parses exactly one proposal. A native provider JSON Schema may be
+and strictly parses exactly one proposal envelope. v0.6 explicitly supports
+`policy=bounded_batch` with at most eight operations applied atomically; the
+legacy single-operation wire shape remains accepted. A native provider JSON Schema may be
 supplied as an optimization, but the prompt and parser remain the correctness
 boundary so a prompt-only provider has identical proposal semantics. The Host
 must not maintain a second Memory prompt or proposal parser.
@@ -512,8 +526,9 @@ SUPERSEDE   append a replacement Revision without deleting history
 IGNORE      complete the job without creating or changing a Record
 ```
 
-`ADD` is the primitive promotion from raw Receipt evidence into a derived
-Record. `MERGE` and `SUPERSEDE` are the refinement primitives. Memory owns shape,
+`ADD` creates derived interpreted content, not user confirmation. Host-sourced
+model facts are pending; structured heads cannot be overwritten by model
+proposals. `MERGE` and `SUPERSEDE` refine unstructured legacy Records. Memory owns shape,
 same-LabelSet evidence checks, immutable history, optimistic revision checks,
 and atomic application. The downstream Host decides whether and when to run a
 Worker; Memory contains no provider configuration and does not schedule model
@@ -523,7 +538,9 @@ A proposal cannot contain Space, Job, profile, visibility, ACL, tombstone,
 publication, or physical-deletion authority. The appliance supplies the Job
 and Space from a durable opaque lease, generates new Record IDs, and validates
 operation shape, size, expected Revision, current status, job receipt, and
-every Evidence reference before mutation.
+every Evidence reference before mutation. All actual-read Record revisions and
+receipts must still be usable, even for IGNORE; empty context permits only the
+job receipt, never arbitrary same-Space references.
 
 Each active Record has one mutable head pointing to immutable Revisions. Every
 Revision has one or more Evidence references that were proven to be existing
@@ -533,11 +550,13 @@ Job, and updating receipt processing state is one transaction. A lost response
 is retried with the same lease and proposal; the stored result produces one
 semantic effect, while changed input conflicts.
 
-Deleting or correcting a cited receipt invalidates any current Record that
-depends on it and removes only that Record's disposable retrieval projection.
-Historical Revisions and Evidence identifiers remain immutable audit; they do
-not remain Recall candidates after invalidation. A model cannot invoke this
-governance path.
+Deleting or correcting a receipt invalidates its transitive dependent Records,
+including historical evidence, actual-read context, batch outputs and explicit
+exception links. Deletion commits a logical barrier before managed history
+cleansing; it clears historical Revision text/kind/fact metadata and head hints,
+retaining only reference/control audit. Correction preserves explicitly marked
+history. New reads and index rebuild cannot adopt invalidated Records, and Open
+resumes unfinished cleansing. A model cannot invoke this governance path.
 
 ## Owner-management plane
 
@@ -548,7 +567,10 @@ inspect the appliance, search and trace receipts, correct or delete receipt
 content, rebuild projections, revoke Grants, and rotate issuer credentials.
 It can also create immutable Steward profile versions, bind them for future
 Jobs, inspect profile bindings, and disable work per Space.
-None of these operations is model-accessible.
+None of these operations is model-accessible. Embedded `Runtime.Management()`
+also exposes versioned `ListRecords`, `TraceRecord` and `CleanupStatus`; these
+three have no standalone transport routes. The delegated DataPlane/Facts/Evidence
+facades have narrow method sets and cannot be type-asserted to owner management.
 
 Inspection returns only bounded topology and operational aggregates: storage
 and filesystem byte counts, receipt processing counts and time range,
@@ -576,7 +598,10 @@ Space references, original effect identity and digest, deletion time, and audit
 reason. It then removes receipt text, processing state, and projection entries
 in the same transaction. The retained effect identity makes an old Remember
 retry conflict rather than recreate deleted content; remembering the fact again
-requires a new host effect identity. Delete and correction requests have their
+requires a new host effect identity on legacy Remember. Trusted Evidence instead
+also suppresses the stable source identity: changing only a call key cannot
+restore it. Owner audit reasons and effect identities remain; they must not
+contain sensitive payloads. Delete and correction requests have their
 own idempotency keys and return the original result on an exact retry. A changed
 request under the same management key conflicts.
 
@@ -602,8 +627,9 @@ is plaintext and therefore always written by `memoryctl` to a new owner-only
 file. Space filtering, corrected-original inclusion, and tombstone inclusion
 are explicit request choices.
 
-Backup is a consistent SQLite snapshot streamed only over the owner-only local
-Socket. `memoryctl` encrypts the stream before durable output using a random
+Embedded `Runtime.Backup` writes a consistent SQLite snapshot to a host-owned
+writer; the host owns destination protection and encryption. The retained
+standalone path streams it over the owner-only local Socket. `memoryctl` encrypts the stream before durable output using a random
 256-bit key and independently authenticated chunks. The key is written to a
 distinct new owner-only file and is never stored in the appliance database or
 backup container. A backup without its key is unrecoverable; co-locating the

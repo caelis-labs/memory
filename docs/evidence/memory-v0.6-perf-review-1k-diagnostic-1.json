@@ -1,0 +1,91 @@
+{
+  "format_version": 1,
+  "engine": "sqlite (modernc.org/sqlite) real files; real Store facts/evidence/management APIs; no random sleeps",
+  "go_version": "go1.26.8",
+  "goos": "darwin",
+  "goarch": "arm64",
+  "model_calls": 0,
+  "notes": [
+    "Measured on this machine only; these are not release thresholds and do not claim a hardware-independent result.",
+    "No model is invoked, so no model usage or model latency is measured.",
+    "Each size uses one fresh on-disk SQLite database in a single Space and LabelSet partition.",
+    "The first seeded receipt includes lazy schema/FTS warmup, visible in seed max_ms rather than p50/p95.",
+    "warm_queries=200 contenders=8"
+  ],
+  "runs": [
+    {
+      "receipts": 1000,
+      "hot_partition": "space-bot-a",
+      "seed_per_receipt": {
+        "samples": 1000,
+        "p50_ms": 0.631,
+        "p95_ms": 1.149,
+        "p99_ms": 2.359,
+        "min_ms": 0.435,
+        "max_ms": 306.236
+      },
+      "seed_total_ms": 999.75,
+      "cold_first_read_ms": 0.339,
+      "cold_first_changes_ms": 0.072,
+      "warm_read": {
+        "samples": 200,
+        "p50_ms": 0.161,
+        "p95_ms": 0.217,
+        "p99_ms": 0.4,
+        "min_ms": 0.129,
+        "max_ms": 0.5
+      },
+      "warm_changes": {
+        "samples": 200,
+        "p50_ms": 0.275,
+        "p95_ms": 0.35,
+        "p99_ms": 0.666,
+        "min_ms": 0.248,
+        "max_ms": 0.707
+      },
+      "contention": {
+        "readers": 8,
+        "writer_ops": 200,
+        "reader_ops": 7686,
+        "errors": 0,
+        "reader_latency": {
+          "samples": 7686,
+          "p50_ms": 0.613,
+          "p95_ms": 0.993,
+          "p99_ms": 1.387,
+          "min_ms": 0.15,
+          "max_ms": 6.328
+        },
+        "writer_total_ms": 625.084
+      },
+      "rebuild_fts": {
+        "samples": 1,
+        "p50_ms": 73.378,
+        "p95_ms": 73.378,
+        "p99_ms": 73.378,
+        "min_ms": 73.378,
+        "max_ms": 73.378
+      },
+      "managed_cleanup": {
+        "samples": 8,
+        "p50_ms": 3.802,
+        "p95_ms": 4.215,
+        "p99_ms": 4.215,
+        "min_ms": 3.722,
+        "max_ms": 4.215
+      },
+      "cleanup_samples": 8,
+      "cleanup_completed": 8,
+      "database_bytes_before_seed": 593920,
+      "database_bytes_after_seed": 5824512,
+      "database_bytes_after_rebuild": 6008832,
+      "fts_bytes": 720896,
+      "fts_bytes_supported": true,
+      "rss_bytes_before": 16711680,
+      "rss_bytes_after": 332677120,
+      "heap_alloc_bytes": 165065296,
+      "heap_sys_bytes": 324495688
+    }
+  ],
+  "finished_at": "2026-09-15T13:46:50Z"
+}

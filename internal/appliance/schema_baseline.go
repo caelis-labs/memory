@@ -327,23 +327,29 @@ func initializeSchema(ctx context.Context, db *sql.DB, now time.Time) error {
 	) STRICT`); err != nil {
 		return fmt.Errorf("create schema ledger: %w", err)
 	}
-	var count, version int
+	var count, version, minimum int
 	if err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*), COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&count, &version); err != nil {
+		`SELECT COUNT(*), COALESCE(MAX(version), 0), COALESCE(MIN(version), 0) FROM schema_migrations`).Scan(&count, &version, &minimum); err != nil {
 		return fmt.Errorf("read schema baseline: %w", err)
 	}
 	if count != 0 {
 		var baseline string
 		err := db.QueryRowContext(ctx,
 			`SELECT value FROM metadata WHERE key = 'schema_baseline'`).Scan(&baseline)
-		if count != 1 || version != CurrentSchemaVersion || err != nil {
+		if err != nil || minimum != 1 || !((count == 1 && version == 1) || (count == 2 && version == CurrentSchemaVersion)) {
 			return fmt.Errorf("database uses an unsupported schema; migrate from a supported release or rebuild development data")
 		}
 		switch baseline {
-		case schemaBaselineID:
-			return nil
-		case preGASchemaBaselineID:
-			return promotePreGASchemaBaseline(ctx, db)
+		case factsSchemaBaselineID:
+			if count == 2 && version == CurrentSchemaVersion {
+				return nil
+			}
+			return fmt.Errorf("facts schema ledger is inconsistent")
+		case schemaBaselineID, preGASchemaBaselineID:
+			if count != 1 || version != 1 {
+				return fmt.Errorf("legacy schema ledger is inconsistent")
+			}
+			return migrateFactsSchema(ctx, db, now)
 		default:
 			return fmt.Errorf("database uses an unsupported schema; migrate from a supported release or rebuild development data")
 		}
@@ -361,29 +367,12 @@ func initializeSchema(ctx context.Context, db *sql.DB, now time.Time) error {
 	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)`,
-		CurrentSchemaVersion, formatTime(now)); err != nil {
+		1, formatTime(now)); err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("record schema baseline: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit schema baseline: %w", err)
 	}
-	return nil
-}
-
-func promotePreGASchemaBaseline(ctx context.Context, db *sql.DB) error {
-	result, err := db.ExecContext(ctx,
-		`UPDATE metadata SET value = ? WHERE key = 'schema_baseline' AND value = ?`,
-		schemaBaselineID, preGASchemaBaselineID)
-	if err != nil {
-		return fmt.Errorf("promote pre-GA schema baseline: %w", err)
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("inspect pre-GA schema promotion: %w", err)
-	}
-	if rows != 1 {
-		return fmt.Errorf("promote pre-GA schema baseline: metadata changed concurrently")
-	}
-	return nil
+	return migrateFactsSchema(ctx, db, now)
 }

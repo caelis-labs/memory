@@ -1,0 +1,21 @@
+=== RUN   TestReviewRetryCannotReadPastForgetBarrier
+    zz_review_v060_test.go:29: forgotten payload returned after barrier: text="sensitive coffee preference" adoption=confirmed evidence=[{ReceiptID:receipt-474acb152e24793b5e2383aec93a3e52 Source:0x282cb40a770} {ReceiptID:receipt-cd0e2784b3564bc12bbf0592f69da34d Source:<nil>}]
+--- FAIL: TestReviewRetryCannotReadPastForgetBarrier (0.39s)
+=== RUN   TestReviewRepeatedCorrectionKeepsExceptionRelation
+    zz_review_v060_test.go:50: correction 2 lost exception relation: metadata={Subject:user:a Key:preference.drink Adoption:confirmed ValidFrom:2026-09-15 12:00:00 +0000 UTC ValidUntil:2026-09-15 13:00:00 +0000 UTC Conditions:[] Transition:correct RelatedRecordID:} current_facts=[]
+--- FAIL: TestReviewRepeatedCorrectionKeepsExceptionRelation (0.03s)
+=== RUN   TestReviewQueryCannotReselectOverriddenFact
+    zz_review_v060_test.go:65: query revived less-specific fact: {RecordID:record-f50ab3f71432617bb8d9c2fe1f883ef6 Revision:1 SpaceID:space-bot-a Text:Tokyo Metadata:{Subject:user:a Key:location Adoption:confirmed ValidFrom:<nil> ValidUntil:<nil> Conditions:[] Transition:establish RelatedRecordID:} Evidence:[{ReceiptID:receipt-f40eb0fa4d0456f95158edfa46139c0c Source:0x282cb6505b0}] HistoricalState:}
+--- FAIL: TestReviewQueryCannotReselectOverriddenFact (0.03s)
+=== RUN   TestReviewSubjectWithoutKeyStillUsesRelevantContext
+    zz_review_v060_test.go:86: subject-only source omitted relevant old fact; context=[{RecordID:record-049f62bed35d609201a5a161ed9a3b8b Revision:1 Kind:fact Text:unrelated number 11 EvidenceRefs:[receipt-2635374a54c553669881c81ac1990cf6] Subject:user:a FactKey:noise.11} {RecordID:record-1a86a71963de09fe4b368f660f28aae6 Revision:1 Kind:fact Text:unrelated number 10 EvidenceRefs:[receipt-748c6348f42aa6d72a741f42fb796eef] Subject:user:a FactKey:noise.10} {RecordID:record-b3abd2767ddd053c1aa9f004a3678da2 Revision:1 Kind:fact Text:unrelated number 9 EvidenceRefs:[receipt-becb0f7463ec71286411d47f6ad90134] Subject:user:a FactKey:noise.9} {RecordID:record-a64aa0d09d784c6c644e41b70a32e623 Revision:1 Kind:fact Text:unrelated number 8 EvidenceRefs:[receipt-67f279c20283b917d5d57e11ab8f4403] Subject:user:a FactKey:noise.8} {RecordID:record-0784c3c5e5f9db854963ede05c82ead5 Revision:1 Kind:fact Text:unrelated number 7 EvidenceRefs:[receipt-21041bf93e458e86b87b4b01e216a961] Subject:user:a FactKey:noise.7} {RecordID:record-6dea7d6add2f21892586de1748c3a833 Revision:1 Kind:fact Text:unrelated number 6 EvidenceRefs:[receipt-f35c2b26e7c85952f9fbcc45debad4bf] Subject:user:a FactKey:noise.6} {RecordID:record-6710f60c3388cddffe91712d433507a0 Revision:1 Kind:fact Text:unrelated number 5 EvidenceRefs:[receipt-1f59c7b41de2409fa9a25dfb838adea8] Subject:user:a FactKey:noise.5} {RecordID:record-7bbd6fbceea5407d7ec068a7e2321894 Revision:1 Kind:fact Text:unrelated number 4 EvidenceRefs:[receipt-7619ed2cff3cd8f74e3cfd8661128ca6] Subject:user:a FactKey:noise.4}]
+--- FAIL: TestReviewSubjectWithoutKeyStillUsesRelevantContext (0.03s)
+FAIL
+FAIL	github.com/caelis-labs/memory/internal/appliance	2.731s
+FAIL
+=== RUN   TestReviewUnstructuredRevisionIsNotCountedAsCleansed
+    zz_review_v060_test.go:95: no governance has run but diagnostics report {Barriers:0 PendingCleanups:0 CompletedCleanups:0 LastInvalidationVersion:0 ClearedRevisions:1}
+--- FAIL: TestReviewUnstructuredRevisionIsNotCountedAsCleansed (0.34s)
+FAIL
+FAIL	github.com/caelis-labs/memory/internal/appliance	3.721s
+FAIL

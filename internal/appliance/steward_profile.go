@@ -261,7 +261,7 @@ func (s *Store) enqueueStewardJob(
 		 job_id, receipt_id, space_id, profile_id, profile_version, state, attempts,
 		 available_at, created_at, updated_at, label_set, label_set_digest)
 		 VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?, ?, ?)`,
-		jobID, receiptID, spaceID, profileID, profileVersion, formattedNow, formattedNow, formattedNow,
+		jobID, receiptID, spaceID, profileID, profileVersion, formatScheduleTime(now), formattedNow, formattedNow,
 		labelSetEncoded, labelSetDigest)
 	return err
 }

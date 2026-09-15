@@ -47,14 +47,20 @@ func (s *Store) ClaimStewardJob(ctx context.Context, leaseDuration time.Duration
 	if leaseDuration < minStewardLease || leaseDuration > maxStewardLease {
 		return StewardWork{}, false, fmt.Errorf("Steward lease duration must be within %s..%s", minStewardLease, maxStewardLease)
 	}
-	formattedNow := formatTime(s.now().UTC())
+	now := s.now().UTC()
+	scheduleNow := formatScheduleTime(now)
 	var available bool
 	if err := s.db.QueryRowContext(ctx,
 		`SELECT EXISTS(
 		 SELECT 1 FROM steward_jobs
-		 WHERE (state = 'pending' AND available_at <= ?)
-		 OR (state = 'leased' AND lease_expires_at <= ?)
-		)`, formattedNow, formattedNow).Scan(&available); err != nil {
+		 WHERE ((state = 'pending' AND available_at <= ?)
+		  OR (state = 'leased' AND lease_expires_at <= ?))
+		  AND NOT EXISTS (
+		   SELECT 1 FROM forgetting_barriers b
+		   WHERE b.kind = 'receipt_deleted'
+		     AND b.space_id = steward_jobs.space_id AND b.receipt_id = steward_jobs.receipt_id
+		  )
+		)`, scheduleNow, scheduleNow).Scan(&available); err != nil {
 		return StewardWork{}, false, fmt.Errorf("inspect available Steward jobs: %w", err)
 	}
 	if !available {
@@ -88,6 +94,7 @@ func (s *Store) claimStewardJob(
 	}
 	now := s.now().UTC()
 	formattedNow := formatTime(now)
+	scheduleNow := formatScheduleTime(now)
 	if _, err := tx.ExecContext(ctx,
 		`UPDATE steward_jobs
 		 SET state = 'failed', lease_expires_at = NULL, lease_token_digest = '',
@@ -95,8 +102,28 @@ func (s *Store) claimStewardJob(
 		 WHERE attempts >= ? AND (
 		  (state = 'leased' AND lease_expires_at <= ?)
 		  OR (state = 'pending' AND available_at <= ?)
-		 )`, formattedNow, maxStewardAttempts, formattedNow, formattedNow); err != nil {
+		 )`, formattedNow, maxStewardAttempts, scheduleNow, scheduleNow); err != nil {
 		return rollback(fmt.Errorf("fail exhausted Steward jobs: %w", err))
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE steward_jobs
+		 SET state = 'failed', lease_expires_at = NULL, lease_token_digest = '',
+		 terminal_error_code = 'receipt_forgotten', updated_at = ?
+		 WHERE state IN ('pending', 'leased') AND EXISTS (
+		  SELECT 1 FROM forgetting_barriers b
+		  WHERE b.kind = 'receipt_deleted'
+		    AND b.space_id = steward_jobs.space_id AND b.receipt_id = steward_jobs.receipt_id
+		 )`, formattedNow); err != nil {
+		return rollback(fmt.Errorf("fail forgotten Steward jobs: %w", err))
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE receipt_processing
+		 SET state = 'failed', last_attempt_at = ?, terminal_error_code = 'receipt_forgotten'
+		 WHERE receipt_id IN (
+		  SELECT receipt_id FROM steward_jobs
+		  WHERE state = 'failed' AND terminal_error_code = 'receipt_forgotten' AND updated_at = ?
+		 )`, formattedNow, formattedNow); err != nil {
+		return rollback(fmt.Errorf("fail forgotten receipt processing: %w", err))
 	}
 	if _, err := tx.ExecContext(ctx,
 		`UPDATE receipt_processing
@@ -111,7 +138,7 @@ func (s *Store) claimStewardJob(
 		`UPDATE steward_jobs
 		 SET state = 'pending', lease_expires_at = NULL, lease_token_digest = '',
 		 terminal_error_code = '', available_at = ?, updated_at = ?
-		 WHERE state = 'leased' AND lease_expires_at <= ?`, formattedNow, formattedNow, formattedNow); err != nil {
+		 WHERE state = 'leased' AND lease_expires_at <= ?`, scheduleNow, formattedNow, scheduleNow); err != nil {
 		return rollback(fmt.Errorf("reclaim expired Steward jobs: %w", err))
 	}
 	if _, err := tx.ExecContext(ctx,
@@ -131,7 +158,12 @@ func (s *Store) claimStewardJob(
 		`SELECT job_id, receipt_id, space_id, profile_id, profile_version, label_set_digest, attempts
 		 FROM steward_jobs
 		 WHERE state = 'pending' AND available_at <= ? AND attempts < ?
-		 ORDER BY created_at, job_id LIMIT 1`, formattedNow, maxStewardAttempts).Scan(
+		  AND NOT EXISTS (
+		   SELECT 1 FROM forgetting_barriers b
+		   WHERE b.kind = 'receipt_deleted'
+		     AND b.space_id = steward_jobs.space_id AND b.receipt_id = steward_jobs.receipt_id
+		  )
+		 ORDER BY created_at, job_id LIMIT 1`, scheduleNow, maxStewardAttempts).Scan(
 		&jobID, &receiptID, &spaceID, &profileID, &profileVersion, &labelSetDigest, &attempts)
 	if errors.Is(err, sql.ErrNoRows) {
 		if err := tx.Commit(); err != nil {
@@ -142,14 +174,14 @@ func (s *Store) claimStewardJob(
 	if err != nil {
 		return rollback(fmt.Errorf("select Steward job: %w", err))
 	}
-	leaseExpiry := formatTime(now.Add(leaseDuration))
+	leaseExpiry := formatScheduleTime(now.Add(leaseDuration))
 	leaseDigest := digestString(leaseToken)
 	result, err := tx.ExecContext(ctx,
 		`UPDATE steward_jobs
 		 SET state = 'leased', attempts = attempts + 1, lease_expires_at = ?,
 		 lease_token_digest = ?, updated_at = ?
 		 WHERE job_id = ? AND state = 'pending' AND available_at <= ?`,
-		leaseExpiry, leaseDigest, formattedNow, jobID, formattedNow)
+		leaseExpiry, leaseDigest, formattedNow, jobID, scheduleNow)
 	if err != nil {
 		return rollback(fmt.Errorf("lease Steward job: %w", err))
 	}
@@ -201,6 +233,9 @@ func (s *Store) claimStewardJob(
 			return StewardWork{}, false, false, nil
 		}
 	}
+	if err := persistStewardReadSet(ctx, tx, jobID, attempts+1, request.Records); err != nil {
+		return rollback(err)
+	}
 	if err := tx.Commit(); err != nil {
 		return StewardWork{}, false, false, fmt.Errorf("commit Steward lease: %w", err)
 	}
@@ -242,46 +277,25 @@ func (s *Store) readStewardWorkRequest(
 		}
 		request.Receipt.OccurredAt = &value
 	}
+	source, err := readStewardHostSource(ctx, db, receiptID)
+	if err != nil {
+		return stewardv1alpha1.WorkRequest{}, err
+	}
+	if source != nil {
+		request.Receipt.Subject = source.Subject
+		request.Receipt.FactKey = source.FactKey
+	}
+	request.Receipt.Sources = stewardSourceRef(source)
 	if s.experimentalLexicon && labelSetDigest == emptyLabelSetDigest {
 		request.LexiconCandidates, err = readStewardLexiconCandidates(ctx, db, spaceID, receiptID)
 		if err != nil {
 			return stewardv1alpha1.WorkRequest{}, fmt.Errorf("read Steward lexicon candidates: %w", err)
 		}
 	}
-	if profile.MaxContextRecords == 0 {
-		return request, nil
-	}
-	rows, err := db.QueryContext(ctx,
-		`SELECT r.record_id, r.current_revision, v.kind, v.text
-		 FROM semantic_records r
-		 JOIN semantic_revisions v ON v.record_id = r.record_id AND v.revision = r.current_revision
-		 WHERE r.space_id = ? AND r.label_set_digest = ? AND r.status = 'active'
-		 ORDER BY r.updated_at DESC, r.record_id
-		 LIMIT ?`, spaceID, labelSetDigest, profile.MaxContextRecords)
+	request.Records, err = s.readStewardContextRecords(
+		ctx, db, spaceID, labelSetDigest, source, request.Receipt.Text, profile.MaxContextRecords)
 	if err != nil {
-		return stewardv1alpha1.WorkRequest{}, fmt.Errorf("read Steward Record context: %w", err)
-	}
-	for rows.Next() {
-		var record stewardv1alpha1.RecordContext
-		if err := rows.Scan(&record.RecordID, &record.Revision, &record.Kind, &record.Text); err != nil {
-			_ = rows.Close()
-			return stewardv1alpha1.WorkRequest{}, fmt.Errorf("scan Steward Record context: %w", err)
-		}
-		request.Records = append(request.Records, record)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return stewardv1alpha1.WorkRequest{}, fmt.Errorf("read Steward Record context: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return stewardv1alpha1.WorkRequest{}, fmt.Errorf("close Steward Record context: %w", err)
-	}
-	for index := range request.Records {
-		evidence, err := readSemanticEvidenceIDs(ctx, db, request.Records[index].RecordID, request.Records[index].Revision)
-		if err != nil {
-			return stewardv1alpha1.WorkRequest{}, fmt.Errorf("read Steward Record evidence: %w", err)
-		}
-		request.Records[index].EvidenceRefs = evidence
+		return stewardv1alpha1.WorkRequest{}, err
 	}
 	return request, nil
 }
@@ -331,7 +345,7 @@ func (s *Store) FailStewardJob(ctx context.Context, lease StewardLease, failure 
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE steward_jobs SET state = 'pending', available_at = ?, lease_expires_at = NULL,
 			 lease_token_digest = '', terminal_error_code = '', updated_at = ? WHERE job_id = ?`,
-			formatTime(now.Add(failure.RetryAfter)), formattedNow, lease.JobID); err != nil {
+			formatScheduleTime(now.Add(failure.RetryAfter)), formattedNow, lease.JobID); err != nil {
 			return fmt.Errorf("retry Steward job: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx,

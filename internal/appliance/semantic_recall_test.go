@@ -35,6 +35,7 @@ func TestRecallMergesSemanticCandidatesWithCompleteProvenance(t *testing.T) {
 		t.Fatal(err)
 	}
 	secondLease := leaseStewardReceipt(t, store, second.ReceiptID, "job-semantic-recall-second")
+	declareStewardReadSet(t, store, secondLease.JobID, 1, added.RecordID, 1, first.ReceiptID)
 	if _, err := store.ApplyStewardProposal(t.Context(), secondLease, stewardv1alpha1.Proposal{
 		Operation: stewardv1alpha1.OperationMerge, TargetRecordID: added.RecordID, ExpectedRevision: 1,
 		Kind: "claim", Text: "The project uses Go and SQLite.",

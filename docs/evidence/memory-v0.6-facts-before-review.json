@@ -1,0 +1,108 @@
+{
+  "format_version": 1,
+  "corpus": "memory-v0.6-facts-longitudinal",
+  "engine": "sqlite (modernc.org/sqlite) real files; Store facts/evidence/management APIs; no model calls",
+  "generated_at": "2026-09-15T11:41:48Z",
+  "finished_at": "2026-09-15T11:41:55Z",
+  "manifest_hashes": {
+    "candidates.json": "c6c7649fefdca6bc917d5528ed7a28624413fb8360e72a649f7564ee08959715",
+    "trajectories.json": "17d938e1eab190d9a7e15ee89ccb13616f40d807784ffca00ad26a32415d8b93"
+  },
+  "review_status": "not_human_reviewed",
+  "human_reviewed_cases": 0,
+  "release_blocker": "At least 200 human-reviewed fact trajectories are still required before any facts/evidence quality claim is releasable. The checked-in candidate trajectories are machine-expanded from the implementation's own controlled vocabulary and are circular candidate-tier evidence, not gold.",
+  "frozen_thresholds": {
+    "explicit_preference_min": 0.95,
+    "recall_at8_alias_min": 0.9
+  },
+  "manifest_thresholds": {
+    "explicit_preference_min": 0.95,
+    "max_recall_p95_ms": 750,
+    "recall_at8_alias_min": 0.9
+  },
+  "candidate_trajectories": 208,
+  "candidate_review_status": "not_human_reviewed",
+  "baseline_recall_runs": 2,
+  "baseline_recall_hits": 2,
+  "arms": [
+    {
+      "id": "C1-authored",
+      "name": "structured_lifecycle_conformance",
+      "status": "measured",
+      "sample": 14,
+      "passed": 14,
+      "rate": 1,
+      "detail": "authored blocking trajectories on real SQLite: scope/privacy, restart, establish/change/exception/correct/confirm/deny/forget, wrong subject, missing/stale target, untrusted role, batch atomicity, policy deny, anti-resurrection"
+    },
+    {
+      "id": "L0-legacy",
+      "name": "in_tree_model_free_recall_control",
+      "status": "measured",
+      "sample": 2,
+      "passed": 2,
+      "rate": 1,
+      "detail": "CONTROL ONLY, NOT exact v0.5.2: the current in-tree Store model-free receipt Recall over the blocking corpus evidence. It isolates whether the legacy receipt path still retrieves the same evidence; it is not a v0.5.2 result."
+    },
+    {
+      "id": "B0-v0.5.2",
+      "name": "exact_v0_5_2_checkout_recall",
+      "status": "unrun",
+      "reason": "requires an exact v0.5.2 checkout, which this workspace does not exercise; v0.5.2 has no facts/evidence API",
+      "sample": 0,
+      "passed": 0,
+      "detail": "Reproducible method: git archive the v0.5.2 revision into a temporary tree, build its own tests, seed the same authored receipt texts through its Remember path with the same label partition, and run its Recall gate. The in-tree L0-legacy control above is not a substitute for this arm."
+    },
+    {
+      "id": "B1-steward",
+      "name": "prior_steward_baseline",
+      "status": "unrun",
+      "reason": "requires the prior Steward revision plus a fixed generator/profile/dataset binding; not runnable from the M06 facts harness alone",
+      "sample": 0,
+      "passed": 0,
+      "detail": "Reproducible method: run the same scripted deterministic generator, profile and dataset against the prior Steward revision and the current revision, then compare relevant-context selection."
+    },
+    {
+      "id": "C2-steward",
+      "name": "relevant_steward_context",
+      "status": "unrun",
+      "reason": "requires a fixed scripted deterministic generator plus the B1 prior-Steward comparison; the facts harness calls no model",
+      "sample": 0,
+      "passed": 0,
+      "detail": "A deterministic scripted generator is acceptable and needs no model tokens, but the result measures structural context selection, not model extraction or paraphrase quality. It must run on the same profile, data and generator as B1-steward."
+    },
+    {
+      "id": "HUMAN-GOLD",
+      "name": "human_reviewed_quality",
+      "status": "blocked",
+      "reason": "At least 200 human-reviewed fact trajectories are still required before any facts/evidence quality claim is releasable. The checked-in candidate trajectories are machine-expanded from the implementation's own controlled vocabulary and are circular candidate-tier evidence, not gold.",
+      "sample": 0,
+      "passed": 0
+    },
+    {
+      "id": "C1-candidate",
+      "name": "structured_adoption_candidates",
+      "status": "measured",
+      "sample": 208,
+      "passed": 208,
+      "rate": 1,
+      "threshold": 0.95,
+      "detail": "CANDIDATE TIER ONLY, not human-reviewed: machine-expanded establish -\u003e confirm [-\u003e change] trajectories reach one confirmed current fact whose text equals the latest explicit statement. This is structured adoption/lifecycle conformance, not model extraction or relevance quality."
+    },
+    {
+      "id": "C3-candidate",
+      "name": "controlled_alias_recall_at8",
+      "status": "measured",
+      "sample": 448,
+      "passed": 448,
+      "rate": 1,
+      "threshold": 0.9,
+      "detail": "CANDIDATE TIER ONLY, not human-reviewed: the current fact is returned within the first 8 facts for a controlled alias query from the frozen dictionary. It is not a paraphrase-quality claim and does not exercise arbitrary free-text paraphrase."
+    }
+  ],
+  "notes": [
+    "C1-candidate and C3-candidate are candidate-tier circular evidence: the fixtures are derived from the implementation's own controlled vocabulary and cannot support a human quality claim.",
+    "No extraction, paraphrase, model or consumer-answer quality is measured by structural reads; arbitrary free-text paraphrase is out of scope.",
+    "B0-v0.5.2, B1-steward and C2-steward are unrun; they are not measured results.",
+    "Human review of at least 200 trajectories remains an open release blocker."
+  ]
+}

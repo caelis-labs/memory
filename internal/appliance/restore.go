@@ -376,6 +376,11 @@ func (s *Store) CommitRestore(ctx context.Context) error {
 		return fmt.Errorf("commit restored generation: %w", err)
 	}
 	s.restorePending.Store(false)
+	// A restored generation can carry barriers whose cleansing did not finish
+	// in the source appliance; settle them before the generation serves reads.
+	if err := s.RecoverGovernanceCleanup(ctx); err != nil {
+		return fmt.Errorf("recover restored governance cleanup: %w", err)
+	}
 	return syncDirectory(s.dataDir)
 }
 

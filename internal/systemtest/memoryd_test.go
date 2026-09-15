@@ -243,7 +243,7 @@ func TestMemoryctlStandaloneWorkflow(t *testing.T) {
 		"delete-receipt", "-id", string(corrected.ReplacementReceiptID),
 		"-reason", "system test erasure", "-idempotency-key", "memoryctl-deletion",
 	)
-	if !bytes.Contains(deleteOutput, []byte(`"deleted": true`)) || !bytes.Contains(deleteOutput, []byte("Session history")) {
+	if !bytes.Contains(deleteOutput, []byte(`"deleted": true`)) || !bytes.Contains(deleteOutput, []byte("external producers")) {
 		t.Fatalf("memoryctl Delete output = %s", deleteOutput)
 	}
 	runCommand(t, memoryctl,

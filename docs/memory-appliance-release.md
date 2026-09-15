@@ -17,6 +17,12 @@ published or consumed by Caelis in the current release line.
 `make standalone-preview` retains the historical native packaging checks
 without adding them to the package candidate gate.
 
+The v0.6.0 source-package release is tracked in the
+[v0.6 release notes and checklist](memory-v0.6-release.md). The user authorized formal package publication after PR review repairs. Exact-revision
+native CI remains required before tagging. Production longitudinal quality and
+Caelis Facts product integration are separately unqualified; a version-file edit
+does not mean the release exists.
+
 ## Package candidate gate
 
 A candidate revision must be clean and pass:
@@ -26,7 +32,18 @@ make check
 make race
 make durable
 make corpus-gate
+make facts-gate
+GOWORK=off go run ./scripts/facts_consumer_gate
 ```
+
+The facts gate has its own frozen longitudinal fixtures and admission/lifecycle/
+governance assertions. Candidate-generated cases are labeled unreviewed and do
+not themselves satisfy review. This candidate has completed the user-authorized
+independent AI-agent substitute review, with human count 0 and per-case evidence.
+Production model/holdout quality remains required for end-to-end Bot acceptance,
+not claimed by this scoped package release. Follow the
+[longitudinal evaluation procedure](memory-v0.6-evaluation.md) for controlled
+comparison arms and 1k/10k/100k hot-partition baseline measurements.
 
 The gate covers public API shape, embedded facade behavior, the current SQLite
 schema baseline, durable Remember/Recall, authorization, governance, Steward
@@ -68,21 +85,28 @@ workflow at that exact revision. Create an annotated prerelease tag only for the
 approved revision, then create a GitHub prerelease containing source archives
 and the reviewed release notes.
 
-For GA, advance `VERSION` to `0.5.0` on the final reviewed commit, rerun the
+For v0.6 GA, verify `VERSION` is `0.6.0` on the final reviewed commit, rerun the
 package candidate gate plus `make ga-soak`, validate the exact Caelis consumer
 revision, push the commit, and wait for remote `quality` success at that SHA.
-Only then create the annotated `v0.5.0` tag and a non-prerelease GitHub source
+Only with separate release authorization create the annotated `v0.6.0` tag and a non-prerelease GitHub source
 release. A local commit, local tag, earlier RC result, or tag on another SHA is
 not release authority. The Memory package publishes no standalone binaries in
 this release line.
 
-The current package version is `0.5.2`. `memory-v0.5.0` remains the first
-published schema compatibility floor. The final
-prerelease baseline `memory-development-baseline-1` has the same schema and is
-promoted in place by changing only its metadata marker; accepted data must
-survive that transition. Every other older development baseline remains
-unsupported. Any post-GA Corpus or projection table is introduced only by an
-explicit additive migration from this floor.
+For this v0.6.0 publication, the user explicitly accepted engineering feasibility
+and stopped the approximately 20-minute final performance rerun. Record that run
+as stopped with no final aggregate result; do not transfer the previous source's
+33/33 score to this release. This disposition does not change the frozen limits
+or qualify production-model or end-to-end Bot performance.
+
+The package version is `0.6.0` (previous released baseline: `0.5.2`).
+`memory-v0.5.0` remains the first supported source schema floor. v0.6 writes
+schema **2**, marker `memory-v0.6.0`, through an explicit atomic migration from
+schema 1, including the final byte-identical prerelease baseline. Old binaries
+reject the new ledger and must not be used for in-place writes. See
+[migration and recovery](memory-v0.6-migration.md). Unknown legacy adoption and
+onset remain unknown; `updated_at` is not an effective fact time. No Corpus or
+projection platform is added by this migration.
 
 ## Version coordination
 

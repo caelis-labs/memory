@@ -16,7 +16,7 @@ const (
 	ManagementCredentialFile    = "management.token"
 	StewardWorkerCredentialFile = "steward-worker.token"
 	SocketFilename              = v1alpha1.LocalSocketFilename
-	CurrentSchemaVersion        = 1
+	CurrentSchemaVersion        = 2
 	defaultSQLiteBusyTimeoutMS  = 2_000
 )
 
@@ -37,6 +37,10 @@ type Faults struct {
 	BeforeRememberCommit func() error
 	AfterRememberCommit  func() error
 	AfterStewardCommit   func() error
+	// AfterForgettingBarrier fires after a forgetting barrier is committed but
+	// before managed history cleansing. A test uses it to model a crash in that
+	// window so restart recovery can be proven deterministically.
+	AfterForgettingBarrier func() error
 }
 
 // ErrOwnerLocked means another memoryd owns the data directory.

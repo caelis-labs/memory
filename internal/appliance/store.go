@@ -145,6 +145,12 @@ func (s *Store) initialize(ctx context.Context) error {
 	if err := initializeSchema(ctx, s.db, s.now().UTC()); err != nil {
 		return err
 	}
+	// Resume any managed history cleansing whose barrier committed before a
+	// crash. Deriving read paths deny the content meanwhile, so recovery closes
+	// the physical obligation instead of an authorization window.
+	if err := s.RecoverGovernanceCleanup(ctx); err != nil {
+		return fmt.Errorf("recover governance cleanup: %w", err)
+	}
 	generation, err := s.metadata(ctx, "storage_generation")
 	if errors.Is(err, sql.ErrNoRows) {
 		generation, err = s.randomHex(16)

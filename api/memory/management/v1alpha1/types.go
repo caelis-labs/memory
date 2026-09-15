@@ -87,6 +87,17 @@ type Inspection struct {
 	Capabilities      CapabilityDiagnostics `json:"capabilities"`
 	Steward           StewardDiagnostics    `json:"steward"`
 	Lexicon           LexiconDiagnostics    `json:"lexicon"`
+	Governance        GovernanceDiagnostics `json:"governance"`
+}
+
+// GovernanceDiagnostics reports forgetting-barrier and managed-cleansing
+// health without exposing receipt or Record identity.
+type GovernanceDiagnostics struct {
+	Barriers                int64  `json:"barriers"`
+	PendingCleanups         int64  `json:"pending_cleanups"`
+	CompletedCleanups       int64  `json:"completed_cleanups"`
+	LastInvalidationVersion uint64 `json:"last_invalidation_version"`
+	ClearedRevisions        int64  `json:"cleared_revisions"`
 }
 
 // LexiconDiagnostics reports private adaptive-index health without exposing
@@ -194,6 +205,12 @@ type DeleteReceiptResponse struct {
 	TombstoneID         string                   `json:"tombstone_id"`
 	DeduplicatedRetry   bool                     `json:"deduplicated_retry"`
 	SessionCopyBoundary string                   `json:"session_copy_boundary"`
+	// InvalidationVersion is the durable logical forgetting barrier sequence.
+	// Later changes for the same Space always carry a greater version.
+	InvalidationVersion uint64 `json:"invalidation_version,omitempty"`
+	// Cleanup reports whether managed history cleansing already completed in
+	// this call. A pending result is safe to poll with CleanupStatus.
+	Cleanup CleanupState `json:"cleanup,omitempty"`
 }
 
 type RebuildFTSResponse struct {

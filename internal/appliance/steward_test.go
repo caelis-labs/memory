@@ -165,6 +165,7 @@ func TestStewardMergeAndSupersedeUseOptimisticRevisions(t *testing.T) {
 		t.Fatal(err)
 	}
 	receiptB, leaseB := remember("project targets Go 1.25", "merge-b", "job-merge-b")
+	declareStewardReadSet(t, store, leaseB.JobID, 1, added.RecordID, 1, receiptA)
 	merged, err := store.ApplyStewardProposal(t.Context(), leaseB, stewardv1alpha1.Proposal{
 		Operation: stewardv1alpha1.OperationMerge, TargetRecordID: added.RecordID, ExpectedRevision: 1,
 		Kind: "claim", Text: "The project uses Go and targets Go 1.25.", EvidenceRefs: []v1alpha1.ReceiptID{receiptB, receiptA},
@@ -261,7 +262,10 @@ func TestReceiptGovernanceInvalidatesCurrentSemanticRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if record.Status != stewardv1alpha1.RecordStatusInvalidated || record.InvalidatedReason != "receipt_deleted" || revision.Text != "Semantic fact to delete." {
+	// A deletion barrier clears derived Revision content; the content-free
+	// skeleton (identity, operation, job, evidence receipt) survives.
+	if record.Status != stewardv1alpha1.RecordStatusInvalidated || record.InvalidatedReason != "receipt_deleted" ||
+		revision.Text != "" || len(revision.Evidence) != 1 {
 		t.Fatalf("deleted-evidence Record = %+v, Revision = %+v", record, revision)
 	}
 	pendingReceipt, err := store.Remember(t.Context(), auth, v1alpha1.RememberRequest{
@@ -318,7 +322,7 @@ func leaseStewardReceipt(
 		 job_id, receipt_id, space_id, profile_id, profile_version, state, attempts,
 		 available_at, lease_expires_at, lease_token_digest, created_at, updated_at)
 		 VALUES (?, ?, ?, 'profile-test', 1, 'leased', 1, ?, ?, ?, ?, ?)`,
-		jobID, receiptID, spaceID, formatTime(now), formatTime(now.Add(time.Hour)), digestString(token), formatTime(now), formatTime(now)); err != nil {
+		jobID, receiptID, spaceID, formatScheduleTime(now), formatScheduleTime(now.Add(time.Hour)), digestString(token), formatTime(now), formatTime(now)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.db.ExecContext(t.Context(),
@@ -327,4 +331,28 @@ func leaseStewardReceipt(
 		t.Fatal(err)
 	}
 	return StewardLease{JobID: jobID, Token: token}
+}
+
+// declareStewardReadSet persists explicit context dependencies for a direct test
+// lease so Apply's actual-read evidence policy is exercised exactly as a
+// production Claim would. Production Claims persist their own set; this exists
+// only because direct-lease setup skips ClaimStewardJob.
+func declareStewardReadSet(
+	t *testing.T,
+	store *Store,
+	jobID stewardv1alpha1.JobID,
+	attempt int,
+	recordID stewardv1alpha1.RecordID,
+	revision uint64,
+	receipts ...v1alpha1.ReceiptID,
+) {
+	t.Helper()
+	for ordinal, receiptID := range receipts {
+		if _, err := store.db.ExecContext(t.Context(),
+			`INSERT INTO steward_read_set(job_id, attempt, ordinal, record_id, revision, receipt_id)
+			 VALUES (?, ?, ?, ?, ?, ?)`,
+			jobID, attempt, ordinal, recordID, revision, receiptID); err != nil {
+			t.Fatal(err)
+		}
+	}
 }

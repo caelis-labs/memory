@@ -1,0 +1,127 @@
+{
+  "source_sha256": "a8001fb40d556b9608b1d028ef3bb6a78e9b9c02beb49a5160920b8b168e6463",
+  "reviewed_head": "c5652ec4dd2164265e2d457061e00dab4cae3af1",
+  "independent_review": {
+    "reviewer": "/root/blocking_trajectory_audit",
+    "method": "read-only source review; no execution",
+    "extra_findings": [
+      "crossing the preceding effective onset",
+      "removing finite change onset revives predecessor"
+    ],
+    "final_result": "both closed; no new high-confidence finding"
+  },
+  "logs": {
+    "initial_regressions_red": {
+      "log_sha256": "500f818ba5d9977ca80069dc9c8dfe45342d7a113de93530348fdc870d5fab28",
+      "combined_output": "--- FAIL: TestPR2ReviewCorrectedChangeRebuildsIntervals (0.43s)\n    --- FAIL: TestPR2ReviewCorrectedChangeRebuildsIntervals/[20] (0.37s)\n        pr2_review_regression_test.go:58: want \"coffee\", got {Facts:[] Background: Cursor:{Generation:e79ed434e6b0e666f3717cffbe8814ad Scope:553a2eec5279af04896eaddbe1abf8796163d65597c23612f7d09d14cece9308 Sequence:6} RefreshAt:2026-09-20 00:00:00 +0000 UTC Truncated:false BytesUsed:2 NextRevision:0}\n    --- FAIL: TestPR2ReviewCorrectedChangeRebuildsIntervals/[5] (0.03s)\n        pr2_review_regression_test.go:73: live: wrong predecessor interval: [{RecordID:record-e9db42cc048fa10f8de91aa7fd1e3113 Revision:1 SpaceID:space-bot-a Text:coffee Metadata:{Subject:user:a Key:preference.drink Adoption:confirmed ValidFrom:2026-09-01 00:00:00 +0000 UTC ValidUntil:2026-09-10 00:00:00 +0000 UTC Conditions:[] Transition:establish RelatedRecordID:} Evidence:[{ReceiptID:receipt-59b956b8c505d3f3f0f2b3a0d0ec52c4 Source:0x715706a19b90}] HistoricalState:changed} {RecordID:record-e9db42cc048fa10f8de91aa7fd1e3113 Revision:2 SpaceID:space-bot-a Text:tea Metadata:{Subject:user:a Key:preference.drink Adoption:confirmed ValidFrom:2026-09-10 00:00:00 +0000 UTC ValidUntil:<nil> Conditions:[] Transition:change RelatedRecordID:} Evidence:[{ReceiptID:receipt-4b10a8a7467364d7068c978e30b07c09 Source:0x715706a19c00}] HistoricalState:corrected} {RecordID:record-e9db42cc048fa10f8de91aa7fd1e3113 Revision:3 SpaceID:space-bot-a Text:tea Metadata:{Subject:user:a Key:preference.drink Adoption:confirmed ValidFrom:2026-09-05 00:00:00 +0000 UTC ValidUntil:<nil> Conditions:[] Transition:correct RelatedRecordID:} Evidence:[{ReceiptID:receipt-73f0cbfbed48c47479bb60c302d09480 Source:0x715706a19c70}] HistoricalState:}]\n    --- FAIL: TestPR2ReviewCorrectedChangeRebuildsIntervals/[20_5_25] (0.03s)\n        pr2_review_regression_test.go:58: want \"coffee\", got {Facts:[] Background: Cursor:{Generation:414fd4020012127cd1c1be87e7157b22 Scope:553a2eec5279af04896eaddbe1abf8796163d65597c23612f7d09d14cece9308 Sequence:10} RefreshAt:2026-09-25 00:00:00 +0000 UTC Truncated:false BytesUsed:2 NextRevision:0}\n--- FAIL: TestPR2ReviewCorrectCannotForkConfirmedFact (0.05s)\n    --- FAIL: TestPR2ReviewCorrectCannotForkConfirmedFact/coffee (0.03s)\n        pr2_review_regression_test.go:109: correction fork accepted: <nil>\n    --- FAIL: TestPR2ReviewCorrectCannotForkConfirmedFact/water (0.03s)\n        pr2_review_regression_test.go:109: correction fork accepted: <nil>\n--- FAIL: TestPR2ReviewGovernanceReadsUseOneConnection (2.09s)\n    --- FAIL: TestPR2ReviewGovernanceReadsUseOneConnection/list (1.03s)\n        pr2_review_regression_test.go:165: list with one available connection: {Records:[] NextCursor: Truncated:false} memory deadline: request deadline exceeded\n    --- FAIL: TestPR2ReviewGovernanceReadsUseOneConnection/trace (1.05s)\n        pr2_review_regression_test.go:170: trace with one available connection: {State: Record:<nil> Revisions:[] InvalidationVersion:0 Cleanup:} memory deadline: request deadline exceeded\nFAIL\nFAIL\tgithub.com/caelis-labs/memory/internal/appliance\t3.780s\nFAIL\n",
+      "exit_code": 1
+    },
+    "crossing_regression_red": {
+      "log_sha256": "fcec57188edb25838a90cad1f35b110c5b26e40bef69e6c5c81fc3ce03ec9ad0",
+      "combined_output": "--- FAIL: TestPR2ReviewCorrectionCannotCrossPreviousEffectiveOnset (0.40s)\n    pr2_review_regression_test.go:200: onset crossing previous effective interval accepted: day=5 err=<nil>\nFAIL\nFAIL\tgithub.com/caelis-labs/memory/internal/appliance\t1.430s\nFAIL\n",
+      "exit_code": 1
+    },
+    "six_regressions_green": {
+      "log_sha256": "f49a1d50e83f8ef048bfd19b5e5a8d3565fe0c44d6f1c8dad4b89b44643ac8db",
+      "combined_output": "ok  \tgithub.com/caelis-labs/memory/internal/appliance\t1.875s\n",
+      "exit_code": 0
+    },
+    "final_package_gate": {
+      "log_sha256": "f2e93bb6f3733960ec84eb9ef5ee8170e78a21cb0565b122a6c2dcbb14c09f70",
+      "combined_output": "GOWORK=off go run ./scripts/markdown_links\ndocumentation links passed (27 files checked)\nGOWORK=off go test ./...\nok  \tgithub.com/caelis-labs/memory/api/memory/facts/v1alpha1\t(cached)\nok  \tgithub.com/caelis-labs/memory/api/memory/management/v1alpha1\t(cached)\nok  \tgithub.com/caelis-labs/memory/api/memory/steward/v1alpha1\t(cached)\nok  \tgithub.com/caelis-labs/memory/api/memory/v1alpha1\t(cached)\nok  \tgithub.com/caelis-labs/memory/appliance\t(cached)\nok  \tgithub.com/caelis-labs/memory/cmd/memoryctl\t(cached)\n?   \tgithub.com/caelis-labs/memory/cmd/memoryd\t[no test files]\n?   \tgithub.com/caelis-labs/memory/cmd/memorymanifest\t[no test files]\n?   \tgithub.com/caelis-labs/memory/conformance\t[no test files]\nok  \tgithub.com/caelis-labs/memory/internal/appliance\t11.671s\nok  \tgithub.com/caelis-labs/memory/internal/backupfile\t(cached)\n?   \tgithub.com/caelis-labs/memory/internal/buildinfo\t[no test files]\nok  \tgithub.com/caelis-labs/memory/internal/localtransport\t(cached)\nok  \tgithub.com/caelis-labs/memory/internal/reference\t(cached)\nok  \tgithub.com/caelis-labs/memory/internal/systemtest\t(cached)\nok  \tgithub.com/caelis-labs/memory/scripts/artifact_checksum\t(cached)\nok  \tgithub.com/caelis-labs/memory/scripts/corpus_eval\t(cached)\nok  \tgithub.com/caelis-labs/memory/scripts/facts_compare\t(cached)\n?   \tgithub.com/caelis-labs/memory/scripts/facts_consumer_gate\t[no test files]\nok  \tgithub.com/caelis-labs/memory/scripts/facts_eval\t(cached)\nok  \tgithub.com/caelis-labs/memory/scripts/ga_soak\t(cached)\n?   \tgithub.com/caelis-labs/memory/scripts/markdown_links\t[no test files]\nok  \tgithub.com/caelis-labs/memory/sdk/go/memory\t(cached)\n?   \tgithub.com/caelis-labs/memory/sdk/go/memory/internal/localhttp\t[no test files]\nok  \tgithub.com/caelis-labs/memory/sdk/go/memory/local\t(cached)\n?   \tgithub.com/caelis-labs/memory/sdk/go/memory/management\t[no test files]\nok  \tgithub.com/caelis-labs/memory/sdk/go/memory/sidecar\t(cached)\nok  \tgithub.com/caelis-labs/memory/sdk/go/memory/stewardworker\t(cached)\nGOWORK=off go vet ./...\nGOWORK=off go build ./cmd/...\ngit diff --check\nGOWORK=off go test -count=1 ./internal/systemtest\nok  \tgithub.com/caelis-labs/memory/internal/systemtest\t17.799s\nGOWORK=off go test -race ./...\nok  \tgithub.com/caelis-labs/memory/api/memory/facts/v1alpha1\t(cached)\nok  \tgithub.com/caelis-labs/memory/api/memory/management/v1alpha1\t(cached)\nok  \tgithub.com/caelis-labs/memory/api/memory/steward/v1alpha1\t(cached)\nok  \tgithub.com/caelis-labs/memory/api/memory/v1alpha1\t(cached)\nok  \tgithub.com/caelis-labs/memory/appliance\t(cached)\nok  \tgithub.com/caelis-labs/memory/cmd/memoryctl\t(cached)\n?   \tgithub.com/caelis-labs/memory/cmd/memoryd\t[no test files]\n?   \tgithub.com/caelis-labs/memory/cmd/memorymanifest\t[no test files]\n?   \tgithub.com/caelis-labs/memory/conformance\t[no test files]\nok  \tgithub.com/caelis-labs/memory/internal/appliance\t56.611s\nok  \tgithub.com/caelis-labs/memory/internal/backupfile\t(cached)\n?   \tgithub.com/caelis-labs/memory/internal/buildinfo\t[no test files]\nok  \tgithub.com/caelis-labs/memory/internal/localtransport\t(cached)\nok  \tgithub.com/caelis-labs/memory/internal/reference\t(cached)\nok  \tgithub.com/caelis-labs/memory/internal/systemtest\t(cached)\nok  \tgithub.com/caelis-labs/memory/scripts/artifact_checksum\t(cached)\nok  \tgithub.com/caelis-labs/memory/scripts/corpus_eval\t(cached)\nok  \tgithub.com/caelis-labs/memory/scripts/facts_compare\t(cached)\n?   \tgithub.com/caelis-labs/memory/scripts/facts_consumer_gate\t[no test files]\nok  \tgithub.com/caelis-labs/memory/scripts/facts_eval\t(cached)\nok  \tgithub.com/caelis-labs/memory/scripts/ga_soak\t(cached)\n?   \tgithub.com/caelis-labs/memory/scripts/markdown_links\t[no test files]\nok  \tgithub.com/caelis-labs/memory/sdk/go/memory\t(cached)\n?   \tgithub.com/caelis-labs/memory/sdk/go/memory/internal/localhttp\t[no test files]\nok  \tgithub.com/caelis-labs/memory/sdk/go/memory/local\t(cached)\n?   \tgithub.com/caelis-labs/memory/sdk/go/memory/management\t[no test files]\nok  \tgithub.com/caelis-labs/memory/sdk/go/memory/sidecar\t(cached)\nok  \tgithub.com/caelis-labs/memory/sdk/go/memory/stewardworker\t(cached)\nGOWORK=off go test -count=1 -v ./internal/appliance -run '^TestReleaseMultilingualCorpusGate$'\n=== RUN   TestReleaseMultilingualCorpusGate\n    release_corpus_test.go:157: release corpus zh: cases=64 recall@1=1.0000 recall@5=1.0000 zero=0 provenance=64 p95=1.256833ms\n    release_corpus_test.go:157: release corpus en: cases=64 recall@1=1.0000 recall@5=1.0000 zero=0 provenance=64 p95=1.301ms\n    release_corpus_test.go:157: release corpus other: cases=96 recall@1=1.0000 recall@5=1.0000 zero=0 provenance=96 p95=2.1145ms\n--- PASS: TestReleaseMultilingualCorpusGate (0.94s)\nPASS\nok  \tgithub.com/caelis-labs/memory/internal/appliance\t4.351s\nGOWORK=off MEMORY_FACTS_EVAL_CANDIDATES=1 MEMORY_FACTS_EVAL_REPORT=\"/Users/xueyongzhi/WorkDir/caelis-labs/memory/dist/facts-eval-report.json\" go test -count=1 -timeout 10m -v ./internal/appliance -run '^TestFactsLongitudinalEvaluationGate$'\n=== RUN   TestFactsLongitudinalEvaluationGate\n    facts_evaluation_test.go:949: facts evaluation: authored C1=14/14 clean, candidates=208 (not_human_reviewed), in-tree legacy receipt Recall control=2/2\n    facts_evaluation_test.go:994: facts evaluation report written to /Users/xueyongzhi/WorkDir/caelis-labs/memory/dist/facts-eval-report.json\n--- PASS: TestFactsLongitudinalEvaluationGate (6.75s)\nPASS\nok  \tgithub.com/caelis-labs/memory/internal/appliance\t7.131s\nGOWORK=off go run ./scripts/facts_eval -fixtures internal/appliance/testdata/facts_eval -report \"/Users/xueyongzhi/WorkDir/caelis-labs/memory/dist/facts-eval-report.json\"\nfacts_eval: report /Users/xueyongzhi/WorkDir/caelis-labs/memory/dist/facts-eval-report.json conforms\nfacts_eval: fixtures conform (trajectories file d5f2c3e811aaa726f1b6b49113d41bcaeb53cf2e589da8556cd4755696d3dff4, 8 subjects, 26 templates, 208 candidates)\nGOWORK=off go run ./scripts/facts_consumer_gate\nfacts_consumer_gate: GOWORK=off go test ./... (temporary module /var/folders/hn/r4ffst5510s89657cwrcjj6w0000gn/T/memory-facts-consumer-gate-1988368639)\nok  \texample.com/memory-facts-consumer-gate\t0.766s\nfacts_consumer_gate: passed\nGOWORK=off go test ./internal/appliance -run '^$' -bench '^BenchmarkM5' -benchtime=200x -benchmem\ngoos: darwin\ngoarch: arm64\npkg: github.com/caelis-labs/memory/internal/appliance\ncpu: Apple M4\nBenchmarkM5Remember-10           \t     200\t    244265 ns/op\t       228.0 remember_p50_us\t       325.0 remember_p95_us\t       579.0 remember_p99_us\t   71892 B/op\t     735 allocs/op\nBenchmarkM5ColdRemember-10       \t     200\t    477180 ns/op\t       401.0 cold_remember_p50_us\t       744.0 cold_remember_p95_us\t      1069 cold_remember_p99_us\t   72707 B/op\t     755 allocs/op\nBenchmarkM5Recall-10             \t     200\t    358416 ns/op\t       362.0 recall_p50_us\t       393.0 recall_p95_us\t       479.0 recall_p99_us\t  230722 B/op\t    1260 allocs/op\nBenchmarkM5Open-10               \t     200\t  23288435 ns/op\t     21726 open_p50_us\t     23595 open_p95_us\t     33778 open_p99_us\t   56386 B/op\t    1281 allocs/op\nBenchmarkM5Reindex-10            \t     200\t   8558786 ns/op\t     58420 entries/s\t23578814 B/op\t   64919 allocs/op\nBenchmarkM5Backup-10             \t     200\t   7853893 ns/op\t      7723 backup_p50_us\t      8528 backup_p95_us\t      8978 backup_p99_us\t   17440 B/op\t     173 allocs/op\nBenchmarkM5Restore-10            \t     200\t  28947554 ns/op\t     28551 restore_p50_us\t     32388 restore_p95_us\t     34932 restore_p99_us\t   51433 B/op\t     591 allocs/op\nBenchmarkM5BacklogRecovery-10    \t     200\t    735240 ns/op\t      1360 jobs/s\t   83440 B/op\t     868 allocs/op\nPASS\nok  \tgithub.com/caelis-labs/memory/internal/appliance\t21.531s\n",
+      "exit_code": 0
+    },
+    "minimum_go_cgo0": {
+      "log_sha256": "62e162a4bc07428f2d0582d825dbb834cdb62feaa8bdea0ddce748e3b57bd9bc",
+      "combined_output": "ok  \tgithub.com/caelis-labs/memory/api/memory/facts/v1alpha1\t(cached)\nok  \tgithub.com/caelis-labs/memory/api/memory/management/v1alpha1\t(cached)\nok  \tgithub.com/caelis-labs/memory/api/memory/steward/v1alpha1\t(cached)\nok  \tgithub.com/caelis-labs/memory/api/memory/v1alpha1\t(cached)\nok  \tgithub.com/caelis-labs/memory/appliance\t(cached)\nok  \tgithub.com/caelis-labs/memory/cmd/memoryctl\t(cached)\n?   \tgithub.com/caelis-labs/memory/cmd/memoryd\t[no test files]\n?   \tgithub.com/caelis-labs/memory/cmd/memorymanifest\t[no test files]\n?   \tgithub.com/caelis-labs/memory/conformance\t[no test files]\nok  \tgithub.com/caelis-labs/memory/internal/appliance\t6.817s\nok  \tgithub.com/caelis-labs/memory/internal/backupfile\t(cached)\n?   \tgithub.com/caelis-labs/memory/internal/buildinfo\t[no test files]\nok  \tgithub.com/caelis-labs/memory/internal/localtransport\t(cached)\nok  \tgithub.com/caelis-labs/memory/internal/reference\t(cached)\nok  \tgithub.com/caelis-labs/memory/internal/systemtest\t(cached)\nok  \tgithub.com/caelis-labs/memory/scripts/artifact_checksum\t(cached)\nok  \tgithub.com/caelis-labs/memory/scripts/corpus_eval\t(cached)\nok  \tgithub.com/caelis-labs/memory/scripts/facts_compare\t(cached)\n?   \tgithub.com/caelis-labs/memory/scripts/facts_consumer_gate\t[no test files]\nok  \tgithub.com/caelis-labs/memory/scripts/facts_eval\t(cached)\nok  \tgithub.com/caelis-labs/memory/scripts/ga_soak\t(cached)\n?   \tgithub.com/caelis-labs/memory/scripts/markdown_links\t[no test files]\nok  \tgithub.com/caelis-labs/memory/sdk/go/memory\t(cached)\n?   \tgithub.com/caelis-labs/memory/sdk/go/memory/internal/localhttp\t[no test files]\nok  \tgithub.com/caelis-labs/memory/sdk/go/memory/local\t(cached)\n?   \tgithub.com/caelis-labs/memory/sdk/go/memory/management\t[no test files]\nok  \tgithub.com/caelis-labs/memory/sdk/go/memory/sidecar\t(cached)\nok  \tgithub.com/caelis-labs/memory/sdk/go/memory/stewardworker\t(cached)\n",
+      "exit_code": 0
+    },
+    "caelis_consumer": {
+      "log_sha256": "bb2980771c12f3f0b059f0c07a9115bdf4c076e96d2eb7cc2deeb612edd02769",
+      "combined_output": "ok  \tgithub.com/caelis-labs/caelis/app/gatewayapp\t11.666s\nok  \tgithub.com/caelis-labs/caelis/app/gatewayapp/internal/memoryhost\t1.680s\nok  \tgithub.com/caelis-labs/caelis/control/memorybinding\t2.268s\nok  \tgithub.com/caelis-labs/caelis/control/memorytool\t1.933s\n",
+      "exit_code": 0
+    },
+    "stopped_performance": {
+      "exit_code": 2,
+      "log_sha256": "cee237770df70553881406a47f611bf293202e830b662a3f87f65b62cc369527",
+      "combined_output": "GOWORK=off MEMORY_FACTS_PERF=1 MEMORY_FACTS_PERF_SIZES=\"1000,10000,100000\" MEMORY_FACTS_PERF_REPORT=\"/Users/xueyongzhi/WorkDir/caelis-labs/memory/docs/evidence/memory-v0.6-release-perf.json\" go test -count=1 -timeout 60m -v ./internal/appliance -run '^TestFactsPerformanceHarness$'\n=== RUN   TestFactsPerformanceHarness\n    facts_performance_test.go:118: facts performance: seeding 1000 receipts\n    facts_performance_test.go:118: facts performance: seeding 10000 receipts\n    facts_performance_test.go:118: facts performance: seeding 100000 receipts\nsignal: terminated\nFAIL\tgithub.com/caelis-labs/memory/internal/appliance\t1198.523s\nFAIL\nmake: *** [facts-perf] Error 1\n"
+    }
+  },
+  "soak_status": "passed",
+  "performance_status": "stopped at explicit user request after engineering feasibility acceptance; no final aggregate report or final-source frozen-limit pass",
+  "soak_report": "memory-v0.6-release-soak.json",
+  "soak_report_sha256": "a361f066907a7894a4cf6ab1ffcd36ce7429e2f2334b0c89c84a783fdfb5ff4c",
+  "commands": {
+    "final_package_gate": "make release-candidate",
+    "minimum_go_cgo0": "GOWORK=off CGO_ENABLED=0 GOTOOLCHAIN=go1.25.8 go test ./...",
+    "six_regressions_green": "GOWORK=off go test ./internal/appliance -run '^TestPR2Review' -count=1",
+    "caelis_consumer": "GOWORK=off go test ./app/gatewayapp ./app/gatewayapp/internal/memoryhost ./control/memorybinding ./control/memorytool -run 'TestMemoryEmbeddedGoldenPath|TestMemoryStewardBindingControlsEmbeddedWorker|TestConfiguredMemoryAuthorityIsValidatedDuringHostStartup|Memory|Bound|Binding' -count=1",
+    "stopped_performance": "FACTS_PERF_SIZES=1000,10000,100000 FACTS_PERF_REPORT=docs/evidence/memory-v0.6-release-perf.json make facts-perf",
+    "soak": "make ga-soak GA_SOAK_REPORT=/tmp/memory-v060-pr2-soak.json"
+  },
+  "caelis_revision": "6485d47bd1ae3b34b97a547fa207ed17b0f5849b",
+  "caelis_method": "git archive to temporary directory; temporary local replace; shared checkout unchanged",
+  "repair_pr_quality": {
+    "url": "https://github.com/caelis-labs/memory/actions/runs/34986041895",
+    "revision": "130b729e6a918d3ccc785f9ffadd8746d8aab5a9",
+    "event": "pull_request",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "native-darwin-arm64-package-check",
+        "conclusion": "success",
+        "url": "https://github.com/caelis-labs/memory/actions/runs/34986041895/job/104438261766"
+      },
+      {
+        "name": "standalone-preview-buildability (darwin, amd64)",
+        "conclusion": "success",
+        "url": "https://github.com/caelis-labs/memory/actions/runs/34986041895/job/104438261955"
+      },
+      {
+        "name": "standalone-preview-buildability (linux, arm64)",
+        "conclusion": "success",
+        "url": "https://github.com/caelis-labs/memory/actions/runs/34986041895/job/104438261975"
+      },
+      {
+        "name": "standalone-preview-buildability (linux, amd64)",
+        "conclusion": "success",
+        "url": "https://github.com/caelis-labs/memory/actions/runs/34986041895/job/104438262054"
+      },
+      {
+        "name": "native-windows-amd64-embedded-open",
+        "conclusion": "success",
+        "url": "https://github.com/caelis-labs/memory/actions/runs/34986041895/job/104438262089"
+      },
+      {
+        "name": "standalone-preview-buildability (windows, amd64)",
+        "conclusion": "success",
+        "url": "https://github.com/caelis-labs/memory/actions/runs/34986041895/job/104438262107"
+      },
+      {
+        "name": "portable-core",
+        "conclusion": "success",
+        "url": "https://github.com/caelis-labs/memory/actions/runs/34986041895/job/104438262116"
+      },
+      {
+        "name": "standalone-preview-buildability (windows, arm64)",
+        "conclusion": "success",
+        "url": "https://github.com/caelis-labs/memory/actions/runs/34986041895/job/104438262168"
+      },
+      {
+        "name": "standalone-preview-buildability (darwin, arm64)",
+        "conclusion": "success",
+        "url": "https://github.com/caelis-labs/memory/actions/runs/34986041895/job/104438262419"
+      }
+    ]
+  },
+  "performance_stop": {
+    "user_requested": true,
+    "elapsed_seconds": 1198.523,
+    "method": "SIGTERM sent only to the identified TestFactsPerformanceHarness process",
+    "make_exit_code": 2,
+    "completed_aggregate_report": false,
+    "prior_source_full_pass": "memory-v0.6-performance-check.json",
+    "prior_source_sha256": "99037fb24c0f1fc64a5380a91ddcefac6287659cd85066fe9c66dcace0f4e8b1"
+  },
+  "soak_exit_code": 0
+}

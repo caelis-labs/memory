@@ -12,6 +12,28 @@ Caelis product type.
 buildable scaffolding for a possible standalone distribution. They are not in
 the current integration or release critical path.
 
+## v0.6.0: long-term facts and governance
+
+The current package milestone is **v0.6.0**, ahead of Corpus/Leaf and
+projection work. It extends existing flat Record/Revision continuity, not a
+second profile ledger. See the [facts contract](memory-v0.6-facts.md) and
+[release scope and verification](memory-v0.6-release.md).
+
+| Milestone | Owning delivered surface | Qualification |
+| --- | --- | --- |
+| M01 | versioned facts API and schema 1 → 2 migration | fixed v0.5.2 fixture, rollback/reopen and external module tests |
+| M02 | embedded management, transitive forgetting barriers, cleanup/recovery | deterministic leased-context deletion and history cleansing tests |
+| M03 | trusted source identity, admission policy, suppression, offline structured edits | source conflicts, authorization and wrong-subject tests |
+| M04 | subject/key + lexical + recent Steward context, actual read set, bounded atomic proposals | stale/unauthorized batch rejection; inference stays pending |
+| M05 | current/historical facts, controlled aliases, bounded background and changes | explicit temporal/conditional semantics and authorization tests |
+| M06 | deterministic longitudinal gate, candidate corpus and hot-partition performance harness | user-authorized independent agent review completed for 222 trajectories; model/answer quality remains unqualified |
+| M07 | candidate snapshot, standalone module consumer harness, release notes | no publication without authorization and exact-candidate native CI |
+
+Raw evidence Recall keeps its existing contract. Facts require explicit evidence;
+Memory never promises complete recall of conversations a host did not submit.
+The historical v0.5 baseline and future Corpus plan below remain distinct from
+these new lifecycle semantics.
+
 ## Product boundary
 
 Memory is a governed evidence and semantic-memory kernel. It supplies public
@@ -22,8 +44,9 @@ interprets its source material.
 Two independent public models are planned:
 
 ```text
-Fact Memory ledger (v0.5.0)
+Fact Memory ledger (v0.5 evidence, v0.6 lifecycle)
   Receipt -> optional semantic Record / Revision -> Remember / Recall
+  trusted evidence -> confirmed/pending facts -> current/history/background
 
 Corpus Memory ledger (post-v0.5.0)
   Corpus -> Leaf -> immutable LeafRevision -> ordered Items -> QueryCorpus

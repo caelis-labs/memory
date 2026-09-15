@@ -14,7 +14,7 @@ import (
 	v1alpha1 "github.com/caelis-labs/memory/api/memory/v1alpha1"
 )
 
-const sessionCopyBoundary = "Caelis Session history must be deleted or redacted separately"
+const sessionCopyBoundary = sessionCopyBoundaryStatement
 
 type receiptSearchCandidate struct {
 	receipt managementv1alpha1.Receipt
@@ -208,8 +208,37 @@ func (s *Store) CorrectReceipt(
 	if alreadyCorrected {
 		return rollback(s.serviceError(v1alpha1.ErrorCodeConflict, "receipt already has a replacement", false))
 	}
+	// A correction barrier invalidates every transitivity derived use of the
+	// shadowed receipt while preserving its audit history. It is separate from a
+	// deletion barrier, which alone authorizes content cleansing.
+	correctionVersion, err := s.insertForgettingBarrier(
+		ctx, tx, spaceID, labelSetDigest, forgettingKindReceiptCorrected, request.ReceiptID)
+	if err != nil {
+		return rollback(s.databaseError("record correction barrier", err))
+	}
+	// The corrected source must never be reprocessed into new derived state. Its
+	// payload stays as owner-visible audit because the original Receipt remains
+	// immutable evidence.
+	if err := suppressEvidenceSource(ctx, tx, request.ReceiptID, false); err != nil {
+		return rollback(s.databaseError("suppress corrected evidence source", err))
+	}
 	if err := s.invalidateSemanticRecordsForReceipt(ctx, tx, request.ReceiptID, "receipt_corrected"); err != nil {
 		return rollback(s.databaseError("invalidate corrected semantic Records", err))
+	}
+	forgetting, err := s.forgettingClosure(ctx, tx, request.ReceiptID, spaceID, labelSetDigest)
+	if err != nil {
+		return rollback(s.databaseError("resolve corrected derived history", err))
+	}
+	if err := s.persistForgettingClosure(ctx, tx, correctionVersion, forgetting); err != nil {
+		return rollback(s.databaseError("record corrected derived history", err))
+	}
+	if err := s.invalidateForgettingClosure(ctx, tx, forgetting, request.ReceiptID, "receipt_corrected"); err != nil {
+		return rollback(s.databaseError("invalidate corrected derived history", err))
+	}
+	if err := s.recordReceiptChange(
+		ctx, tx, spaceID, labelSetDigest, memoryChangeReceiptCorrected, request.ReceiptID, forgetting, memoryChangeRecordInvalidated,
+	); err != nil {
+		return rollback(err)
 	}
 	receiptSuffix, err := s.randomHex(16)
 	if err != nil {
@@ -306,6 +335,12 @@ func (s *Store) CorrectReceipt(
 	if err := tx.Commit(); err != nil {
 		return managementv1alpha1.CorrectReceiptResponse{}, s.serviceError(v1alpha1.ErrorCodeUnknownOutcome, "correction commit outcome is unknown; retry the same effect identity", true)
 	}
+	// Settle the correction barrier. No derived content is cleared for a
+	// correction, so this only makes the invalidation explicitly reconcilable.
+	_ = s.cleanupForgettingBarrier(ctx, forgettingBarrier{
+		sequence: correctionVersion, spaceID: spaceID, labelDigest: labelSetDigest,
+		kind: forgettingKindReceiptCorrected, receiptID: request.ReceiptID, status: "pending",
+	})
 	return response, nil
 }
 
@@ -339,15 +374,18 @@ func (s *Store) DeleteReceipt(
 		return rollback(err)
 	}
 	if found {
+		if err := s.refreshCleanupReporting(ctx, tx, request.ReceiptID, &replay); err != nil {
+			return rollback(err)
+		}
 		_ = tx.Rollback()
 		replay.DeduplicatedRetry = true
 		return replay, nil
 	}
 	var spaceID v1alpha1.SpaceID
-	var receiptKey, receiptDigest string
+	var labelSetDigest, receiptKey, receiptDigest string
 	err = tx.QueryRowContext(ctx,
-		`SELECT space_id, idempotency_key, request_digest FROM receipts WHERE receipt_id = ?`, request.ReceiptID).Scan(
-		&spaceID, &receiptKey, &receiptDigest)
+		`SELECT space_id, label_set_digest, idempotency_key, request_digest FROM receipts WHERE receipt_id = ?`, request.ReceiptID).Scan(
+		&spaceID, &labelSetDigest, &receiptKey, &receiptDigest)
 	if errors.Is(err, sql.ErrNoRows) {
 		tombstone, tombstoneErr := readTombstoneWith(ctx, tx, request.ReceiptID)
 		if errors.Is(tombstoneErr, sql.ErrNoRows) {
@@ -359,6 +397,9 @@ func (s *Store) DeleteReceipt(
 		response := managementv1alpha1.DeleteReceiptResponse{
 			Deleted: true, ReceiptID: request.ReceiptID, TombstoneID: tombstone.TombstoneID,
 			DeduplicatedRetry: true, SessionCopyBoundary: sessionCopyBoundary,
+		}
+		if err := s.refreshCleanupReporting(ctx, tx, request.ReceiptID, &response); err != nil {
+			return rollback(err)
 		}
 		if err := s.storeManagementEffect(ctx, tx, "delete_receipt", request.IdempotencyKey, digest, response, s.now().UTC()); err != nil {
 			return rollback(err)
@@ -377,8 +418,34 @@ func (s *Store) DeleteReceipt(
 	}
 	tombstoneID := "tombstone-" + tombstoneSuffix
 	now := s.now().UTC()
+	// The logical forgetting barrier is committed in this transaction, before
+	// any managed history cleansing, so every derived read is already denied
+	// when the deletion becomes visible.
+	invalidationVersion, err := s.insertForgettingBarrier(
+		ctx, tx, spaceID, labelSetDigest, forgettingKindReceiptDeleted, request.ReceiptID)
+	if err != nil {
+		return rollback(s.databaseError("record receipt forgetting barrier", err))
+	}
+	if err := suppressEvidenceSource(ctx, tx, request.ReceiptID, true); err != nil {
+		return rollback(s.databaseError("suppress forgotten evidence source", err))
+	}
 	if err := s.invalidateSemanticRecordsForReceipt(ctx, tx, request.ReceiptID, "receipt_deleted"); err != nil {
 		return rollback(s.databaseError("invalidate deleted semantic Records", err))
+	}
+	forgetting, err := s.forgettingClosure(ctx, tx, request.ReceiptID, spaceID, labelSetDigest)
+	if err != nil {
+		return rollback(s.databaseError("resolve forgotten derived history", err))
+	}
+	if err := s.persistForgettingClosure(ctx, tx, invalidationVersion, forgetting); err != nil {
+		return rollback(s.databaseError("record forgotten derived history", err))
+	}
+	if err := s.invalidateForgettingClosure(ctx, tx, forgetting, request.ReceiptID, "receipt_deleted"); err != nil {
+		return rollback(s.databaseError("invalidate forgotten derived history", err))
+	}
+	if err := s.recordReceiptChange(
+		ctx, tx, spaceID, labelSetDigest, memoryChangeReceiptDeleted, request.ReceiptID, forgetting, memoryChangeRecordForgotten,
+	); err != nil {
+		return rollback(err)
 	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO receipt_tombstones(tombstone_id, receipt_id, space_id, idempotency_key, request_digest, deleted_at, reason)
@@ -411,6 +478,7 @@ func (s *Store) DeleteReceipt(
 	response := managementv1alpha1.DeleteReceiptResponse{
 		Deleted: true, ReceiptID: request.ReceiptID, TombstoneID: tombstoneID,
 		SessionCopyBoundary: sessionCopyBoundary,
+		InvalidationVersion: invalidationVersion, Cleanup: managementv1alpha1.CleanupStatePending,
 	}
 	if err := s.storeManagementEffect(ctx, tx, "delete_receipt", request.IdempotencyKey, digest, response, now); err != nil {
 		return rollback(err)
@@ -418,6 +486,22 @@ func (s *Store) DeleteReceipt(
 	if err := tx.Commit(); err != nil {
 		return managementv1alpha1.DeleteReceiptResponse{}, s.serviceError(v1alpha1.ErrorCodeUnknownOutcome, "deletion commit outcome is unknown; retry the same effect identity", true)
 	}
+	// Managed history cleansing runs in a second transaction. Failure leaves the
+	// durable barrier pending, which Open recovery and CleanupStatus reconcile;
+	// derived content stays denied meanwhile.
+	if s.faults.AfterForgettingBarrier != nil {
+		if err := s.faults.AfterForgettingBarrier(); err != nil {
+			return response, s.serviceError(v1alpha1.ErrorCodeUnknownOutcome, "forgetting barrier committed; managed history cleansing did not run", true)
+		}
+	}
+	barrier := forgettingBarrier{
+		sequence: invalidationVersion, spaceID: spaceID, labelDigest: labelSetDigest,
+		kind: forgettingKindReceiptDeleted, receiptID: request.ReceiptID, status: "pending",
+	}
+	if err := s.cleanupForgettingBarrier(ctx, barrier); err != nil {
+		return response, nil
+	}
+	response.Cleanup = managementv1alpha1.CleanupStateCompleted
 	return response, nil
 }
 

@@ -1,5 +1,13 @@
 # Memory Appliance Corpus Evaluation
 
+For the v0.6 long-term facts milestone, the owning additional procedure is
+[Longitudinal facts evaluation](memory-v0.6-evaluation.md). `make facts-gate`
+is separate from `corpus-gate`: neither keyword hits nor the old multilingual
+corpus establish temporal adoption, correction/denial semantics or complete
+managed cleansing. Machine-expanded candidates are not human-reviewed gold.
+See the [release evidence and scope](memory-v0.6-release.md) for actual runs,
+unrun comparisons, performance baselines and outstanding product qualification.
+
 Status: current privacy-preserving multi-round receipt evaluation plus an
 opt-in local Ollama Steward sample. The default measures the model-free durable
 baseline. The optional sample exercises the real `ModelGenerator` prompt,

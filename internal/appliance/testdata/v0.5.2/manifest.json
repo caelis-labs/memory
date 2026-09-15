@@ -1,0 +1,49 @@
+{
+  "source_commit": "51693ff135be8c4149c15117980290aaad6d90da",
+  "source_tag": "v0.5.2",
+  "database_sha256": "68e02a7031d05e7baa3d5271019911728c42a9ef3fbcba4658bf44500e9f7708",
+  "schema_baseline": "memory-v0.5.0",
+  "schema_version": 1,
+  "generated_at": "2026-09-01T12:00:00Z",
+  "storage_generation": "42424242424242424242424242424242",
+  "label_set": ["workspace:migration"],
+  "label_set_digest": "ade6db2fae7ad46a12456ce3e4fad3051d8da1b2988d7f3a009c8d6febe246d0",
+  "test_only_capability_token": "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI",
+  "receipt": {
+    "receipt_id": "receipt-42424242424242424242424242424242",
+    "space_id": "space:migration",
+    "text": "v0.5.2 source receipt survives schema migration",
+    "source_context": {
+      "actor_ref": "actor:migration",
+      "session_ref": "session:v052",
+      "workspace_ref": "workspace:migration",
+      "task_ref": "task:migration-fixture",
+      "tool_call_ref": "tool:v052",
+      "source_type": "fixture-source",
+      "extension_labels": {
+        "fixture": "v0.5.2",
+        "origin": "baseline"
+      }
+    },
+    "occurred_at": "2026-09-01T10:00:00Z",
+    "received_at": "2026-09-01T12:00:00Z",
+    "idempotency_key": "fixture-v052-receipt",
+    "request_digest": "628206b891dd87f10c4542c28d75e3df3174306852a51fba0cd2163cf1b6878e",
+    "consistency_token": "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJC",
+    "commit_sequence": 1
+  },
+  "semantic": {
+    "record_id": "record-42424242424242424242424242424242",
+    "revision": 1,
+    "space_id": "space:migration",
+    "kind": "claim",
+    "status": "active",
+    "text": "The migration source receipt is retained.",
+    "operation": "ADD",
+    "job_id": "job-f76b8dab11dc8dc7c0b8a8d134af10c5",
+    "created_at": "2026-09-01T12:00:00Z",
+    "evidence_receipt_ids": ["receipt-42424242424242424242424242424242"]
+  },
+  "grant_ids": ["grant:migration", "grant:shared-reader"],
+  "capability_grant_id": "grant:migration"
+}

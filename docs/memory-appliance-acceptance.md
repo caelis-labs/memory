@@ -4,6 +4,37 @@ This document owns executable acceptance IDs for the Go package and its Caelis
 integration. Evidence applies only to the exact source revisions and datasets
 that produced it.
 
+## v0.6 additional acceptance
+
+The v0.6.0 publication is scoped to the embedded Go package, following the
+user's explicit release authorization and PR review repairs. The full product
+acceptance goals below remain tracked: `FACT-009` production model/answer quality
+and Caelis product/platform integration are not asserted by this source release.
+See the [release scope and evidence](memory-v0.6-release.md).
+
+The [facts contract](memory-v0.6-facts.md),
+[governance contract](memory-v0.6-governance.md),
+[migration](memory-v0.6-migration.md) and
+[longitudinal procedure](memory-v0.6-evaluation.md) own the new milestone.
+
+| ID | Gate |
+| --- | --- |
+| `FACT-001` | Fixed v0.5.2 schema-1 fixture preserves receipts, idempotency, evidence links, labels and old Recall through atomic forward migration; unknown adoption/onsets stay unknown |
+| `FACT-002` | Current personalization never mixes independent raw Receipts; explicit change, exception, correction and denial have distinct current/historical behavior |
+| `FACT-003` | Trusted-source conflict/dedup/suppression works across call keys; policy-denied ingestion creates no receipt or job; inference is pending |
+| `FACT-004` | Exact Space/LabelSet and subject checks precede candidates; read-only workers cannot submit evidence or obtain owner governance through delegated authority |
+| `FACT-005` | A leased Steward reads, an owner forgets, then Apply is rejected under deterministic barriers; transitive and legacy-derived history is fenced and cleansed across restart/rebuild |
+| `FACT-006` | Bounded multi-op proposals apply atomically and validate all actual-read dependencies; confirmed heads are not overwritten by generated proposals |
+| `FACT-007` | Background is bounded and deterministic; cursor/generation changes and effective-time boundaries support host invalidation |
+| `FACT-008` | Public-only independent module exercises Facts/Evidence/Management; Caelis history/context cleanup is separately accepted, never inferred from Memory deletion |
+| `FACT-009` | ≥200 reviewed longitudinal trajectories (this candidate uses the user-authorized independent AI-agent substitute, human count 0); frozen ≥95% explicit preference and ≥90% natural paraphrase Recall@8 targets still require production extraction/retrieval/background/answer evaluation |
+| `FACT-010` | 1k/10k/100k hot-partition baselines recorded before performance limits/optimization; final candidate passes existing gates, new facts gate, soak and native Windows embedded Open |
+
+Local implementation tests can satisfy `FACT-001`–`FACT-008` without satisfying
+`FACT-009` or all of `FACT-010`. The [release checklist](memory-v0.6-release.md)
+records those statuses explicitly. Generated labels alone do not constitute
+review; the authorized substitute has separate per-case reviewer evidence.
+
 ## Core invariants
 
 | ID | Acceptance |
@@ -30,7 +61,7 @@ that produced it.
 | ID | Acceptance |
 | --- | --- |
 | `PKG-001` | An external Go consumer imports public `appliance`, `api`, and `sdk` packages without importing `internal/*` |
-| `PKG-002` | `appliance.Open` synchronously initializes a fresh database, reopens the exact `memory-v0.5.0` baseline, promotes the byte-identical final prerelease baseline without data loss, and rejects every other unsupported schema |
+| `PKG-002` | `appliance.Open` synchronously initializes schema 2, atomically migrates supported schema-1 `memory-v0.5.0`/final-prerelease baselines without data loss, reopens schema 2, and rejects unsupported or inconsistent schemas |
 | `PKG-003` | Direct `DataPlane` Remember/Recall passes the shared semantic and durable suites |
 | `PKG-004` | Embedded and retained local-transport adapters execute the same Memory authority and contracts |
 | `PKG-005` | The public facade exposes no SQL handle, concrete Store, index, schema mutation, or model-provider configuration |

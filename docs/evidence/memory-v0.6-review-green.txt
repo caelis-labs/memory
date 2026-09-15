@@ -1,0 +1,12 @@
+=== RUN   TestReviewRetryCannotReadPastForgetBarrier
+--- PASS: TestReviewRetryCannotReadPastForgetBarrier (0.47s)
+=== RUN   TestReviewRepeatedCorrectionKeepsExceptionRelation
+--- PASS: TestReviewRepeatedCorrectionKeepsExceptionRelation (0.06s)
+=== RUN   TestReviewQueryCannotReselectOverriddenFact
+--- PASS: TestReviewQueryCannotReselectOverriddenFact (0.06s)
+=== RUN   TestReviewSubjectWithoutKeyStillUsesRelevantContext
+--- PASS: TestReviewSubjectWithoutKeyStillUsesRelevantContext (0.09s)
+=== RUN   TestReviewUnstructuredRevisionIsNotCountedAsCleansed
+--- PASS: TestReviewUnstructuredRevisionIsNotCountedAsCleansed (0.06s)
+PASS
+ok  	github.com/caelis-labs/memory/internal/appliance	6.544s

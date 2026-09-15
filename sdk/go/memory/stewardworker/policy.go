@@ -58,7 +58,7 @@ Examples of the intended normalization:
 - "接口使用 JWT。" becomes "接口使用 JSON Web Token (JWT) 作为访问凭证。"
 - "服务每周一发布。" becomes "服务每星期一（周一）发布。"
 - "下游异常时启用熔断。" becomes "下游异常时启用熔断（circuit breaker）机制。"
-For ADD, cite the assigned receipt. For MERGE or SUPERSEDE, use the exact supplied target and revision and cite only the assigned receipt plus evidence references from that target. Return exactly one JSON object and no prose.`,
+For ADD, cite the assigned receipt. For MERGE or SUPERSEDE, use the exact supplied target and revision and cite only the assigned receipt plus evidence references from that target. Host source attribution supplied in the input is trusted and immutable: never invent, alter, or add producer, event_id, role, subject, or key values, and never claim adoption or confirmation. Prefer one op; use a bounded batch only for genuinely independent mutations. Return exactly one JSON object and no prose.`,
 		MaxContextRecords: 16,
 		MaxInputBytes:     128 << 10,
 		MaxOutputBytes:    4 << 10,
@@ -104,7 +104,7 @@ func PrepareGeneration(request stewardv1alpha1.WorkRequest) (GenerationRequest, 
 }
 
 func generationInstructions(profilePrompt string, hasLexiconCandidates bool) string {
-	keys := "operation, target_record_id, expected_revision, kind, text, and evidence_refs"
+	keys := "operation, target_record_id, expected_revision, kind, text, and evidence_refs, or the bounded batch fields policy and ops"
 	if hasLexiconCandidates {
 		keys += ", plus the optional lexicon_terms field described below"
 	}
@@ -115,7 +115,9 @@ The response may use only these top-level keys: ` + keys + `. Return one of thes
 ADD: {"operation":"ADD","kind":"fact","text":"...","evidence_refs":["assigned-receipt-id"]}
 MERGE: {"operation":"MERGE","target_record_id":"supplied-record-id","expected_revision":1,"kind":"supplied-kind","text":"...","evidence_refs":["assigned-receipt-id","retained-target-evidence-id"]}
 SUPERSEDE: {"operation":"SUPERSEDE","target_record_id":"supplied-record-id","expected_revision":1,"kind":"fact","text":"...","evidence_refs":["assigned-receipt-id","supported-target-evidence-id"]}
-IGNORE: {"operation":"IGNORE"}`
+IGNORE: {"operation":"IGNORE"}
+BATCH: {"policy":"bounded_batch","ops":[{"operation":"ADD","kind":"fact","text":"...","evidence_refs":["assigned-receipt-id"]},{"operation":"IGNORE"}]}
+Use BATCH only for more than one independent durable mutation in the assigned receipt. A batch may not exceed 8 ops, must set policy to bounded_batch, must leave the single-op fields empty, and may target each record only once. Every op follows the same evidence rules.`
 	if !hasLexiconCandidates {
 		return instructions
 	}
@@ -124,16 +126,16 @@ The input contains lexicon_candidates. The response may additionally contain lex
 }
 
 func proposalJSONSchema(hasLexiconCandidates bool) map[string]any {
-	properties := map[string]any{
-		"operation": map[string]any{
-			"type": "string", "enum": []any{"ADD", "MERGE", "SUPERSEDE", "IGNORE"},
-		},
-		"target_record_id":  map[string]any{"type": "string"},
-		"expected_revision": map[string]any{"type": "integer", "minimum": 0},
-		"kind":              map[string]any{"type": "string"},
-		"text":              map[string]any{"type": "string"},
-		"evidence_refs": map[string]any{
-			"type": "array", "items": map[string]any{"type": "string"},
+	properties := proposalOperationProperties()
+	properties["policy"] = map[string]any{
+		"type": "string", "enum": []any{stewardv1alpha1.PolicyBoundedBatch},
+	}
+	properties["ops"] = map[string]any{
+		"type": "array", "maxItems": stewardv1alpha1.MaxProposalOps,
+		"items": map[string]any{
+			"type": "object", "additionalProperties": false,
+			"properties": proposalOperationProperties(),
+			"required":   []any{"operation"},
 		},
 	}
 	if hasLexiconCandidates {
@@ -146,13 +148,33 @@ func proposalJSONSchema(hasLexiconCandidates bool) map[string]any {
 		"type":                 "object",
 		"additionalProperties": false,
 		"properties":           properties,
-		"required":             []any{"operation"},
+		"required":             []any{},
 	}
+}
+
+func proposalOperationProperties() map[string]any {
+	return map[string]any{
+		"operation": map[string]any{
+			"type": "string", "enum": []any{"ADD", "MERGE", "SUPERSEDE", "IGNORE"},
+		},
+		"target_record_id":  map[string]any{"type": "string"},
+		"expected_revision": map[string]any{"type": "integer", "minimum": 0},
+		"kind":              map[string]any{"type": "string"},
+		"text":              map[string]any{"type": "string"},
+		"evidence_refs": map[string]any{
+			"type": "array", "items": map[string]any{"type": "string"},
+		},
+	}
+}
+
+// maxEnvelopeBytes bounds one provider response, including a bounded batch.
+func maxEnvelopeBytes() int {
+	return stewardv1alpha1.MaxRecordTextBytes*stewardv1alpha1.MaxProposalOps + maxEnvelopeOverhead
 }
 
 // ParseProposal extracts and strictly validates one untrusted model proposal.
 func ParseProposal(text string, mode ParseMode) (stewardv1alpha1.Proposal, error) {
-	if len(text) > stewardv1alpha1.MaxRecordTextBytes+maxEnvelopeOverhead {
+	if len(text) > maxEnvelopeBytes() {
 		return stewardv1alpha1.Proposal{}, fmt.Errorf("Steward output exceeds local parse limit")
 	}
 	candidate := strings.TrimSpace(text)
