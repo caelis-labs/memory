@@ -12,11 +12,14 @@ MEMORYCTL_NAME := memoryctl-$(GOOS)-$(GOARCH)$(EXECUTABLE_SUFFIX)
 SIDECAR_CHECKSUM_NAME := $(SIDECAR_NAME).sha256
 MEMORYCTL_CHECKSUM_NAME := $(MEMORYCTL_NAME).sha256
 MANIFEST_SUPPORT_FLAG ?=
+FACTS_EVAL_REPORT ?= $(CURDIR)/dist/facts-eval-report.json
+FACTS_PERF_SIZES ?= 1000,10000,100000
+FACTS_PERF_REPORT ?= $(CURDIR)/dist/facts-perf-report.json
 
 WINDOWS_REGRESSION_PACKAGES = ./internal/appliance ./appliance
 WINDOWS_REGRESSION_RUN = ^Test(SQLiteFileDSN|OpenPingsSQLiteOnNativeTempDir|SyncDirectorySucceedsOnNativeTempDir|DurableRestartAndIdempotency|LabelSetPartitionSurvivesRestart|EmbeddedRuntimeRememberRecall|OwnerLockRejectsSecondProcessOwner|ManagementCredentialRotationRevokesOldBearerAcrossRestart)$$
 
-.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported cross-build check corpus-gate m5-benchmark ga-soak release-candidate standalone-preview windows-regression
+.PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported cross-build check corpus-gate m5-benchmark ga-soak release-candidate standalone-preview windows-regression facts-gate facts-perf
 
 docs-links:
 	GOWORK=off go run ./scripts/markdown_links
@@ -26,7 +29,7 @@ fmt-check:
 	if [ -n "$$unformatted" ]; then printf '%s\n' "$$unformatted"; exit 1; fi
 
 whitespace-check:
-	@if git grep --untracked -n -E '[[:blank:]]+$$' -- .; then exit 1; fi
+	@if git grep -I --untracked -n -E '[[:blank:]]+$$' -- .; then exit 1; fi
 
 test:
 	GOWORK=off go test ./...
@@ -99,7 +102,11 @@ m5-benchmark:
 ga-soak:
 	GOWORK=off go run ./scripts/ga_soak -output "$(if $(GA_SOAK_REPORT),$(GA_SOAK_REPORT),dist/ga-soak-report.json)"
 
-release-candidate: check durable race corpus-gate m5-benchmark
+release-candidate: check durable race corpus-gate facts-gate facts-consumer-gate m5-benchmark
+
+.PHONY: facts-consumer-gate
+facts-consumer-gate:
+	GOWORK=off go run ./scripts/facts_consumer_gate
 
 standalone-preview: check durable race m5-benchmark sidecar-supported
 
@@ -108,3 +115,12 @@ check: docs-links fmt-check whitespace-check test vet build
 
 corpus-gate:
 	GOWORK=off go test -count=1 -v ./internal/appliance -run '^TestReleaseMultilingualCorpusGate$$'
+
+facts-gate:
+	GOWORK=off MEMORY_FACTS_EVAL_CANDIDATES=1 MEMORY_FACTS_EVAL_REPORT="$(FACTS_EVAL_REPORT)" go test -count=1 -timeout 10m -v ./internal/appliance -run '^TestFactsLongitudinalEvaluationGate$$'
+	GOWORK=off go run ./scripts/facts_eval -fixtures internal/appliance/testdata/facts_eval -report "$(FACTS_EVAL_REPORT)"
+
+# Opt-in and expensive. Narrow the sizes for a quick run, for example
+# FACTS_PERF_SIZES=1000 make facts-perf. No model is invoked.
+facts-perf:
+	GOWORK=off MEMORY_FACTS_PERF=1 MEMORY_FACTS_PERF_SIZES="$(FACTS_PERF_SIZES)" MEMORY_FACTS_PERF_REPORT="$(FACTS_PERF_REPORT)" go test -count=1 -timeout 60m -v ./internal/appliance -run '^TestFactsPerformanceHarness$$'

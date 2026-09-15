@@ -10,10 +10,11 @@ recall(query)
 
 The package owns identity continuity, Spaces, Views, durable receipts,
 authorization, retrieval, and every derived-memory mutation. The current
-package baseline is a durable model-free lexical path plus an optional
-provider-neutral Steward path. Classification, consolidation, lifecycle, and
-forgetting are product directions, not claims that the first release already
-implements them.
+v0.6.0 candidate adds trusted evidence, explicit long-term fact lifecycle,
+current/historical reads and bounded background, plus governed transitive
+forgetting. The durable model-free lexical path and optional provider-neutral
+Steward remain. Independent trajectory review, production model qualification and native platform
+CI have separate evidence; this worktree is not a GA release.
 
 Caelis imports Memory and runs it as part of the Caelis Host. There is no
 separate Memory download, installation, process, endpoint, readiness state, or
@@ -53,7 +54,22 @@ or lifecycle.
 - a provider-neutral Steward `ModelGenerator` boundary plus Memory-owned prompt
   rendering and strict proposal parsing;
 - static receipt/lexical Recall that consumes zero model tokens when no Steward
-  model is bound.
+  model is bound;
+- `appliance.Runtime.Facts()` for current facts, explicit historical adoption,
+  deterministic bounded background and generation-bound change cursors;
+- trusted `Runtime.Evidence()` ingestion with source identity, policy, suppression
+  and atomic structured confirmation/change/exception/correction/denial;
+- public owner governance with durable forgetting barriers, transitive history
+  cleansing, cleanup status and restart recovery;
+- atomic bounded Steward proposals, relevant subject/key + lexical context, and
+  validation of the complete persisted context read set.
+
+The new [facts contract](docs/memory-v0.6-facts.md) does **not** silently turn
+legacy `recall(query)` evidence hits into current user preferences. Existing
+Receipts and unknown legacy metadata survive an explicit schema 1 → 2
+[migration](docs/memory-v0.6-migration.md). See the
+[v0.6 candidate checklist](docs/memory-v0.6-release.md) for measured evidence and
+remaining GA gates.
 
 Adaptive local lexicon learning is retained only as an internal experiment.
 The public embedded runtime does not enable it, learn terms, consult learned
@@ -70,7 +86,7 @@ not presented as a complete cognitive-memory system. It does not include a
 global Session-corpus importer, time-aware ranking policy, or automatic task
 briefing.
 
-Post-GA work separates two new layers. A source-neutral Corpus ledger accepts
+Beyond v0.6's flat fact lifecycle, future work separates two new layers. A source-neutral Corpus ledger accepts
 immutable Leaf revisions and ordered Items from arbitrary downstream producers.
 Memory never reads, parses, sanitizes, checkpoints, or otherwise understands a
 producer's source. A concrete Session JSONL may be projected to one Leaf by a
@@ -127,6 +143,9 @@ Run the package gates with:
 make check
 make race
 make durable
+make corpus-gate
+make facts-gate
+GOWORK=off go run ./scripts/facts_consumer_gate
 ```
 
 The repository gates set `GOWORK=off` so the module remains independently

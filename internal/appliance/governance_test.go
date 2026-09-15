@@ -26,7 +26,7 @@ func TestFreshSchemaUsesOneCurrentBaseline(t *testing.T) {
 		`SELECT COUNT(*), MAX(version) FROM schema_migrations`).Scan(&count, &version); err != nil {
 		t.Fatal(err)
 	}
-	if count != 1 || version != CurrentSchemaVersion {
+	if count != 2 || version != CurrentSchemaVersion {
 		t.Fatalf("schema ledger = count:%d version:%d", count, version)
 	}
 	var baseline string
@@ -34,13 +34,14 @@ func TestFreshSchemaUsesOneCurrentBaseline(t *testing.T) {
 		`SELECT value FROM metadata WHERE key = 'schema_baseline'`).Scan(&baseline); err != nil {
 		t.Fatal(err)
 	}
-	if baseline != schemaBaselineID {
-		t.Fatalf("schema baseline = %q, want %q", baseline, schemaBaselineID)
+	if baseline != factsSchemaBaselineID {
+		t.Fatalf("schema baseline = %q, want %q", baseline, factsSchemaBaselineID)
 	}
 	for _, table := range []string{
 		"receipt_tombstones", "receipt_corrections", "management_effects",
 		"steward_profiles", "steward_jobs", "semantic_records", "semantic_revisions",
 		"semantic_evidence", "space_lexicons", "lexicon_terms",
+		forgettingBarrierTable, "forgetting_barrier_records", "governance_legacy_revisions",
 	} {
 		var exists bool
 		if err := store.db.QueryRowContext(t.Context(),
@@ -106,42 +107,143 @@ func TestHistoricalUnreleasedSchemaRequiresDevelopmentDatabaseRebuild(t *testing
 	}
 }
 
+// TestFinalPrereleaseBaselinePromotesWithoutDataLoss builds a genuine v0.5.0
+// generation, then proves the upgrade preserves accepted evidence, applies the
+// governance migration, and still forgets legacy derived history.
 func TestFinalPrereleaseBaselinePromotesWithoutDataLoss(t *testing.T) {
 	dataDir := t.TempDir()
-	store, auth := newGoldenStore(t, dataDir, time.Now)
-	receipt, err := store.Remember(t.Context(), auth, v1alpha1.RememberRequest{
-		Text: "the GA schema promotion preserves accepted evidence", IdempotencyKey: "ga-schema-promotion",
-	})
+	database, err := sql.Open("sqlite", filepath.Join(dataDir, DatabaseFilename))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.db.ExecContext(t.Context(),
-		`UPDATE metadata SET value = ? WHERE key = 'schema_baseline'`, preGASchemaBaselineID); err != nil {
+	if _, err := database.ExecContext(t.Context(), `PRAGMA foreign_keys = ON`); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Close(); err != nil {
+	now := formatTime(time.Now())
+	tx, err := database.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range baselineSchema {
+		if _, err := tx.ExecContext(t.Context(), statement); err != nil {
+			_ = tx.Rollback()
+			t.Fatal(err)
+		}
+	}
+	// initializeSchema creates the ledger before the baseline schema; the legacy
+	// fixture reproduces that exact starting state.
+	if _, err := tx.ExecContext(t.Context(), `CREATE TABLE schema_migrations (
+		version INTEGER PRIMARY KEY,
+		applied_at TEXT NOT NULL
+	) STRICT`); err != nil {
+		_ = tx.Rollback()
+		t.Fatal(err)
+	}
+	statements := []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO schema_migrations(version, applied_at) VALUES (1, ?)`, []any{now}},
+		{`INSERT INTO realms(id, created_at) VALUES ('realm-legacy', ?)`, []any{now}},
+		{`INSERT INTO spaces(id, realm_id, class, created_at) VALUES ('space-legacy', 'realm-legacy', 'shared', ?)`, []any{now}},
+		{`INSERT INTO receipts(receipt_id, space_id, text, source_context, received_at, idempotency_key, request_digest, consistency_token, label_set, label_set_digest)
+		  VALUES ('receipt-legacy', 'space-legacy', 'legacy source text', '{}', ?, 'legacy-key', 'legacy-digest', 'token-legacy', '[]', ?)`,
+			[]any{now, emptyLabelSetDigest}},
+		{`INSERT INTO receipt_processing(receipt_id, state) VALUES ('receipt-legacy', 'organized')`, nil},
+		{`INSERT INTO steward_profiles(profile_id, version, system_prompt, max_context_records, max_input_bytes, max_output_bytes, created_at)
+		  VALUES ('profile-legacy', 1, 'legacy organizer', 8, 65536, 16384, ?)`, []any{now}},
+		{`INSERT INTO steward_jobs(job_id, receipt_id, space_id, profile_id, profile_version, state, available_at, created_at, updated_at, label_set, label_set_digest)
+		  VALUES ('job-legacy', 'receipt-legacy', 'space-legacy', 'profile-legacy', 1, 'completed', ?, ?, ?, '[]', ?)`,
+			[]any{now, now, now, emptyLabelSetDigest}},
+		{`INSERT INTO semantic_records(record_id, space_id, kind, status, current_revision, created_at, updated_at, label_set, label_set_digest)
+		  VALUES ('record-legacy', 'space-legacy', 'claim', 'active', 1, ?, ?, '[]', ?)`, []any{now, now, emptyLabelSetDigest}},
+		{`INSERT INTO semantic_revisions(record_id, revision, space_id, kind, text, operation, job_id, created_at)
+		  VALUES ('record-legacy', 1, 'space-legacy', 'claim', 'legacy derived paraphrase', 'ADD', 'job-legacy', ?)`, []any{now}},
+		{`INSERT INTO semantic_evidence(record_id, revision, ordinal, receipt_id, space_id)
+		  VALUES ('record-legacy', 1, 0, 'receipt-legacy', 'space-legacy')`, nil},
+		{`INSERT INTO space_indexes(space_id, table_name) VALUES ('space-legacy', ?)`, []any{spaceIndexTable("space-legacy")}},
+		{`INSERT INTO semantic_space_indexes(space_id, table_name) VALUES ('space-legacy', ?)`, []any{semanticSpaceIndexTable("space-legacy")}},
+		{`INSERT INTO space_lexicons(space_id, algorithm_version, updated_at) VALUES ('space-legacy', ?, ?)`, []any{lexiconAlgorithmVersion, now}},
+	}
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(t.Context(), statement.query, statement.args...); err != nil {
+			_ = tx.Rollback()
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := createReceiptFTSTable(t.Context(), database, spaceIndexTable("space-legacy")); err != nil {
+		t.Fatal(err)
+	}
+	if err := createSemanticFTSTable(t.Context(), database, semanticSpaceIndexTable("space-legacy")); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Close(); err != nil {
 		t.Fatal(err)
 	}
 
-	store, err = Open(t.Context(), Options{DataDir: dataDir})
+	store, err := Open(t.Context(), Options{DataDir: dataDir})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer store.Close()
-
+	var version int
+	if err := store.db.QueryRowContext(t.Context(),
+		`SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != CurrentSchemaVersion {
+		t.Fatalf("promoted schema version = %d, want %d", version, CurrentSchemaVersion)
+	}
 	var baseline string
 	if err := store.db.QueryRowContext(t.Context(),
 		`SELECT value FROM metadata WHERE key = 'schema_baseline'`).Scan(&baseline); err != nil {
 		t.Fatal(err)
 	}
-	if baseline != schemaBaselineID {
-		t.Fatalf("promoted schema baseline = %q, want %q", baseline, schemaBaselineID)
+	if baseline != factsSchemaBaselineID {
+		t.Fatalf("promoted schema baseline = %q, want %q", baseline, factsSchemaBaselineID)
 	}
-	response, err := store.Recall(t.Context(), auth, testRecall("schema promotion", receipt.ConsistencyToken))
+	if text := governanceText(t, store, `SELECT text FROM receipts WHERE receipt_id = 'receipt-legacy'`); text != "legacy source text" {
+		t.Fatalf("promoted receipt text = %q", text)
+	}
+	if revision := governanceText(t, store, `SELECT text FROM semantic_revisions WHERE record_id = 'record-legacy'`); revision != "legacy derived paraphrase" {
+		t.Fatalf("promoted Revision text = %q", revision)
+	}
+	if factJSON := governanceText(t, store, `SELECT fact_json FROM semantic_revisions WHERE record_id = 'record-legacy'`); factJSON != "" {
+		t.Fatalf("promoted Revision fact_json = %q", factJSON)
+	}
+	if legacy := governanceCount(t, store,
+		`SELECT COUNT(*) FROM governance_legacy_revisions WHERE record_id = 'record-legacy' AND revision = 1`); legacy != 1 {
+		t.Fatalf("legacy revision attribution rows = %d, want 1", legacy)
+	}
+	if _, err := store.db.ExecContext(t.Context(),
+		`UPDATE semantic_revisions SET text = 'rewritten' WHERE record_id = 'record-legacy'`); err == nil ||
+		!strings.Contains(err.Error(), "immutable") {
+		t.Fatalf("promoted Revision update error = %v, want immutable", err)
+	}
+
+	response, err := store.DeleteReceipt(t.Context(), managementv1alpha1.DeleteReceiptRequest{
+		ReceiptID: "receipt-legacy", Reason: "approved erasure", IdempotencyKey: "delete-legacy-upgrade",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertHasText(t, response, "the GA schema promotion preserves accepted evidence")
+	if response.Cleanup != managementv1alpha1.CleanupStateCompleted || response.InvalidationVersion == 0 {
+		t.Fatalf("legacy deletion response = %+v", response)
+	}
+	if revision := governanceText(t, store, `SELECT text FROM semantic_revisions WHERE record_id = 'record-legacy'`); revision != "" {
+		t.Fatalf("legacy derived Revision survived forgetting: %q", revision)
+	}
+	if evidence := governanceCount(t, store,
+		`SELECT COUNT(*) FROM semantic_evidence WHERE record_id = 'record-legacy' AND receipt_id = 'receipt-legacy'`); evidence != 1 {
+		t.Fatalf("legacy Evidence attribution = %d, want 1", evidence)
+	}
+	if changes := governanceCount(t, store,
+		`SELECT COUNT(*) FROM memory_changes WHERE receipt_id = 'receipt-legacy'`); changes == 0 {
+		t.Fatal("upgraded generation recorded no owner change")
+	}
 }
 
 func TestSchemaBaselineFailureRollsBackAllDomainTables(t *testing.T) {

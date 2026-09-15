@@ -1,0 +1,895 @@
+{
+  "base_revision": "51693ff135be8c4149c15117980290aaad6d90da",
+  "version": "0.6.0",
+  "scope": "all tracked and untracked non-ignored files except docs/** and README.md",
+  "hash_method": "SHA-256 of UTF-8 JSON of files, sorted path list; object keys sorted; compact separators comma and colon; no trailing newline",
+  "source_sha256": "bbfaeeeafd99d06770c5d05bfc38902c8589bae7cceb2d1074ab61c811baba77",
+  "files": [
+    {
+      "path": ".github/workflows/quality.yml",
+      "sha256": "5f98b628a1ff9df64baa6e7d2753c73491329c1cdf693401653f6dd7a411c34d",
+      "executable": false
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "f3320625e48a53020ed8c11483d7f9e706091826aa24882e640b234295139b27",
+      "executable": false
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "356f3cbec23788bac0c8b30b7e243a63e4daf4fe526c8c8f909d775aeceded35",
+      "executable": false
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "executable": false
+    },
+    {
+      "path": "Makefile",
+      "sha256": "c23163bcc0e334cc2f533027c86c43acb97bb1ed550354f3221b5e100c91b40b",
+      "executable": false
+    },
+    {
+      "path": "VERSION",
+      "sha256": "97a5d6e540a6120d09c39ddb667e0e8e2bac7fcc2ffef813b82e08fd60365bce",
+      "executable": false
+    },
+    {
+      "path": "api/memory/facts/v1alpha1/types.go",
+      "sha256": "1f68b3e34491aa05bf306c72b7e8ff4722729c355558d488578d51f0bff0c339",
+      "executable": false
+    },
+    {
+      "path": "api/memory/facts/v1alpha1/types_test.go",
+      "sha256": "cabdef8006cf597b47be668fb6c8c1f0d8712ca1b6e8fd34976b2e54f70fbe48",
+      "executable": false
+    },
+    {
+      "path": "api/memory/facts/v1alpha1/validate.go",
+      "sha256": "c56cba637a402c39591d560cfdbd6fc2d998dd6b2c780f2095ee5ad72dfb3358",
+      "executable": false
+    },
+    {
+      "path": "api/memory/management/v1alpha1/contract_test.go",
+      "sha256": "4bd94bf48bf7b23008a7feeb3bc2e27fa864c594df67329c82531d594081db3b",
+      "executable": false
+    },
+    {
+      "path": "api/memory/management/v1alpha1/diagnostics.go",
+      "sha256": "274eaf29b2fa2a7e348600604209f1386a9eae58b8d24a09102cf237a250a16b",
+      "executable": false
+    },
+    {
+      "path": "api/memory/management/v1alpha1/export.go",
+      "sha256": "9a73700abcd42bdeb4c7e7f1e41f8e23977f845bb94e7dd5a26f55631b747ed9",
+      "executable": false
+    },
+    {
+      "path": "api/memory/management/v1alpha1/local_transport.go",
+      "sha256": "46893d6f9b3d6b367ca0bc13eed34749e36f2b484ec25b2028344fbe8aa59954",
+      "executable": false
+    },
+    {
+      "path": "api/memory/management/v1alpha1/records.go",
+      "sha256": "e3258b7d1814f57ef8bee6e27fa8b8b21ce8b32862da2bfd43ad5c9378b59ebf",
+      "executable": false
+    },
+    {
+      "path": "api/memory/management/v1alpha1/records_contract_test.go",
+      "sha256": "8402b389f04ec11ca0c19bd1626667cd587bf30074547641bae03018674996d3",
+      "executable": false
+    },
+    {
+      "path": "api/memory/management/v1alpha1/steward.go",
+      "sha256": "f61a6294969d4e770475f639117c63e3716ba8fe80c999dca8e6cb1638ba8c3f",
+      "executable": false
+    },
+    {
+      "path": "api/memory/management/v1alpha1/types.go",
+      "sha256": "c11714302f8e824757963c7bdd53228d89724414caf8b5577281c27c313b7982",
+      "executable": false
+    },
+    {
+      "path": "api/memory/management/v1alpha1/validate.go",
+      "sha256": "53de568e62146df52fe05c4a147594c1694184efacc4ed48b97186081d552473",
+      "executable": false
+    },
+    {
+      "path": "api/memory/management/v1alpha1/validate_test.go",
+      "sha256": "6e23e83efd0826218bf075a17e3a5a0857c94b0c00c793e7150ea15a9ba5c4ca",
+      "executable": false
+    },
+    {
+      "path": "api/memory/steward/v1alpha1/local_transport.go",
+      "sha256": "124d50d0e0b9888a5045a9c9bd0c662bfc2872b7536c30e1a5898404ecce9a2b",
+      "executable": false
+    },
+    {
+      "path": "api/memory/steward/v1alpha1/types.go",
+      "sha256": "252c937c68ecf59f5eb0d0803d951d750d601a458b9ed1be8395cd7b52ced7c2",
+      "executable": false
+    },
+    {
+      "path": "api/memory/steward/v1alpha1/types_test.go",
+      "sha256": "5edf0427f14b9ce494e87b564876eac94e80b000f17bd4fe08b4928c83f2ad7f",
+      "executable": false
+    },
+    {
+      "path": "api/memory/v1alpha1/compatibility.go",
+      "sha256": "d44c71c94ffe75ff9fa1cba33b24e9030c99b09b06b137cc56b06904983c070d",
+      "executable": false
+    },
+    {
+      "path": "api/memory/v1alpha1/compatibility_test.go",
+      "sha256": "72b53cd5411dd50ff28b4d6789f2c41641c888e38b8a415be76c2c096758ec6b",
+      "executable": false
+    },
+    {
+      "path": "api/memory/v1alpha1/doc.go",
+      "sha256": "b5996d87aa2c6caa1b46a0270b00629d673ed5d63fb89c22d4bcf9ef82c86342",
+      "executable": false
+    },
+    {
+      "path": "api/memory/v1alpha1/endpoint_default_unix.go",
+      "sha256": "e6b8217034410d580113b5500cf44aa2c5d756241adcd2dd3d3b4e8986e2ff5c",
+      "executable": false
+    },
+    {
+      "path": "api/memory/v1alpha1/endpoint_default_windows.go",
+      "sha256": "264d0a3d3f33f5e9bb62508e1ab440583ab6252259e641c371bee7356f27303b",
+      "executable": false
+    },
+    {
+      "path": "api/memory/v1alpha1/labels.go",
+      "sha256": "f4b84df2d95643c383c7b958ece78b53b5f63130a3082e5508efb95bf3f846bd",
+      "executable": false
+    },
+    {
+      "path": "api/memory/v1alpha1/labels_test.go",
+      "sha256": "12c228148102938d1e052e4becf1288b64b7412123290947155a5863b3cb4381",
+      "executable": false
+    },
+    {
+      "path": "api/memory/v1alpha1/local_transport.go",
+      "sha256": "7a7af731674a66800479049703baf9432b0faa4c073551ff99ad41e5e7417e4b",
+      "executable": false
+    },
+    {
+      "path": "api/memory/v1alpha1/local_transport_test.go",
+      "sha256": "3e925dff304b8b4051ca07b16ae3ada4dc6944df68c44d690bd2ecb066c61189",
+      "executable": false
+    },
+    {
+      "path": "api/memory/v1alpha1/service.go",
+      "sha256": "01bcc46d0761dbac0473cd5c6abfbd7025843d0346a8b7bb2edcf3237c40728b",
+      "executable": false
+    },
+    {
+      "path": "api/memory/v1alpha1/types.go",
+      "sha256": "e9586c209d15f74a8b98e14c3ed69dbd06433cce31368b51ec73525684056e56",
+      "executable": false
+    },
+    {
+      "path": "api/memory/v1alpha1/validate.go",
+      "sha256": "cca91abe2a1b21f77da5aaade5e559d3f3793d00687f28a040596639db61d457",
+      "executable": false
+    },
+    {
+      "path": "api/memory/v1alpha1/validate_test.go",
+      "sha256": "07604e500cfde706fc688d91ef8f217a5a16e59d9137260751183d50e1b20528",
+      "executable": false
+    },
+    {
+      "path": "appliance/backup_public_test.go",
+      "sha256": "4049d7cc406214fb154a17d56dafbe3e3a768a0b7a59bb758f766ab7e658bf23",
+      "executable": false
+    },
+    {
+      "path": "appliance/facts.go",
+      "sha256": "3a53994b7b2dea6130c1b86218b005501c7237fb838fd74f7a650948df85c2a7",
+      "executable": false
+    },
+    {
+      "path": "appliance/planes.go",
+      "sha256": "41bc113b1480a4a55ed3630f11082e0acc37d17f789b738488c67a37c5076e6d",
+      "executable": false
+    },
+    {
+      "path": "appliance/planes_public_test.go",
+      "sha256": "f69c2d35f5dd8bfad67ef29758ec3f237dd58154005e831e81beea83a4728cf4",
+      "executable": false
+    },
+    {
+      "path": "appliance/restore.go",
+      "sha256": "9338428a9e702d6d0303374321b42b266149f31e288db82254059380588c70b3",
+      "executable": false
+    },
+    {
+      "path": "appliance/restore_public_test.go",
+      "sha256": "694562895e348bc70852fd096c8c0b5dd8f9b7fc5192e4a1e5d1c87ba8b9f89d",
+      "executable": false
+    },
+    {
+      "path": "appliance/runtime.go",
+      "sha256": "d299d6446c2dd64f1013575cf9ee709b272017cdc42e128dbe8912b0f80a80fa",
+      "executable": false
+    },
+    {
+      "path": "appliance/runtime_test.go",
+      "sha256": "10cf9980256bad43e3236952ccb1c640fce7c6d85ed5f66f02b07474ce66d973",
+      "executable": false
+    },
+    {
+      "path": "cmd/memoryctl/main.go",
+      "sha256": "95b4c9c31b5fa6106a0538c11d6221f7016219519f64e85452370bff516dd5d0",
+      "executable": false
+    },
+    {
+      "path": "cmd/memoryctl/main_test.go",
+      "sha256": "47e1e10f6dfe8872a7b7034b07d1e2d4ab9b41ad6339ba86743178f0b6b6dbc8",
+      "executable": false
+    },
+    {
+      "path": "cmd/memoryd/main.go",
+      "sha256": "a77c283513e6a74ef6f4a0743335f94f0ea5fe77af9697451814add319402935",
+      "executable": false
+    },
+    {
+      "path": "cmd/memorymanifest/main.go",
+      "sha256": "a763de5080a99a6e2ad7f0de6bbfb380a92aba071f0e9e8446f6c406577c0a80",
+      "executable": false
+    },
+    {
+      "path": "conformance/durable.go",
+      "sha256": "c5654a70b549113bee912cb8dd071a4a2039b54ce1d95d4c623270476fc04022",
+      "executable": false
+    },
+    {
+      "path": "conformance/suite.go",
+      "sha256": "5837ff85c151fd17017fe522d72ac093454793f7c7bb493342fba255e6ccd711",
+      "executable": false
+    },
+    {
+      "path": "go.mod",
+      "sha256": "c7eed2f80994c69d1040c5044017471160b0a2613ca48b587bf3e77cb11ae848",
+      "executable": false
+    },
+    {
+      "path": "go.sum",
+      "sha256": "8704758e9058b09dd744a72c869868a7449cfae03bec09fcd3ea5a432a973016",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/backup_restore_test.go",
+      "sha256": "d7f2cc5fcfd400be8677fdbb8bd7fd1c84cd2e223109856dd43409b88d0f8102",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/config.go",
+      "sha256": "538d3b8f8f06a203eea128292feada8f73c42a357514c2ae74cf371d4b458fa9",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/dataplane.go",
+      "sha256": "860c2ec3b775e36c7b3d36fd3f322a69b7e348f20c4cd3cd1a69c64e22ad7477",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/diagnostics_test.go",
+      "sha256": "c1fe02c6fcfbd0efd8899ba2a5d88fa3cdac2ad24eaea135a4e003111ca6b372",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/export_backup.go",
+      "sha256": "596a1fd176a65ffc18e1d714830ff977ebe7e2c2402a65aa3912099d10e2e40a",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_changes.go",
+      "sha256": "ac153bc5be06d8b6adb2e37a3c296f97c91d65f3c0e801796cfe77cbe7745640",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_concurrency_test.go",
+      "sha256": "d2655fa8edb54c50b78ce4e061e2200d64df6fdba8584d7c9988d9e704d8dd41",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_eval_candidates_test.go",
+      "sha256": "0a44b05b474b6526e4d9a84477ce8203cd704031e894690b2b35fe22c6827e14",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_evaluation_test.go",
+      "sha256": "fa8db9656318098a14340c99b41397b7086ad86a57cf964c9e2977f9ef997c4e",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_exception_budget_test.go",
+      "sha256": "7e84f8c0fb870c6de479684e4e3382746e1e340ba8baf8427e6913b9b5ed5adf",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_history_test.go",
+      "sha256": "3f259da02550fa4d37fd2e815934696bfbc8e096e8cb958fc85f1ab72dd2c2f7",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_ingest.go",
+      "sha256": "0568a53e81964078871784f781ef9efe1969d6b07f07ee83a12c00bc535a8ebd",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_lifecycle.go",
+      "sha256": "cf06f37a5081f87a97ce5e4f029937c61bf81b90d36644b2a9c1b03ebe3f921e",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_migration_test.go",
+      "sha256": "fe11ea1d972addbe2bb1a6898b0d895fbffacc1a31cc61384ad301432c6c280f",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_perf_rss_unix_test.go",
+      "sha256": "f78f6d81f1fbfb15a0735e435525c75592f218b4fa806210da87dea8e774df6d",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_perf_rss_windows_test.go",
+      "sha256": "8ddc44a5c6c5012e46b619777661b2f5b15f61f470489a2a4721e6c5ba7fa250",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_performance_test.go",
+      "sha256": "34ed08f9613c8ea26cc443fca40a8a338983251c96d69826335b734a521576fb",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_read.go",
+      "sha256": "acac7aad5eedbbf8080eb59993ca658af4c3b0b68a5383e68c77273c98f3ae5e",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_regression_test.go",
+      "sha256": "4ca63ce1cc37e5e07e113a78c4bb47418ee26ccf7f91f42b78b057e3d28a9801",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_schema.go",
+      "sha256": "e4ab273861112e3a76f22d407997821d9cab80063f39dcf397b952ca37aa1d81",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/facts_test.go",
+      "sha256": "94494b238d493db00bcc483fdd44669b00c1f3da5e5f89f817e1e4dccc3fae41",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/governance.go",
+      "sha256": "f58846acfe00f76a3bf4bcd41d8a47522fb1d85fb57861938a2c32ab23c47c14",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/governance_cleanup.go",
+      "sha256": "924357e61fd98062340409154ddea1fd6980452f08d03859f72ea909a0efd9af",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/governance_cleanup_test.go",
+      "sha256": "724a4519630f53d4784e6e8522a7ab2409d60633036df986d8528fe4b2d967bf",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/governance_test.go",
+      "sha256": "ba206acb3775d103013e38a8c34fc2f121da7a739b2a46fc7acb99c64a7fe679",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/inspect.go",
+      "sha256": "d0e02e2b2f607bb71c2ccafeabf95e4340c6ff8f129ed00ccfd58eee4278159f",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/labelset.go",
+      "sha256": "c90f7657bffea00445c0b2a2220ff361d006d52ed0f8d00c7a2fb434d38e2a19",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/lexical.go",
+      "sha256": "d4d4c3101f2290e6b41e978fa3ddc47fa8e5bb69cd21df80c335c964b4d381d2",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/lexical_recall_test.go",
+      "sha256": "cd9bfc876776068b0f7276f5f1bf6c7ba2e91e7d3d5c08a11a26870eab4d668c",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/lexical_schema.go",
+      "sha256": "acad85bfdd631d19bb75ad2f409785aa9e627369beea962edff3de870e76a739",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/lexical_test.go",
+      "sha256": "a79a88a18c464ed6dd615657c63c05378046f0baee6624996947709005f7c60b",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/lexicon.go",
+      "sha256": "1971512af8f00de26b0f3e20da9cde926591c80eb387dfc411d924ba73af2b8b",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/lexicon_learning_test.go",
+      "sha256": "6445041751583f8a2f35857e152a085bf9cb4147679f115f9e76855522008cc0",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/lock.go",
+      "sha256": "d818eaabbaad20b853b559d5cb131d9e2cc56728c98f583432c169abaf99dd99",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/lock_platform.go",
+      "sha256": "381b0e7d2a301c331f9775ae5dee41f31c8c71c8ee76339f61ef96d586207933",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/lock_unix.go",
+      "sha256": "724a0d49824d4c704410be4cf4916f4cab89caa77a3f2fbc5119f149a98914e0",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/lock_windows.go",
+      "sha256": "d2b84a7951934cb3995e9144ba3a44ee8eb3f410cb78d24d9239ec0eeebd6252",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/management_credential.go",
+      "sha256": "f5dd1f73279e7b0c001d5bb30b28b757dd337aa6b2912043e5ec3469fbdc3747",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/management_credential_test.go",
+      "sha256": "eecbcbbef1354bab355815bd5add6dcf3964c9664bfa7459cde30639e71172fe",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/path_security_unix.go",
+      "sha256": "83908f556e121c155032e2c3af0c4b33fe8eb0afba4ac0b5248b1e1f29d9c3fb",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/path_security_windows.go",
+      "sha256": "97f939d6b4cc47c2f727d4b86c908c34c7a46cf37305af72cd4fcfc43fc51c33",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/performance_test.go",
+      "sha256": "559094ce35b48d5fa19c680dab6178cf7b4b803a9d8e5f86b78abb0b13c4db7b",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/realistic_corpus_test.go",
+      "sha256": "6b23052bdc80dd02b8a3f34c74cdd3ff327a6d47d98219d84140a0aae228ac88",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/release_corpus_test.go",
+      "sha256": "1a860f69adf3cb7ca4edf6facce26e7c4022275d93b1f4c33c996ff1ad9b2393",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/restore.go",
+      "sha256": "c76d33bbc4717b7c5f86569adf51ed91fc41d97efe8ec1ae6b4b896057acca1b",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/schema_baseline.go",
+      "sha256": "c3d9136e461f6b35927806e00375190596e6f5f46e4f6f2f31ef9ff5061faa7e",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/semantic_recall.go",
+      "sha256": "c97478f1414a8427f658ca45a2baaacc8c250e9345dfd4913fb86c0be8571198",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/semantic_recall_test.go",
+      "sha256": "af761cd8ff0ecb5e2eecb4ce95be4d8964c22176764f101946d9811d57ea4bea",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/semantic_schema.go",
+      "sha256": "de7f006e0970b1727129347200e9aff42e1733678eb1da9dfc27f7bd6649a5d3",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/steward.go",
+      "sha256": "5e874845214cb8b717dfe31fa56cd71dc9e111f38226d1672929f40dcef2c455",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/steward_context.go",
+      "sha256": "3eb2ae443f7782f5287903d97a0e87c999050df9762f738269aa987df350fe15",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/steward_jobs.go",
+      "sha256": "e18d3f7099efb73b7cbd5bc5aa676a7d9e1aba08d77118486d88e557132df951",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/steward_jobs_test.go",
+      "sha256": "1fbcc4be6af54bb4a8a385e57c354b3620df75955ffa1415cb500a911288064b",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/steward_m02_test.go",
+      "sha256": "1c1ce88f32f29ef5fa1fb87520f43203981bf2d3319a43317cfc9deb878af3b0",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/steward_migration.go",
+      "sha256": "f368a7bdc594fe151d6e7250448d010cab4a8fc6567ec147bac21d7aca8bc097",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/steward_profile.go",
+      "sha256": "a8a22664a8d5ca87dfc97adee4f07511b13271920421986951568b7dde923272",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/steward_schedule.go",
+      "sha256": "781e085d2975c81ae7ec3f8f825a6eae897f308b3af48d959a4255e088502efd",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/steward_schedule_test.go",
+      "sha256": "b55db82ea7360e15fab7dc5a93abdd7caaeb580d1878eb8f8b12cca4dabf13f1",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/steward_test.go",
+      "sha256": "16da184a36bab90841a2c287aaec4772774edcecf61a2a0ea420cc263ff9562d",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/storage_capacity_unix.go",
+      "sha256": "9669456ef7e9da75b0c8977fc9b9b736c55e16a83f393a442487cf123c39542c",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/storage_capacity_windows.go",
+      "sha256": "3d743f104683cebea52d26e5d4d049096d13ad9fe6be9690e3c8b11c77b6284e",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/store.go",
+      "sha256": "cb48aaa68a212302800d0a49f630550e6cb94c6a49dea74562e65af91883dfc3",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/store_test.go",
+      "sha256": "a19f433dfdf3bd60affd4ddce17ffc03685a3b759b9e972aed3019d895de575c",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/facts_eval/README.md",
+      "sha256": "1782b9daba2da504c4488d01a6aebc0c5afd58d904e74eecd432babad8e4e273",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/facts_eval/candidates.json",
+      "sha256": "c6c7649fefdca6bc917d5528ed7a28624413fb8360e72a649f7564ee08959715",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/facts_eval/manifest.json",
+      "sha256": "0fff2f854a1cc8c50f34030236007df750c84577b9d3b21da54e6ead28b66e58",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/facts_eval/trajectories.json",
+      "sha256": "d5f2c3e811aaa726f1b6b49113d41bcaeb53cf2e589da8556cd4755696d3dff4",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/release_corpus/README.md",
+      "sha256": "9c29e2f84841faeb9e2d7d27f6b1ea07513a6692b5e6e1c40e8b46981fd065a4",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/release_corpus/en.json",
+      "sha256": "e07da7b0017eb73b8cd36cdd4c2c9de71ae361564a3083c05a9d8e4f2f074b16",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/release_corpus/manifest.json",
+      "sha256": "39d6d7ae4281fd629c863e884d82955ba44e21e995fa5036b7b79a65f411ade6",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/release_corpus/other.json",
+      "sha256": "f13791d8546f056b1e10711fd7babac75ec58de5f7e47e90d6ba1fe33ab595f9",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/release_corpus/zh.json",
+      "sha256": "52c0b5778ab4863c5f7275757f261e45d4d95dfa6f5b724c3644d62b542a77b5",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/v0.5.2/generate_test.go.txt",
+      "sha256": "9762b5e6716cdac1c823ee9fa8126ed941dfc9d5df7af46cd0c69932ecf19864",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/v0.5.2/management.token.txt",
+      "sha256": "1eff21d9026b27bd8e4be9292c4eb25923174ad29a162a1fae326d44b10d12dc",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/v0.5.2/manifest.json",
+      "sha256": "f218cf7472cbc6945a82eb8ec6ad305ab192b6c8b38bf77143a7d66718131dd9",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/v0.5.2/memory.db",
+      "sha256": "68e02a7031d05e7baa3d5271019911728c42a9ef3fbcba4658bf44500e9f7708",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/testdata/v0.5.2/steward-worker.token.txt",
+      "sha256": "1eff21d9026b27bd8e4be9292c4eb25923174ad29a162a1fae326d44b10d12dc",
+      "executable": false
+    },
+    {
+      "path": "internal/appliance/types.go",
+      "sha256": "6267775a22e02c1372d67609f87e37d434494a577a164e8d23358d41c791bb00",
+      "executable": false
+    },
+    {
+      "path": "internal/backupfile/format.go",
+      "sha256": "17dbf3c7fe1e503d0bd499610164f6e1e7c5bf993f3574f3dbbf8d8d00cdc4e6",
+      "executable": false
+    },
+    {
+      "path": "internal/backupfile/format_test.go",
+      "sha256": "e1f5bb373c10cc7f3f8e1f130f2e51d474229cb58bb5ac7747e76c7e690fa5de",
+      "executable": false
+    },
+    {
+      "path": "internal/buildinfo/info.go",
+      "sha256": "74eff14e01bd2a74e08db1e066524f1ba3488e873b7529fab6160d65514a19ed",
+      "executable": false
+    },
+    {
+      "path": "internal/localtransport/listener_unix.go",
+      "sha256": "192607ff5c0733846e60f68586f8e09c44c4b4a94a5227d3d51a988ecfac31a8",
+      "executable": false
+    },
+    {
+      "path": "internal/localtransport/listener_windows.go",
+      "sha256": "0c80c62068563ddab02670a32bb01e2b49f4f16d3bf63cd7ab4003c94ca7f075",
+      "executable": false
+    },
+    {
+      "path": "internal/localtransport/server.go",
+      "sha256": "2bbbb51a3435e497aa8113e8620120dddc23013b998e4b46421120bb1c41bad5",
+      "executable": false
+    },
+    {
+      "path": "internal/localtransport/server_test.go",
+      "sha256": "d08000756b8aa81c83bf19d936e9e913b1fa27ad0b13afc4760b3721040cda6d",
+      "executable": false
+    },
+    {
+      "path": "internal/reference/config.go",
+      "sha256": "4a5628de07c345697755597b1b49d969751961e135d92c0970fa962bab6dfb8d",
+      "executable": false
+    },
+    {
+      "path": "internal/reference/server.go",
+      "sha256": "e1d8d37997ff9a3715111e98d8edad0a484555868c1da4cc7c519cb11bd2f0cf",
+      "executable": false
+    },
+    {
+      "path": "internal/reference/server_test.go",
+      "sha256": "39ab8712539aaa6d87c2630069452a439d06f7434c18a4d4d534bcba7b1e8d7d",
+      "executable": false
+    },
+    {
+      "path": "internal/systemtest/memoryd_test.go",
+      "sha256": "a89f0f98a7c858ad1da8e89094eaf3f6c34acf22fe46aae0f9d56617d57d620c",
+      "executable": false
+    },
+    {
+      "path": "scripts/artifact_checksum/main.go",
+      "sha256": "b9388f578260962da3f3991c4a5691ba63743b5327f8a2c9cedcf53b78f4663b",
+      "executable": false
+    },
+    {
+      "path": "scripts/artifact_checksum/main_test.go",
+      "sha256": "e39d9a7ad5b13c05beea919416b861df6b764a1bff71c2e541550c71126569b8",
+      "executable": false
+    },
+    {
+      "path": "scripts/corpus_eval/evaluate.go",
+      "sha256": "021ace07b6471dd35afd66363c9f6efba1459a50bff7c24f67056aa051aee34b",
+      "executable": false
+    },
+    {
+      "path": "scripts/corpus_eval/legacy_baseline.go",
+      "sha256": "cbdc80694fc1db6cb08d57e073a927a60f5081d7b86618640e1f54a5d23dccbf",
+      "executable": false
+    },
+    {
+      "path": "scripts/corpus_eval/lexicon_quality.go",
+      "sha256": "3d12e01856b53d5e959370a4ac5ca79bc880863cbb63b24a44c9d639bf26f0fe",
+      "executable": false
+    },
+    {
+      "path": "scripts/corpus_eval/main.go",
+      "sha256": "f93a670d1950e472b30bd2cc9ca072c9109f0ddc35fc11379d04c561122f553c",
+      "executable": false
+    },
+    {
+      "path": "scripts/corpus_eval/main_test.go",
+      "sha256": "57efc66fce211e8c1f29180360eec1c0620001bf7f8a1052e0ee16fcb771d029",
+      "executable": false
+    },
+    {
+      "path": "scripts/corpus_eval/source.go",
+      "sha256": "3760d7e695a47be4aa1cc60de570fd3db4db97fe45a3d4e069e42c852f6b0804",
+      "executable": false
+    },
+    {
+      "path": "scripts/corpus_eval/steward_eval.go",
+      "sha256": "71dfb33de6b66a2f154228f800a57cf868c86e16221c08706e50ad91e937f0c2",
+      "executable": false
+    },
+    {
+      "path": "scripts/facts_compare/main.go",
+      "sha256": "85e60affc7cf431bd16648f2855c2388b723f8e83c42648fa54bc31f83343f71",
+      "executable": false
+    },
+    {
+      "path": "scripts/facts_compare/main_test.go",
+      "sha256": "61fc5e1a296cc78664a1e51bf4b7821c088c7d7efad254512b548e88495a2be7",
+      "executable": false
+    },
+    {
+      "path": "scripts/facts_compare/templates.go",
+      "sha256": "4e7dfe7655209de5e421b82134a45417cdda7a87725143a620594c861278f12f",
+      "executable": false
+    },
+    {
+      "path": "scripts/facts_consumer_gate/main.go",
+      "sha256": "36dc9db7a7ce23b884458e984df4d92aaba1ef2764dff06378343940289c5e33",
+      "executable": false
+    },
+    {
+      "path": "scripts/facts_eval/main.go",
+      "sha256": "9fc94df5f13b57c3db824680274d872fa9a89a49db5fce7b97fbed156a63ce1b",
+      "executable": false
+    },
+    {
+      "path": "scripts/facts_eval/main_test.go",
+      "sha256": "e8a8252b125e7f3edd0594329e704e813bd2abfa9dd3066dc81f9c3fb6dd023a",
+      "executable": false
+    },
+    {
+      "path": "scripts/ga_soak/main.go",
+      "sha256": "ccdc65ca181dfee91a9edaa38bbe2f0bbe015bce02557e84e304f4bdc806b989",
+      "executable": false
+    },
+    {
+      "path": "scripts/ga_soak/soak.go",
+      "sha256": "0240088c871495b2fa12b3ca7a0a5933935d4792935121c84e08b809b40717cd",
+      "executable": false
+    },
+    {
+      "path": "scripts/ga_soak/soak_test.go",
+      "sha256": "1783d0a16a5ce8dc76d9162ca6724307d881503d2eb6f98c0881a65493eda481",
+      "executable": false
+    },
+    {
+      "path": "scripts/markdown_links/main.go",
+      "sha256": "b085e2347f6d52dccf10045db5a310ccf550be3efe1bef47950c1e573dc77e10",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/client.go",
+      "sha256": "3cf26c2fad23a29443fd69020656e4d96161f4edb844e1db6a9849c8d2a9655e",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/internal/localhttp/client.go",
+      "sha256": "9296dd64113fd35e3a21650eb6f6f60ce00cd223c06cb5123ba246c045eedd69",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/internal/localhttp/dial_unix.go",
+      "sha256": "9151fe6128b220b532b96c04fe4220698a7a34691d0760e38129a682390178c5",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/internal/localhttp/dial_windows.go",
+      "sha256": "e6ba9747019dcac5031dffd02a47aeca3910916c83e74c8f98b1ea56850da32c",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/local/client.go",
+      "sha256": "377c52625306b21fe9329b4168440fabf7beabad23141668c86a8128569adcf7",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/local/client_test.go",
+      "sha256": "c7fc617f290cf8fb7c76c8e02c188e4aaa72f5cbbdfcdb01c36a6a265c45359f",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/local/issuer.go",
+      "sha256": "c852b993956eb65e578b58aaf313c8e3021b22ea4c5904341606fff794f86c00",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/management/client.go",
+      "sha256": "742893f8c2d715e98f90204df80e4dcd9b5c2f52dd52d0fb7451dd8262fa9d49",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/projection.go",
+      "sha256": "eade2138fac1bcbcfab69a65648b73bb37a2498c447589961081c210fd480367",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/projection_test.go",
+      "sha256": "bb0672f31cc1ba3213bd40737cd4008d7e8a28ae2d2d7b9e38829f53b1286604",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/sidecar/executable_unix.go",
+      "sha256": "488aec5d7128c36fa60bf082a8d7c08fa3e9f9bc0cfd11f630deedb5e0a99cc3",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/sidecar/executable_windows.go",
+      "sha256": "95a6cc7b2bc5e20d9263eb1fa855814e4007cb84d2e7fad00c43f9dba50060a1",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/sidecar/manifest.go",
+      "sha256": "2ab2a32d171557e3093aa56e6965b2561a7ac867d03491569c1f678ddd83901e",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/sidecar/manifest_test.go",
+      "sha256": "eff1eeef94a8baaaf86833aa4d9863a846ecf1cf54fb00c32a2588e08e11df29",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/stewardworker/client.go",
+      "sha256": "4fcff8691cc2e1ecada90510752559223c828bdb7b0a281340bd008a205b19d1",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/stewardworker/client_test.go",
+      "sha256": "f332a8044117b6863100ec5a49072fcfedd68f3c4390d38906e0471ce8661cc4",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/stewardworker/policy.go",
+      "sha256": "1fc2b7cfe1da00d0642af4562705d0fe8a3a8ffa0abb7a64c8d2a1d2c06766a5",
+      "executable": false
+    },
+    {
+      "path": "sdk/go/memory/stewardworker/policy_test.go",
+      "sha256": "30208349cabe131b15588916f42361fe7a0a3596ab06e4e9d9cbf7c48196e011",
+      "executable": false
+    }
+  ],
+  "attribution": "Post-code-repair full-gate checkpoint, before the final documentation-only fixture README change. Reconstructed from the final manifest plus the unchanged before-review fixture README entry; hash equals the checkpoint recorded during execution. All compiled source, test and JSON fixture entries equal the final candidate."
+}

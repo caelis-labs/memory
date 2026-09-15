@@ -1,0 +1,96 @@
+package appliance
+
+import (
+ "errors"
+ "fmt"
+ "testing"
+ "time"
+ facts "github.com/caelis-labs/memory/api/memory/facts/v1alpha1"
+ management "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
+ memory "github.com/caelis-labs/memory/api/memory/v1alpha1"
+)
+
+func TestReviewRetryCannotReadPastForgetBarrier(t *testing.T) {
+ s,auth:=newGoldenStore(t,t.TempDir(),time.Now); defer s.Close()
+ r:=factRequest("quote","sensitive coffee preference",nil)
+ r.Source.Role=facts.RoleUserQuote
+ original:=submitFact(t,s,auth,r)
+ confirm:=factRequest("confirmation","sensitive coffee preference",nil)
+ confirm.Mutations[0].Transition=facts.TransitionConfirm
+ confirm.Mutations[0].TargetRecordID=original.Facts[0].RecordID
+ confirm.Mutations[0].ExpectedRevision=1
+ submitFact(t,s,auth,confirm)
+ s.faults.AfterForgettingBarrier=func() error{return errors.New("stop after durable barrier")}
+ deleted,err:=s.DeleteReceipt(t.Context(),management.DeleteReceiptRequest{ReceiptID:original.ReceiptID,Reason:"forget",IdempotencyKey:"forget"})
+ if err==nil || deleted.Cleanup!=management.CleanupStatePending {t.Fatalf("expected paused cleanup: %+v %v",deleted,err)}
+ wantFact(t,s,auth,factRead(),"")
+ confirm.IdempotencyKey="confirmation-retry"
+ retry,err:=s.SubmitEvidence(t.Context(),auth,confirm)
+ if err!=nil {t.Fatal(err)}
+ if len(retry.Facts)>0 {t.Fatalf("forgotten payload returned after barrier: text=%q adoption=%s evidence=%+v",retry.Facts[0].Text,retry.Facts[0].Metadata.Adoption,retry.Facts[0].Evidence)}
+}
+
+func TestReviewRepeatedCorrectionKeepsExceptionRelation(t *testing.T) {
+ now:=time.Date(2026,9,15,12,0,0,0,time.UTC)
+ s,auth:=newGoldenStore(t,t.TempDir(),func()time.Time{return now});defer s.Close()
+ base:=submitFact(t,s,auth,factRequest("base","coffee",nil))
+ until:=now.Add(time.Hour)
+ r:=factRequest("exception","no coffee this hour",&now)
+ r.Mutations[0].Transition=facts.TransitionException
+ r.Mutations[0].TargetRecordID=base.Facts[0].RecordID
+ r.Mutations[0].ExpectedRevision=1
+ r.Mutations[0].ValidUntil=&until
+ ex:=submitFact(t,s,auth,r)
+ for i,event:=range []string{"correct-one","correct-two"} {
+  r:=factRequest(event,event,&now)
+  r.Mutations[0].Transition=facts.TransitionCorrect
+  r.Mutations[0].TargetRecordID=ex.Facts[0].RecordID
+  r.Mutations[0].ExpectedRevision=uint64(i+1)
+  r.Mutations[0].ValidUntil=&until
+  out:=submitFact(t,s,auth,r)
+  if out.Facts[0].Metadata.RelatedRecordID!=base.Facts[0].RecordID {current,err:=s.ReadFacts(t.Context(),auth,factRead()); if err!=nil {t.Fatal(err)}; t.Fatalf("correction %d lost exception relation: metadata=%+v current_facts=%+v",i+1,out.Facts[0].Metadata,current.Facts)}
+  wantFact(t,s,auth,factRead(),event)
+ }
+}
+
+func TestReviewQueryCannotReselectOverriddenFact(t *testing.T) {
+ s,auth:=newGoldenStore(t,t.TempDir(),time.Now); defer s.Close()
+ a:=factRequest("base","Tokyo",nil);a.Source.FactKey="location";a.Mutations[0].Key="location"
+ submitFact(t,s,auth,a)
+ b:=factRequest("condition","Kyoto",nil);b.Source.FactKey="location";b.Mutations[0].Key="location";b.Mutations[0].Conditions=[]facts.Condition{{Key:"trip",Value:"yes"}}
+ submitFact(t,s,auth,b)
+ q:=factRead();q.Context=map[string]string{"trip":"yes"}
+ wantFact(t,s,auth,q,"Kyoto")
+ q.Query="Tokyo"
+ out,err:=s.ReadFacts(t.Context(),auth,q);if err!=nil {t.Fatal(err)}
+ for _,f:=range out.Facts {if f.Text=="Tokyo" {t.Fatalf("query revived less-specific fact: %+v",f)}}
+}
+
+func TestReviewSubjectWithoutKeyStillUsesRelevantContext(t *testing.T) {
+ now:=time.Date(2026,9,15,12,0,0,0,time.UTC)
+ s,auth:=newGoldenStore(t,t.TempDir(),func()time.Time{return now});defer s.Close()
+ old:=submitFact(t,s,auth,factRequest("old-coffee","I drink coffee",nil))
+ for i:=0;i<12;i++ {
+  now=now.Add(time.Second)
+  r:=factRequest(fmt.Sprintf("noise-%d",i),fmt.Sprintf("unrelated number %d",i),nil)
+  r.Source.FactKey=fmt.Sprintf("noise.%d",i);r.Mutations[0].Key=r.Source.FactKey
+  submitFact(t,s,auth,r)
+ }
+ putAndBindSteward(t,s,1)
+ now=now.Add(time.Second)
+ r:=factRequest("coffee-probe","I no longer drink coffee",nil)
+ r.Source.FactKey="";r.Source.Role=facts.RoleUserQuote;r.Mutations=nil
+ if _,err:=s.SubmitEvidence(t.Context(),auth,r);err!=nil {t.Fatal(err)}
+ work,found,err:=s.ClaimStewardJob(t.Context(),time.Minute)
+ if err!=nil || !found {t.Fatalf("claim %v %v",found,err)}
+ for _,f:=range work.Request.Records {if string(f.RecordID)==old.Facts[0].RecordID {return}}
+ t.Fatalf("subject-only source omitted relevant old fact; context=%+v",work.Request.Records)
+}
+
+func TestReviewUnstructuredRevisionIsNotCountedAsCleansed(t *testing.T) {
+ s,auth:=newGoldenStore(t,t.TempDir(),time.Now);defer s.Close()
+ receipt,err:=s.Remember(t.Context(),auth,memory.RememberRequest{Text:"ordinary retained evidence",IdempotencyKey:"ordinary"});if err!=nil {t.Fatal(err)}
+ applyStewardAddDirect(t,s,receipt.ReceiptID,"job-review-diagnostics","ordinary retained fact")
+ inspection,err:=s.Inspect(t.Context());if err!=nil {t.Fatal(err)}
+ if inspection.Governance.Barriers!=0 || inspection.Governance.ClearedRevisions!=0 {t.Fatalf("no governance has run but diagnostics report %+v",inspection.Governance)}
+}

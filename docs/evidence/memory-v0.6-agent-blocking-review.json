@@ -1,0 +1,655 @@
+{
+  "format_version": 1,
+  "review_date": "2026-09-15",
+  "review_type": "independent_ai_agent_semantic_review",
+  "reviewer": {
+    "kind": "independent_ai_agent",
+    "task": "/root/blocking_trajectory_audit",
+    "production_code_author": false
+  },
+  "authorization": "The user explicitly authorized the assistant or an independent subagent to perform the review in place of human trajectory review. This artifact records that substitute review; it is not human gold.",
+  "status": "completed_for_assigned_blocking_corpus",
+  "human_reviewed_cases": 0,
+  "independent_agent_reviewed_cases": 14,
+  "accepted_with_coverage_limits": 14,
+  "rejected_fixture_expectations": 0,
+  "counts_note": "These 14 cases are the authored blocking corpus only. No expanded candidate case is counted here, and this report alone does not meet a 200-case substitute-review target.",
+  "method": [
+    "Read each trajectory input, mutation role, expected result and operation sequence independently of test pass/fail.",
+    "Inspect the execution harness including capability scopes, target-reference resolution, owner-only management helpers, fixed clock and assertion semantics.",
+    "Compare against the original requirement and the owning versioned facts API contract.",
+    "Read all five previous deterministic regression reproductions and assess the expected behavior and directly related paths.",
+    "Follow-up review: inspect strengthened t03 and all five new deterministic regression tests with their production repair sites. Preserve the original 14 judgments and input hashes in review_history."
+  ],
+  "source_files": [
+    {
+      "path": "internal/appliance/testdata/facts_eval/trajectories.json",
+      "sha256": "d5f2c3e811aaa726f1b6b49113d41bcaeb53cf2e589da8556cd4755696d3dff4"
+    },
+    {
+      "path": "internal/appliance/testdata/facts_eval/manifest.json",
+      "sha256": "0fff2f854a1cc8c50f34030236007df750c84577b9d3b21da54e6ead28b66e58"
+    },
+    {
+      "path": "internal/appliance/facts_evaluation_test.go",
+      "sha256": "fa8db9656318098a14340c99b41397b7086ad86a57cf964c9e2977f9ef997c4e"
+    },
+    {
+      "path": "api/memory/facts/v1alpha1/types.go",
+      "sha256": "1f68b3e34491aa05bf306c72b7e8ff4722729c355558d488578d51f0bff0c339"
+    },
+    {
+      "path": "docs/evidence/memory-v0.6-review-reproduction_test.go.txt",
+      "sha256": "8cf348f762762ca2bbfeac1a51016d6713fe0653cea3a12ae3ce83b8eda45749"
+    },
+    {
+      "path": "docs/evidence/memory-v0.6-implementation-brief.txt",
+      "sha256": "61f7fa3a532e0b8d430cab69001d4d9aff9f6730803858963767e1f1a6c45581"
+    },
+    {
+      "path": "internal/appliance/facts_regression_test.go",
+      "sha256": "4ca63ce1cc37e5e07e113a78c4bb47418ee26ccf7f91f42b78b057e3d28a9801"
+    },
+    {
+      "path": "internal/appliance/facts_ingest.go",
+      "sha256": "0568a53e81964078871784f781ef9efe1969d6b07f07ee83a12c00bc535a8ebd"
+    },
+    {
+      "path": "internal/appliance/facts_read.go",
+      "sha256": "acac7aad5eedbbf8080eb59993ca658af4c3b0b68a5383e68c77273c98f3ae5e"
+    },
+    {
+      "path": "internal/appliance/facts_lifecycle.go",
+      "sha256": "cf06f37a5081f87a97ce5e4f029937c61bf81b90d36644b2a9c1b03ebe3f921e"
+    },
+    {
+      "path": "internal/appliance/steward_context.go",
+      "sha256": "3eb2ae443f7782f5287903d97a0e87c999050df9762f738269aa987df350fe15"
+    },
+    {
+      "path": "internal/appliance/governance_cleanup.go",
+      "sha256": "924357e61fd98062340409154ddea1fd6980452f08d03859f72ea909a0efd9af"
+    },
+    {
+      "path": "internal/appliance/facts_test.go",
+      "sha256": "94494b238d493db00bcc483fdd44669b00c1f3da5e5f89f817e1e4dccc3fae41"
+    }
+  ],
+  "case_hash_canonicalization": "SHA-256 of UTF-8 JSON with sorted keys, no extra whitespace and unescaped Unicode.",
+  "test_execution": {
+    "executed_by_this_reviewer": false,
+    "reason": "This is an independent semantic fixture/oracle review. The root agent owns implementation and candidate execution gates; no test success is used as the review oracle."
+  },
+  "corpus_wide_limits": [
+    "Inputs provide trusted subject, role, exact lifecycle transition and known intervals. This does not demonstrate natural-language extraction or production model quality.",
+    "Fourteen small isolated Stores do not replace long-running multi-conversation interference, in-flight cleanup, consumer cache invalidation, or Caelis end-to-end acceptance.",
+    "Management helper calls possess Store owner authority; a fixture scope is not a read-capability authorization test for DeleteReceipt/ListRecords/TraceRecord.",
+    "Most current reads assert Facts, not negative Background contents or exact receipt/source provenance.",
+    "Do not combine agent-review counts with machine execution counts and call the result human-reviewed quality."
+  ],
+  "reviews": [
+    {
+      "case_id": "t01-scope-label-isolation",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "Host-confirmed coffee is attributable to s0 in private Space a / workspace:alpha. Owner facts survive reopen. Scope b, shared and a_alt_label are independently authorized scopes with no matching fact, so empty results are correct. Legacy Recall can still return the admitted evidence.",
+      "execution_semantics_checked": [
+        "Each scope has its own real capability; read_facts checks exact count and text. The s0 ingest checks its receipt evidence reference.",
+        "list_records is owner Space-scoped; its subject field is descriptive and is not a filtering assertion."
+      ],
+      "coverage_limits": [
+        "The only Changes call is for a and checks event kinds; it does not prove change-ledger cross-scope non-disclosure or cursor reset.",
+        "No candidate-read hook is asserted here, so result isolation alone does not prove authorization preceded candidate generation."
+      ],
+      "recommended_boundary_extensions": [
+        "Present a cursor issued for a to b and a_alt_label and assert reset without private change IDs.",
+        "Instrument candidate reads to prove only authorized Spaces are queried, including a denied capability."
+      ],
+      "step_count": 10,
+      "case_sha256": "096c3a1a2e45ba38ec5a7614483f8e372c1f4642d5549d0d85e5f4118d898e09"
+    },
+    {
+      "case_id": "t02-restart-idempotency-conflict",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "Replaying the identical source and effect before reopen must return the original receipt. Different text under the same source tuple and a different source reusing an existing effect key both conflict; coffee/tea truth must not change as a side effect.",
+      "execution_semantics_checked": [
+        "source_ref copies the entire prior request, including its original idempotency key.",
+        "After restart the two conflict paths run and final ReadFacts still returns tea."
+      ],
+      "coverage_limits": [
+        "Despite the summary, an identical successful replay is only exercised before restart.",
+        "No distinct idempotency-key source replay is present, and no failed-write receipt/job counts are asserted."
+      ],
+      "recommended_boundary_extensions": [
+        "Replay identical source with the original and a new effect key after reopen, then compare receipt identity and row counts."
+      ],
+      "step_count": 6,
+      "case_sha256": "05bd458843b1b6ada64741cc2d1e6ee27a36580e6df2535c3122ce57b6fd2a83"
+    },
+    {
+      "case_id": "t03-temporary-exception",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "A host-authorized finite exception is a separate fact related to the coffee base. It replaces that base during the explicit March interval and leaves the base available afterward. After denial, a new as_of read inside that same former interval must return the base, proving denial prevents adoption independently of natural expiry. Explicit timestamps are the test authority; the Ramadan wording is not a calendar-validation claim.",
+      "execution_semantics_checked": [
+        "The exception ingest asserts RelatedRecordID against s0 and confirmed/exception metadata.",
+        "The pre-denial as_of reads are inside and after the interval. A new post-denial as_of=2026-03-15 read expects the unchanged coffee base, removing the earlier fixed-clock coverage gap.",
+        "The final current read still uses the harness fixed clock of 2026-09-01."
+      ],
+      "coverage_limits": [
+        "The trajectory itself still does not query the exact 2026-04-01 exclusive endpoint or assert the base revision number.",
+        "Repeated exception correction is not present in this fixture; the separately reviewed TestFactsRepeatedExceptionCorrectionsKeepRelationAndConstraints covers repeated corrections, endpoint expiry, denial before expiry and finite-interval restrictions."
+      ],
+      "recommended_boundary_extensions": [
+        "Add exact ValidFrom/ValidUntil fixture reads and verify base revision/source identity stays unchanged."
+      ],
+      "step_count": 7,
+      "case_sha256": "ed181983c26a6f2daef13450dcdf1b69b2b75f54471f19b6501e5f26fe2993e7"
+    },
+    {
+      "case_id": "t04-permanent-change",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "Structured change from coffee to tea with a February onset should end the old adoption interval, expose tea now and in March, retain coffee in January, reject a stale head and reject a change before known onset. Historical audit must keep both revisions.",
+      "execution_semantics_checked": [
+        "target_ref captures the revision returned at that step, so s0.f0 is deliberately stale after s1.",
+        "ReadFacts exercises both sides of the change interval; FactHistory checks two revision texts."
+      ],
+      "coverage_limits": [
+        "The exact change instant, HistoricalState values and explicit receipt evidence for both revisions are not asserted.",
+        "A post-restart temporal query is absent."
+      ],
+      "recommended_boundary_extensions": [
+        "At the exact February onset assert only tea; after reopen assert corrected/current historical labels and source receipt IDs."
+      ],
+      "step_count": 8,
+      "case_sha256": "d3782a80254496717700aa54cdccb4a3e78ebed8d3f31a43ce97a24dd75b2147"
+    },
+    {
+      "case_id": "t05-correction-history-preserved",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "An explicit correction replaces erroneous derived text and retains the original revision for owner audit. It must not be interpreted as a genuine former coffee preference. The expected current tea and two non-cleansed audit revisions are supported.",
+      "execution_semantics_checked": [
+        "The correcting source is a structured confirmation and targets the exact s0 revision.",
+        "FactHistory and TraceRecord verify retained text/count and active Record state."
+      ],
+      "coverage_limits": [
+        "This case does not inspect HistoricalState or issue an as_of query, so it cannot alone distinguish correction from a time-based change.",
+        "The source text is an explicit correction supplied by the host; no language extraction is tested."
+      ],
+      "recommended_boundary_extensions": [
+        "Read an as_of within the old alleged interval and assert erroneous coffee is not adopted; verify its HistoricalState is corrected."
+      ],
+      "step_count": 5,
+      "case_sha256": "84af2b497b5d45dd84d5fd33d57d033cb6b5aa36b895cea0b5d4890fc834fa02"
+    },
+    {
+      "case_id": "t06-deny-excludes",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "The user_quote saying might prefer coffee is appropriately pending. A later host-supplied deny transition revokes adoption while preserving attributable audit state; current reads must be empty and management state invalidated. The transition, not the repeated affirmative-looking text alone, supplies denial authority.",
+      "execution_semantics_checked": [
+        "The ingest assertions distinguish pending and denied metadata.",
+        "Current ReadFacts is empty; ListRecords/TraceRecord check invalidated state and two revisions."
+      ],
+      "coverage_limits": [
+        "The case denies a pending fact; a formerly confirmed fact is not covered.",
+        "No negative Background assertion, historical denied-state assertion or change/cursor assertion exists."
+      ],
+      "recommended_boundary_extensions": [
+        "Deny a confirmed fact after obtaining Background and cursor; verify a subsequent read has neither the fact nor its text, and changes invalidate the captured dependency."
+      ],
+      "step_count": 5,
+      "case_sha256": "8e643ffaa8613aa61150004de91e92d58e6648d1ab252a1bbddd10c1b73e70d5"
+    },
+    {
+      "case_id": "t07-forget-clears-and-blocks-resurrection",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "Owner deletion of the original receipt must make the fact unusable, clear managed revision payloads, retain forgotten audit state, and suppress resubmission of the same source. Rebuilding projections must not recreate adoptable fact content.",
+      "execution_semantics_checked": [
+        "DeleteReceipt is an owner-plane Store operation; fixture scope does not grant deletion through a read capability.",
+        "TraceRecord checks empty revision texts after completed cleanup; subsequent reads and replay verify logical exclusion and source suppression."
+      ],
+      "coverage_limits": [
+        "The helper waits through completed synchronous cleanup; it has no pause after the durable barrier or worker-in-flight boundary.",
+        "source_ref keeps the original effect key, so changed-key source suppression is not tested here.",
+        "It never reopens the store and does not check raw Recall after FTS rebuild, external caches or old backups."
+      ],
+      "recommended_boundary_extensions": [
+        "Use the deterministic AfterForgettingBarrier hook, then retry a different still-live receipt that confirms or depends on the forgotten original.",
+        "Retry with a new effect key, reopen with pending cleanup, and verify Recall, Facts, trace payloads and change notification."
+      ],
+      "step_count": 9,
+      "case_sha256": "f0a54ff2cc666fdc78be4009665609b3691245a575b2e460faeba1b8b6ab2823"
+    },
+    {
+      "case_id": "t08-wrong-subject-rejected",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "A mutation for user-beta cannot borrow a trusted source attributed to user-alpha. Both user_quote and structured_confirmation requests correctly reject with invalid_argument; no current fact should be adopted for alpha.",
+      "execution_semantics_checked": [
+        "The mutation subject is explicitly beta and does not inherit the step subject alpha.",
+        "ListRecords checks the whole Space and confirms no Record was created."
+      ],
+      "coverage_limits": [
+        "No direct receipt/job/source count check proves the stronger summary statement that no receipt exists.",
+        "No accepted beta fact followed by alpha read exists, and friend-versus-user attribution from natural language is not exercised."
+      ],
+      "recommended_boundary_extensions": [
+        "Check receipt/source/job counts before and after rejected requests, then retry the same source/effect with corrected subject.",
+        "Seed a real beta fact and verify alpha current reads and mutations cannot adopt or edit it."
+      ],
+      "step_count": 4,
+      "case_sha256": "8fd10fad54c513fc965093547254e16c875ebe811019840acb8d7d6a3988c051"
+    },
+    {
+      "case_id": "t09-missing-stale-target-and-role",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "Changing a nonexistent or stale target must conflict; an unstructured user_quote cannot authorize a lifecycle change. The initial confirmed coffee and one-revision audit should remain untouched.",
+      "execution_semantics_checked": [
+        "Expected revision 42 deliberately overrides the referenced revision.",
+        "Final current read and history count detect mutation of the target."
+      ],
+      "coverage_limits": [
+        "No authorized-but-other-Space or other-LabelSet target is attempted.",
+        "The summary says no partial persistence, but only target facts/history are inspected, not new receipts, sources or jobs."
+      ],
+      "recommended_boundary_extensions": [
+        "Target a valid record in another scope and confirm indistinguishable conflict without source/effect consumption.",
+        "Verify all receipt/source/job and change-ledger counts remain unchanged after rejected operations."
+      ],
+      "step_count": 6,
+      "case_sha256": "386e9c2b3a04b70663eb92e8d9b984482392ee30df7addc9048fbf2b2a6a54b9"
+    },
+    {
+      "case_id": "t10-owner-ingestion-policy",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "An owner policy for exact Space/LabelSet/producer/subject denies admission of the matching source. Removing that policy restores admission for a new event, so one confirmed coffee fact is expected.",
+      "execution_semantics_checked": [
+        "SetIngestionPolicy is invoked on the owner Store facade with explicit scope.",
+        "Rejected submission checks accepted=false and ingestion_policy reason prefix; ListRecords checks no Record."
+      ],
+      "coverage_limits": [
+        "No direct receipt or job count assertion verifies denial before evidence admission.",
+        "The restored request uses a different event/effect key; same-request replay after policy removal is not covered.",
+        "Policy isolation and persistence across restart are not asserted."
+      ],
+      "recommended_boundary_extensions": [
+        "Test the same original denied request after restart/removal, and assert no receipt/job was produced during denial.",
+        "Keep the denied tuple while admitting a different producer, subject, or exact LabelSet."
+      ],
+      "step_count": 6,
+      "case_sha256": "936873c374e00de250e80ecad6ff720b2dfb128799ac1d4542cc2d831e65aa60"
+    },
+    {
+      "case_id": "t11-mutation-batch-atomicity",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "The second establish conflicts with an existing drink key and must roll back the first language establish in the same host-authorized batch. Reusing the failed effect key with a valid one-operation request should succeed because the failed batch consumed no effect.",
+      "execution_semantics_checked": [
+        "The batch places a valid language mutation before a conflicting drink mutation.",
+        "ReadFacts checks language absent and coffee unchanged, then a different source reuses the failed effect key successfully."
+      ],
+      "coverage_limits": [
+        "The intentionally conflicting second text is not factual gold; it is a deliberately rejected write.",
+        "The retry changes event_id and does not prove the original source tuple was not persisted; maximum batch size and late unauthorized/stale operations are absent."
+      ],
+      "recommended_boundary_extensions": [
+        "Retry the same original source tuple with a corrected batch and inspect receipt/source/change counts.",
+        "At the maximum eight mutations, make the last operation stale or unauthorized and assert complete rollback."
+      ],
+      "step_count": 6,
+      "case_sha256": "aa4e84f661ba10e5556d273820aa2f3ee44ec6498799e5a42774e9925403ae81"
+    },
+    {
+      "case_id": "t12-mixed-language-explicit-preference",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "A Chinese user quote stays pending until identical text receives explicit structured confirmation. The drink-key alias policy can retrieve that confirmed fact for coffee or 饮品 while preserving source text; similarly 语言 maps to the English response-language fact. These expectations are deterministic alias conformance.",
+      "execution_semantics_checked": [
+        "No generator or model runs; the known controlled alias map links queries to fact keys.",
+        "The confirmation targets the pending fact revision; reads compare exact text."
+      ],
+      "coverage_limits": [
+        "No explicit current read between pending and confirm verifies exclusion before confirmation.",
+        "Alias inclusion checks do not require unique results, attribution IDs or correct ranking within multiple competing facts.",
+        "This is not arbitrary bilingual paraphrase understanding or answer-quality evidence."
+      ],
+      "recommended_boundary_extensions": [
+        "Read before confirmation and assert absence; after confirmation assert both source receipt IDs.",
+        "Use distractor facts plus boundary negatives such as team versus tea and unconstrained paraphrases as separately labelled quality experiments."
+      ],
+      "step_count": 9,
+      "case_sha256": "e13b9e84d0fb56598fce25c3a9f3c38d4745408470135667949c628a59109272"
+    },
+    {
+      "case_id": "t13-asof-onset-and-budget",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "A fact with a known January onset is absent in the preceding year and available afterward. Three independently keyed confirmed facts may coexist; MaxFacts and MaxBytes should truncate bounded reads, while legacy Recall can retrieve vegetarian evidence.",
+      "execution_semantics_checked": [
+        "The one-fact budget forces truncation while preserving the existing truth state.",
+        "BytesUsed is compared with the configured upper bound; small MaxBytes and two-fact caps are combined."
+      ],
+      "coverage_limits": [
+        "The case does not include an unknown-onset fact despite the broad summary wording.",
+        "It checks reported BytesUsed rather than independently recomputing the contract-defined charge.",
+        "No RefreshAt assertion or stable repeated-background comparison is present."
+      ],
+      "recommended_boundary_extensions": [
+        "Add unknown onset: usable now, absent for arbitrary as_of.",
+        "Independently recompute charged fact/background bytes and test exact boundaries; verify RefreshAt at a future onset/expiry."
+      ],
+      "step_count": 9,
+      "case_sha256": "9ed5f04c6de9915332e8136ff9e3fb0472ca798ff0d7a70504b2bf3203c5a362"
+    },
+    {
+      "case_id": "t14-recall-only-cannot-write",
+      "verdict": "accept_with_coverage_limits",
+      "input_support": "A Recall-only capability cannot admit evidence. An owner-authorized write remains readable through Recall-only access in the same scope, while another exact LabelSet in the same Space has its own independently confirmed preference.",
+      "execution_semantics_checked": [
+        "The readonly capability operations list contains only Recall.",
+        "After both successful writes, exact-scope reads return coffee versus tea respectively."
+      ],
+      "coverage_limits": [
+        "This tests capability rejection inside the Store, not public facade type-assertion isolation or possession of management methods.",
+        "Unauthorized admission is not paired with a receipt/source/job count check."
+      ],
+      "recommended_boundary_extensions": [
+        "Keep facade type-assertion and independent-module checks as separate gates.",
+        "Attempt cross-LabelSet target mutation and verify no revision/source/effect leakage."
+      ],
+      "step_count": 6,
+      "case_sha256": "64dd097d0df4246fca2caa6300188a7e170e8d1d9b3a09dbb50e29c5f70b4f25"
+    }
+  ],
+  "prior_regression_review": [
+    {
+      "test": "TestReviewRetryCannotReadPastForgetBarrier",
+      "judgment": "expected_behavior_supported",
+      "reason": "A committed deletion barrier immediately prevents all new adoption/egress of affected managed payloads; the second receipt does not override the transitive Record barrier. A synchronous post-barrier pause is a deterministic production boundary.",
+      "related_paths": [
+        "Same request retry as well as alternate-idempotency-key retry.",
+        "Facts returned for other unaffected receipts whose history depends on the forgotten record."
+      ]
+    },
+    {
+      "test": "TestReviewQueryCannotReselectOverriddenFact",
+      "judgment": "expected_behavior_supported",
+      "reason": "Query relevance cannot grant a fact adoption authority already defeated by an applicable more specific condition. Empty query selecting Kyoto establishes the semantic winner; querying Tokyo must not restore the default.",
+      "related_paths": [
+        "Equally specific conflicting matches must continue to abstain even if Query only matches one of them.",
+        "An applicable finite exception must suppress its base before either query relevance or budget trimming."
+      ]
+    },
+    {
+      "test": "TestReviewRepeatedCorrectionKeepsExceptionRelation",
+      "judgment": "expected_behavior_supported",
+      "reason": "Correct changes erroneous derived content, not the separate exception Record identity. Its base relationship and finite interval survive every subsequent correction.",
+      "related_paths": [
+        "After the first correction, change or a new exception targeting that corrected exception must remain prohibited.",
+        "A subsequent correction without finite endpoints must remain rejected rather than becoming a permanent independent assertion."
+      ]
+    },
+    {
+      "test": "TestReviewSubjectWithoutKeyStillUsesRelevantContext",
+      "judgment": "expected_behavior_supported",
+      "reason": "FactKey is an optional host hint. A valid subject-only source still requires relevant older lexical candidates after same-subject recent noise fills the record budget. The test observes the actual claimed Worker context.",
+      "related_paths": [
+        "Missing FactKey with a one-record context budget should select the relevant old fact.",
+        "Irrelevant other-subject lexical hits should not starve a same-subject relevant candidate; verify intended policy before changing scope."
+      ]
+    },
+    {
+      "test": "TestReviewUnstructuredRevisionIsNotCountedAsCleansed",
+      "judgment": "expected_behavior_supported",
+      "reason": "An ordinary retained Steward revision with absent fact metadata was never cleansed. ClearedRevisions must be grounded in completed managed deletion evidence, not a blank metadata field shared with old/unstructured records.",
+      "related_paths": [
+        "Legacy migrated unstructured revisions with empty fact_json.",
+        "Records containing both normal and actually cleared revisions; verify counts track the cleared revisions exactly."
+      ]
+    }
+  ],
+  "additional_high_confidence_related_paths": [
+    {
+      "root_cause": "query_filter_before_adoption_resolution",
+      "path": "equally_specific_conflict_selected_by_query",
+      "status": "production_fix_and_deterministic_regression_reviewed_execution_owned_by_root",
+      "required_assertion": "No current fact is adopted for a same-key equal-specificity conflict, with or without a query that matches only one conflicting fact.",
+      "regression_test": "TestFactsQueryCannotOverrideConditionsOrResolveAmbiguity"
+    },
+    {
+      "root_cause": "exception_identity_inferred_from_last_transition",
+      "path": "corrected_exception_bypasses_transition_and_finite_interval_checks",
+      "status": "production_fix_and_deterministic_regression_reviewed_execution_owned_by_root",
+      "required_assertion": "RelatedRecordID-based exception constraints survive correction; forbidden transitions and open-ended follow-up corrections remain rejected.",
+      "regression_test": "TestFactsRepeatedExceptionCorrectionsKeepRelationAndConstraints"
+    }
+  ],
+  "conclusion": "All 14 fixture expectations remain supported within their stated structural scope, now across 96 steps. The strengthened t03 closes the in-window denial assertion gap. Independent follow-up source review accepts the five repair sites and new deterministic regression expectations, including both same-root-cause paths. This is source/semantic review evidence; root-owned execution gates remain separate. No new high-confidence defect was found in the reviewed repair scope.",
+  "reviewed_step_count": 96,
+  "review_history": [
+    {
+      "revision": 1,
+      "review_date": "2026-09-15",
+      "reviewed_cases": 14,
+      "reviewed_steps": 95,
+      "source_files": [
+        {
+          "path": "internal/appliance/testdata/facts_eval/trajectories.json",
+          "sha256": "17d938e1eab190d9a7e15ee89ccb13616f40d807784ffca00ad26a32415d8b93"
+        },
+        {
+          "path": "internal/appliance/testdata/facts_eval/manifest.json",
+          "sha256": "889d9feb4748a75460c2747ac70fc53c380e95f569298b0fd5e405ad484d8f2b"
+        },
+        {
+          "path": "internal/appliance/facts_evaluation_test.go",
+          "sha256": "fa8db9656318098a14340c99b41397b7086ad86a57cf964c9e2977f9ef997c4e"
+        },
+        {
+          "path": "api/memory/facts/v1alpha1/types.go",
+          "sha256": "1f68b3e34491aa05bf306c72b7e8ff4722729c355558d488578d51f0bff0c339"
+        },
+        {
+          "path": "/tmp/memory-v060-review-_g7apeeo/review_test.go",
+          "sha256": "8cf348f762762ca2bbfeac1a51016d6713fe0653cea3a12ae3ce83b8eda45749"
+        },
+        {
+          "path": "/Users/xueyongzhi/.codex/attachments/4eeeedf0-4efc-4e81-b7f0-efe281b04b56/pasted-text.txt",
+          "sha256": "61f7fa3a532e0b8d430cab69001d4d9aff9f6730803858963767e1f1a6c45581"
+        }
+      ],
+      "case_judgments": [
+        {
+          "case_id": "t01-scope-label-isolation",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "096c3a1a2e45ba38ec5a7614483f8e372c1f4642d5549d0d85e5f4118d898e09",
+          "step_count": 10
+        },
+        {
+          "case_id": "t02-restart-idempotency-conflict",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "05bd458843b1b6ada64741cc2d1e6ee27a36580e6df2535c3122ce57b6fd2a83",
+          "step_count": 6
+        },
+        {
+          "case_id": "t03-temporary-exception",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "4506eb0a1f9d463390119c0c2f43566974b7cf2a759854d489d30f6420a7a4fa",
+          "step_count": 6
+        },
+        {
+          "case_id": "t04-permanent-change",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "d3782a80254496717700aa54cdccb4a3e78ebed8d3f31a43ce97a24dd75b2147",
+          "step_count": 8
+        },
+        {
+          "case_id": "t05-correction-history-preserved",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "84af2b497b5d45dd84d5fd33d57d033cb6b5aa36b895cea0b5d4890fc834fa02",
+          "step_count": 5
+        },
+        {
+          "case_id": "t06-deny-excludes",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "8e643ffaa8613aa61150004de91e92d58e6648d1ab252a1bbddd10c1b73e70d5",
+          "step_count": 5
+        },
+        {
+          "case_id": "t07-forget-clears-and-blocks-resurrection",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "f0a54ff2cc666fdc78be4009665609b3691245a575b2e460faeba1b8b6ab2823",
+          "step_count": 9
+        },
+        {
+          "case_id": "t08-wrong-subject-rejected",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "8fd10fad54c513fc965093547254e16c875ebe811019840acb8d7d6a3988c051",
+          "step_count": 4
+        },
+        {
+          "case_id": "t09-missing-stale-target-and-role",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "386e9c2b3a04b70663eb92e8d9b984482392ee30df7addc9048fbf2b2a6a54b9",
+          "step_count": 6
+        },
+        {
+          "case_id": "t10-owner-ingestion-policy",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "936873c374e00de250e80ecad6ff720b2dfb128799ac1d4542cc2d831e65aa60",
+          "step_count": 6
+        },
+        {
+          "case_id": "t11-mutation-batch-atomicity",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "aa4e84f661ba10e5556d273820aa2f3ee44ec6498799e5a42774e9925403ae81",
+          "step_count": 6
+        },
+        {
+          "case_id": "t12-mixed-language-explicit-preference",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "e13b9e84d0fb56598fce25c3a9f3c38d4745408470135667949c628a59109272",
+          "step_count": 9
+        },
+        {
+          "case_id": "t13-asof-onset-and-budget",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "9ed5f04c6de9915332e8136ff9e3fb0472ca798ff0d7a70504b2bf3203c5a362",
+          "step_count": 9
+        },
+        {
+          "case_id": "t14-recall-only-cannot-write",
+          "verdict": "accept_with_coverage_limits",
+          "case_sha256": "64dd097d0df4246fca2caa6300188a7e170e8d1d9b3a09dbb50e29c5f70b4f25",
+          "step_count": 6
+        }
+      ],
+      "original_t03_review": {
+        "case_id": "t03-temporary-exception",
+        "verdict": "accept_with_coverage_limits",
+        "input_support": "A host-authorized finite exception is a separate fact related to the coffee base. It replaces that base during the explicit March interval and leaves the base available afterward. Denial concerns the exception only. Explicit timestamps are the test authority; the Ramadan wording is not a calendar-validation claim.",
+        "execution_semantics_checked": [
+          "The exception ingest asserts RelatedRecordID against s0 and confirmed/exception metadata.",
+          "The two as_of reads are inside and after the interval; current denial read uses the harness fixed clock of 2026-09-01."
+        ],
+        "coverage_limits": [
+          "The exclusive endpoint 2026-04-01 is not queried exactly.",
+          "The post-denial read occurs after natural expiry and would return the base even if denial did not suppress an in-window exception.",
+          "No correction of an exception is present."
+        ],
+        "recommended_boundary_extensions": [
+          "After deny, query as_of within the former exception interval and inspect the unchanged base revision.",
+          "Check exact ValidFrom and exclusive ValidUntil, plus exception -> correct -> correct with preserved relation and finite interval."
+        ],
+        "step_count": 6,
+        "case_sha256": "4506eb0a1f9d463390119c0c2f43566974b7cf2a759854d489d30f6420a7a4fa"
+      },
+      "note": "Initial independent semantic review. Fourteen expectations accepted with coverage limits; the t03 post-denial read only observed the already-expired interval."
+    },
+    {
+      "revision": 2,
+      "review_date": "2026-09-15",
+      "reviewed_cases": 14,
+      "reviewed_steps": 96,
+      "changed_cases": [
+        "t03-temporary-exception"
+      ],
+      "unchanged_case_verdicts": 14,
+      "note": "Reviewed added t03 in-window post-denial read, revised manifest attribution, five new regression tests and five production repair sites. Refreshed source hashes. No prior acceptance was changed to failure."
+    }
+  ],
+  "substitute_review_metadata_check": {
+    "manifest_human_reviewed_cases": 0,
+    "manifest_review_status": "not_human_reviewed",
+    "assessment": "The revised release_blocker accurately records explicit user authorization for separate independent-agent evidence and retains production/holdout quality limitations. It does not reclassify generated candidates as human gold.",
+    "fixture_manifest_sha256_matches": true
+  },
+  "repair_review": [
+    {
+      "test": "TestFactsSourceRetryRespectsPendingAndRecoveredForgetBarrier",
+      "assessment": "accepted_by_independent_source_review",
+      "production_files": [
+        "internal/appliance/facts_ingest.go"
+      ],
+      "verified_assertions": [
+        "Durable barrier committed with UnknownOutcome and pending cleanup.",
+        "Changed-effect-key retry on retained confirmation source exposes only independent English fact through pending, cleaned and reopened stages.",
+        "Retry retains accepted/deduplicated status and original confirmation receipt identity."
+      ],
+      "production_reasoning": "factsForReceipt checks forgottenRecord for each revision before reading its payload, in the submission transaction. The persistent barrier has no pending-only predicate, so it fences both pending and completed erasure while preserving unaffected facts.",
+      "execution": "owned_by_root_not_executed_by_this_reviewer"
+    },
+    {
+      "test": "TestFactsQueryCannotOverrideConditionsOrResolveAmbiguity",
+      "assessment": "accepted_by_independent_source_review",
+      "production_files": [
+        "internal/appliance/facts_read.go"
+      ],
+      "verified_assertions": [
+        "Applicable Kyoto condition suppresses Tokyo before empty, Kyoto or Tokyo queries.",
+        "Equally specific Kyoto/Berlin conflict remains unknown for every matching query, including Tokyo.",
+        "wantFact with empty expected text checks both no Facts and empty Background."
+      ],
+      "production_reasoning": "ReadFacts now groups unranked applicable candidates, suppresses exact exception bases, resolves condition specificity/ambiguity, and only then ranks a unique adoptable fact with factQueryRank. Query matching cannot remove an override or a competing equally specific match before adoption.",
+      "execution": "owned_by_root_not_executed_by_this_reviewer"
+    },
+    {
+      "test": "TestFactsRepeatedExceptionCorrectionsKeepRelationAndConstraints",
+      "assessment": "accepted_by_independent_source_review",
+      "production_files": [
+        "internal/appliance/facts_lifecycle.go"
+      ],
+      "verified_assertions": [
+        "Two corrections preserve RelatedRecordID and remain currently adoptable.",
+        "Forbidden change, open-ended correction and overlap with another exception reject without a Receipt row; current corrected fact remains unchanged.",
+        "At the exact exclusive endpoint the base resumes with RefreshAt for the next exception.",
+        "Denial before expiry restores the base."
+      ],
+      "production_reasoning": "Exception identity and constraints are now based on persistent RelatedRecordID. Both newly created and corrected confirmed exceptions check sibling interval overlap, excluding the edited record, before writing. Denial keeps the relation but avoids confirmed-adoption overlap validation.",
+      "execution": "owned_by_root_not_executed_by_this_reviewer"
+    },
+    {
+      "test": "TestStewardSubjectWithoutKeyPreservesLexicalContext",
+      "assessment": "accepted_by_independent_source_review",
+      "production_files": [
+        "internal/appliance/steward_context.go"
+      ],
+      "verified_assertions": [
+        "After twelve same-subject distractors, omitted FactKey still places the older coffee fact at rank 1 in the claimed Worker context.",
+        "Context count remains within profile budget.",
+        "The selected exact record revision and original receipt are present in the actual persisted read set."
+      ],
+      "production_reasoning": "Only exact subject-plus-key matches preempt lexical selection; missing-key requests try lexical candidates before broad subject recency. Existing Space/LabelSet candidate restrictions and read-set evidence collection remain in place.",
+      "execution": "owned_by_root_not_executed_by_this_reviewer"
+    },
+    {
+      "test": "TestGovernanceClearedRevisionCountRequiresCompletedDeletion",
+      "assessment": "accepted_by_independent_source_review",
+      "production_files": [
+        "internal/appliance/governance_cleanup.go"
+      ],
+      "verified_assertions": [
+        "Ordinary unstructured revision reports zero cleared revisions.",
+        "Committed pending erasure still reports zero.",
+        "Completed cleanup reports one; repeated recovery does not increment the count."
+      ],
+      "production_reasoning": "The diagnostic requires blank text, kind and fact_json plus a completed receipt-deletion barrier for that record and Space. EXISTS prevents multiple barriers from multiplying one revision, while absent structured metadata alone no longer proves cleanup.",
+      "execution": "owned_by_root_not_executed_by_this_reviewer"
+    }
+  ],
+  "source_portability_note": "The original reproduction test and user implementation brief are preserved byte-for-byte under docs/evidence. Current source_files uses those repository copies with the same reviewed hashes; review_history retains the original locations as provenance."
+}

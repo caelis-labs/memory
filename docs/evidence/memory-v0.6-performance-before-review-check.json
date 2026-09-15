@@ -1,0 +1,241 @@
+{
+  "format": "memory.v0.6.local-performance-check.v1",
+  "qualification": "single-machine candidate qualification; not GA or a hardware-independent SLO",
+  "report": "memory-v0.6-perf-final.json",
+  "report_sha256": "fb503290104ec3eb7432712b416b1689069de49a19b7129c982812abaaebb4c4",
+  "limits": "memory-v0.6-performance-limits.json",
+  "limits_sha256": "813486e534ca2c94c81dd5356fd0870faccebc09b5684ca9b6fd665327f2338d",
+  "performance_run_source_sha256": "eefea4171f425e7f85d385f4c343d208632f0c02a2df22e1172d6c50ae9a4e3a",
+  "final_source_sha256": "13e9e08428c10f6e30d258ca9a0e1771a9be34b2eb29306002ebcca9a5f34515",
+  "comparison": "every measured value <= its frozen upper bound; limits not modified",
+  "runs": [
+    {
+      "receipts": 1000,
+      "fixture_checks_passed": true,
+      "passed": true,
+      "checks": [
+        {
+          "metric": "cleanup_p95_ms",
+          "measured": 4.273,
+          "upper_bound": 500,
+          "passed": true
+        },
+        {
+          "metric": "contention_errors",
+          "measured": 0,
+          "upper_bound": 0,
+          "passed": true
+        },
+        {
+          "metric": "contention_reader_p95_ms",
+          "measured": 1.013,
+          "upper_bound": 20,
+          "passed": true
+        },
+        {
+          "metric": "database_after_rebuild_bytes",
+          "measured": 5988352,
+          "upper_bound": 629145600,
+          "passed": true
+        },
+        {
+          "metric": "fts_bytes",
+          "measured": 720896,
+          "upper_bound": 104857600,
+          "passed": true
+        },
+        {
+          "metric": "peak_rss_bytes",
+          "measured": 341196800,
+          "upper_bound": 536870912,
+          "passed": true
+        },
+        {
+          "metric": "reopen_first_read_ms",
+          "measured": 0.298,
+          "upper_bound": 50,
+          "passed": true
+        },
+        {
+          "metric": "seed_p95_ms",
+          "measured": 1.092,
+          "upper_bound": 5,
+          "passed": true
+        },
+        {
+          "metric": "single_rebuild_ms",
+          "measured": 67.531,
+          "upper_bound": 15000,
+          "passed": true
+        },
+        {
+          "metric": "warm_changes_p95_ms",
+          "measured": 0.271,
+          "upper_bound": 10,
+          "passed": true
+        },
+        {
+          "metric": "warm_read_p95_ms",
+          "measured": 0.156,
+          "upper_bound": 10,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "receipts": 10000,
+      "fixture_checks_passed": true,
+      "passed": true,
+      "checks": [
+        {
+          "metric": "cleanup_p95_ms",
+          "measured": 33.591,
+          "upper_bound": 500,
+          "passed": true
+        },
+        {
+          "metric": "contention_errors",
+          "measured": 0,
+          "upper_bound": 0,
+          "passed": true
+        },
+        {
+          "metric": "contention_reader_p95_ms",
+          "measured": 1.017,
+          "upper_bound": 20,
+          "passed": true
+        },
+        {
+          "metric": "database_after_rebuild_bytes",
+          "measured": 45862912,
+          "upper_bound": 629145600,
+          "passed": true
+        },
+        {
+          "metric": "fts_bytes",
+          "measured": 5058560,
+          "upper_bound": 104857600,
+          "passed": true
+        },
+        {
+          "metric": "peak_rss_bytes",
+          "measured": 369803264,
+          "upper_bound": 536870912,
+          "passed": true
+        },
+        {
+          "metric": "reopen_first_read_ms",
+          "measured": 0.315,
+          "upper_bound": 50,
+          "passed": true
+        },
+        {
+          "metric": "seed_p95_ms",
+          "measured": 2.906,
+          "upper_bound": 15,
+          "passed": true
+        },
+        {
+          "metric": "single_rebuild_ms",
+          "measured": 562.87,
+          "upper_bound": 15000,
+          "passed": true
+        },
+        {
+          "metric": "warm_changes_p95_ms",
+          "measured": 0.265,
+          "upper_bound": 10,
+          "passed": true
+        },
+        {
+          "metric": "warm_read_p95_ms",
+          "measured": 0.166,
+          "upper_bound": 10,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "receipts": 100000,
+      "fixture_checks_passed": true,
+      "passed": true,
+      "checks": [
+        {
+          "metric": "cleanup_p95_ms",
+          "measured": 342.044,
+          "upper_bound": 500,
+          "passed": true
+        },
+        {
+          "metric": "contention_errors",
+          "measured": 0,
+          "upper_bound": 0,
+          "passed": true
+        },
+        {
+          "metric": "contention_reader_p95_ms",
+          "measured": 0.871,
+          "upper_bound": 20,
+          "passed": true
+        },
+        {
+          "metric": "database_after_rebuild_bytes",
+          "measured": 450813952,
+          "upper_bound": 629145600,
+          "passed": true
+        },
+        {
+          "metric": "fts_bytes",
+          "measured": 65126400,
+          "upper_bound": 104857600,
+          "passed": true
+        },
+        {
+          "metric": "peak_rss_bytes",
+          "measured": 433176576,
+          "upper_bound": 536870912,
+          "passed": true
+        },
+        {
+          "metric": "reopen_first_read_ms",
+          "measured": 0.375,
+          "upper_bound": 50,
+          "passed": true
+        },
+        {
+          "metric": "seed_p95_ms",
+          "measured": 26.198,
+          "upper_bound": 50,
+          "passed": true
+        },
+        {
+          "metric": "single_rebuild_ms",
+          "measured": 6016.266,
+          "upper_bound": 15000,
+          "passed": true
+        },
+        {
+          "metric": "warm_changes_p95_ms",
+          "measured": 0.291,
+          "upper_bound": 10,
+          "passed": true
+        },
+        {
+          "metric": "warm_read_p95_ms",
+          "measured": 0.419,
+          "upper_bound": 10,
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "passed": true,
+  "checks_passed": 33,
+  "checks_total": 33,
+  "limitations": [
+    "Limits frozen after baseline and before this rerun; no performance optimization introduced.",
+    "Distinct-subject point reads, not one subject with 100k facts.",
+    "Some other local gates ran concurrently with seeding.",
+    "No model-driven performance or answer quality qualification."
+  ]
+}

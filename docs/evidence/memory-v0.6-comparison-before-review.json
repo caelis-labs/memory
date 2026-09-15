@@ -1,0 +1,330 @@
+{
+  "format_version": 1,
+  "baseline_revision": "51693ff135be8c4149c15117980290aaad6d90da",
+  "baseline_subject": "51693ff135be8c4149c15117980290aaad6d90da Merge pull request #1 from caelis-labs/codex/release/memory-backup-api-20260908",
+  "current_head": "51693ff135be8c4149c15117980290aaad6d90da",
+  "current_worktree_sha256": "f0e96918e74ba0184646db313b6074767755bec97a32ba3854a67e0ea46c8476",
+  "generated_at": "2026-09-15T11:54:06Z",
+  "engine": "go test in temporary trees; modernc.org/sqlite real files; legacy Remember plus scripted deterministic proposals; no model, no credentials",
+  "fixture": {
+    "unrelated_records": 80,
+    "old_receipt_text": "I prefer coffee.",
+    "old_record_kind": "preference",
+    "old_record_text": "Prefers coffee.",
+    "unrelated_kind": "note",
+    "unrelated_text": "Unrelated operating note %03d about schedules and tooling.",
+    "probe_receipt_text": "I now prefer tea over coffee.",
+    "profile": {
+      "profile_id": "profile-facts-compare",
+      "version": 1,
+      "system_prompt": "organize evidence",
+      "max_context_records": 8,
+      "max_input_bytes": 131072,
+      "max_output_bytes": 16384
+    },
+    "recall_queries": [
+      {
+        "query": "coffee",
+        "expected_text": "I prefer coffee."
+      },
+      {
+        "query": "tea coffee",
+        "expected_text": "I now prefer tea over coffee.",
+        "secondary_text": "I prefer coffee."
+      }
+    ],
+    "supplemental": {
+      "subject": "subject-compare",
+      "fact_key": "preference.drink",
+      "fact_text": "Prefers espresso.",
+      "probe_receipt_text": "Espresso preference update for the compare subject.",
+      "unrelated_records": 80,
+      "unrelated_template": "Supplemental unrelated note %03d about schedules and tooling."
+    }
+  },
+  "fixture_sha256": "bf09a9af4af64a4452013cf8437994f6d889c99653809ca4bc9dd50a130615ee",
+  "baseline_side": {
+    "side": "baseline",
+    "scheduler_encoding": "rfc3339nano_lexicographic",
+    "profile_id": "profile-facts-compare",
+    "profile_version": 1,
+    "max_context_records": 8,
+    "old_record_included": false,
+    "old_record_rank": 0,
+    "records_count": 8,
+    "records_sha256": "f2a326e42dbd832be764f94ff6085998144bd9aa611eebfdef473786c654d1f4",
+    "old_record_id_hash": "002599adb7e1762410bd2c22128106323f3f8c24711333ccfd36b4a7feeaceea",
+    "receipt_attribution": {
+      "baseline_fields_only": true,
+      "fact_key": "",
+      "side_note": "v0.5.2 ReceiptInput has no host sources, subject or fact key",
+      "sources_count": 0,
+      "status": "measured",
+      "subject": ""
+    },
+    "scripted_outputs_sha256": "0190fe4302f47174bb7e27bb9e986a9a2eadbbce2744d9cc6e7f02e48cce3694",
+    "no_steward_recall": [
+      {
+        "query": "coffee",
+        "expected_present": true,
+        "expected_rank": 1,
+        "secondary_present": false,
+        "secondary_rank": 0,
+        "fragments": [
+          "I prefer coffee.",
+          "I now prefer tea over coffee."
+        ],
+        "retrieval_only": true,
+        "answers_preference": false
+      },
+      {
+        "query": "tea coffee",
+        "expected_present": true,
+        "expected_rank": 1,
+        "secondary_present": true,
+        "secondary_rank": 2,
+        "fragments": [
+          "I now prefer tea over coffee.",
+          "I prefer coffee."
+        ],
+        "retrieval_only": true,
+        "answers_preference": false
+      }
+    ],
+    "no_steward_jobs": 0,
+    "no_steward_records": 0,
+    "steward_recall": [
+      {
+        "query": "coffee",
+        "expected_present": true,
+        "expected_rank": 2,
+        "secondary_present": false,
+        "secondary_rank": 0,
+        "fragments": [
+          "Prefers coffee.",
+          "I prefer coffee.",
+          "I now prefer tea over coffee."
+        ],
+        "retrieval_only": true,
+        "answers_preference": false
+      },
+      {
+        "query": "tea coffee",
+        "expected_present": true,
+        "expected_rank": 1,
+        "secondary_present": true,
+        "secondary_rank": 3,
+        "fragments": [
+          "I now prefer tea over coffee.",
+          "Prefers coffee.",
+          "I prefer coffee."
+        ],
+        "retrieval_only": true,
+        "answers_preference": false
+      }
+    ],
+    "supplemental": {
+      "reason": "the exact v0.5.2 baseline has no facts/evidence API or trusted host source attribution",
+      "status": "not_applicable"
+    }
+  },
+  "current_side": {
+    "side": "current",
+    "scheduler_encoding": "fixed_width_utc_nanoseconds",
+    "profile_id": "profile-facts-compare",
+    "profile_version": 1,
+    "max_context_records": 8,
+    "old_record_included": true,
+    "old_record_rank": 1,
+    "records_count": 8,
+    "records_sha256": "3d5f1a692cd7b035461f631a84c56cdaa57ceae53e2d602a065036e988567fd7",
+    "old_record_id_hash": "f727d5779a001d6f178072766676a223ad9183cbf3b26873fc4420c4bf9367ba",
+    "receipt_attribution": {
+      "fact_key": "",
+      "sources_count": 0,
+      "status": "measured",
+      "subject": ""
+    },
+    "scripted_outputs_sha256": "0190fe4302f47174bb7e27bb9e986a9a2eadbbce2744d9cc6e7f02e48cce3694",
+    "no_steward_recall": [
+      {
+        "query": "coffee",
+        "expected_present": true,
+        "expected_rank": 1,
+        "secondary_present": false,
+        "secondary_rank": 0,
+        "fragments": [
+          "I prefer coffee.",
+          "I now prefer tea over coffee."
+        ],
+        "retrieval_only": true,
+        "answers_preference": false
+      },
+      {
+        "query": "tea coffee",
+        "expected_present": true,
+        "expected_rank": 1,
+        "secondary_present": true,
+        "secondary_rank": 2,
+        "fragments": [
+          "I now prefer tea over coffee.",
+          "I prefer coffee."
+        ],
+        "retrieval_only": true,
+        "answers_preference": false
+      }
+    ],
+    "no_steward_jobs": 0,
+    "no_steward_records": 0,
+    "steward_recall": [
+      {
+        "query": "coffee",
+        "expected_present": true,
+        "expected_rank": 2,
+        "secondary_present": false,
+        "secondary_rank": 0,
+        "fragments": [
+          "Prefers coffee.",
+          "I prefer coffee.",
+          "I now prefer tea over coffee."
+        ],
+        "retrieval_only": true,
+        "answers_preference": false
+      },
+      {
+        "query": "tea coffee",
+        "expected_present": true,
+        "expected_rank": 1,
+        "secondary_present": true,
+        "secondary_rank": 3,
+        "fragments": [
+          "I now prefer tea over coffee.",
+          "Prefers coffee.",
+          "I prefer coffee."
+        ],
+        "retrieval_only": true,
+        "answers_preference": false
+      }
+    ],
+    "supplemental": {
+      "evidence": "trusted source subject/fact-key match is current-only",
+      "probe_receipt_matched": true,
+      "receipt_fact_key": "preference.drink",
+      "receipt_sources_count": 1,
+      "receipt_subject": "subject-compare",
+      "records_count": 8,
+      "relevant_included": true,
+      "relevant_rank": 1,
+      "status": "measured"
+    }
+  },
+  "arms": [
+    {
+      "id": "B0-exact-v0.5.2-no-steward-recall",
+      "side": "baseline",
+      "status": "measured",
+      "detail": "receipt-only Recall with no Steward profile binding, no Steward job and no Record (jobs=0 records=0); retrieval fragments only",
+      "retrieval_hit_rate": 1,
+      "retrieval_only": true,
+      "answers_preference": false
+    },
+    {
+      "id": "B1-prior-steward-context",
+      "side": "baseline",
+      "status": "measured",
+      "detail": "exact v0.5.2 Claim Work.Records context after the old coffee Record, 80 newer unrelated Records and the related probe",
+      "relevant_included": false,
+      "records_count": 8,
+      "retrieval_only": false,
+      "answers_preference": false
+    },
+    {
+      "id": "B1-exact-v0.5.2-steward-recall",
+      "side": "baseline",
+      "status": "measured",
+      "detail": "Steward-organized evidence Recall on the same side (fragments include the old coffee Record); retrieval only",
+      "retrieval_hit_rate": 1,
+      "retrieval_only": true,
+      "answers_preference": false
+    },
+    {
+      "id": "C2-relevant-steward-context",
+      "side": "current",
+      "status": "measured",
+      "detail": "current Claim Work.Records context under the same fixture, profile and scripted proposal bytes",
+      "relevant_included": true,
+      "relevant_rank": 1,
+      "records_count": 8,
+      "retrieval_only": false,
+      "answers_preference": false
+    },
+    {
+      "id": "L0-current-no-steward-recall",
+      "side": "current",
+      "status": "measured",
+      "detail": "in-tree receipt-only Recall control with no Steward job and no Record (jobs=0 records=0); not a baseline result",
+      "retrieval_hit_rate": 1,
+      "retrieval_only": true,
+      "answers_preference": false
+    },
+    {
+      "id": "C2-current-steward-recall",
+      "side": "current",
+      "status": "measured",
+      "detail": "current Steward-organized evidence Recall on the same fixture; retrieval only",
+      "retrieval_hit_rate": 1,
+      "retrieval_only": true,
+      "answers_preference": false
+    },
+    {
+      "id": "C2-trusted-source-supplemental",
+      "side": "current",
+      "status": "measured",
+      "detail": "current-only trusted host source subject/fact-key match; the baseline cannot run it",
+      "relevant_included": true,
+      "relevant_rank": 1,
+      "retrieval_only": false,
+      "answers_preference": false
+    },
+    {
+      "id": "C2-trusted-source-supplemental-baseline",
+      "side": "baseline",
+      "status": "not_applicable",
+      "reason": "the exact v0.5.2 baseline has no facts/evidence API or trusted host source attribution",
+      "retrieval_only": false,
+      "answers_preference": false
+    },
+    {
+      "id": "GA-real-quality",
+      "side": "none",
+      "status": "blocked",
+      "reason": "extraction, model and consumer-answer quality require a real model and human-reviewed data; this comparison is structural only",
+      "retrieval_only": false,
+      "answers_preference": false
+    }
+  ],
+  "verdict": {
+    "b1_relevant_included": false,
+    "c2_relevant_included": true,
+    "context_selection_changed": true,
+    "context_records_identical": false,
+    "structural_only": true,
+    "answers_preference": false,
+    "real_quality_claim": false
+  },
+  "commands": [
+    "git -C /Users/xueyongzhi/WorkDir/caelis-labs/memory archive --format=tar 51693ff135be8c4149c15117980290aaad6d90da | tar -x -C \u003ctmp\u003e/baseline",
+    "GOWORK=off FACTS_COMPARE_FIXTURE=\u003cfixture\u003e FACTS_COMPARE_RESULT=\u003cresult\u003e FACTS_COMPARE_SIDE=baseline go test -count=1 -run=^TestFactsCompareStruct$ ./internal/appliance  (in the archived baseline tree)",
+    "GOWORK=off FACTS_COMPARE_FIXTURE=\u003cfixture\u003e FACTS_COMPARE_RESULT=\u003cresult\u003e FACTS_COMPARE_SIDE=current go test -count=1 -run=^TestFactsCompareStruct$ ./internal/appliance  (in the copied current tree)",
+    "go run ./scripts/facts_compare -baseline-revision 51693ff135be8c4149c15117980290aaad6d90da -unrelated 80 -output \u003creport.json\u003e"
+  ],
+  "notes": [
+    "This is a structural, model-free comparison. It reports retrieval fragments and context selection only.",
+    "A returned fragment or a selected context Record is never evidence that the user's preference was answered, adopted, extracted or paraphrased.",
+    "Both sides use the same legacy Remember path and the same scripted proposal bytes, so the comparison is not an ingestion-advantage test.",
+    "The current-only trusted-source subject/fact-key match depends on the facts/evidence API, which the baseline does not have; it is supplemental.",
+    "Real extraction, model and consumer-answer quality comparisons remain GA-blocked.",
+    "Nomenclature: B0 is receipt-only Recall on a separate store with no Steward profile binding, so no Steward job and no Record exist. A Steward-organized Recall is B1, not B0.",
+    "Scheduler encoding is reported per side: the exact v0.5.2 baseline compares RFC3339Nano schedule text; the final v0.6 candidate stores fixed-width UTC nanoseconds."
+  ]
+}

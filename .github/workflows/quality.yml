@@ -51,6 +51,9 @@ jobs:
       - run: make check
       - run: make durable
       - run: make race
+      - run: make corpus-gate facts-gate facts-consumer-gate
+      - name: Pure-Go embedded path
+        run: CGO_ENABLED=0 GOWORK=off go test ./appliance ./internal/appliance
 
   native-windows-amd64-embedded-open:
     runs-on: windows-2022
@@ -62,6 +65,9 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Embedded Open regression
+        env:
+          GOWORK: "off"
+          CGO_ENABLED: "0"
         shell: bash
         run: go test -count=1 -timeout 15m ./internal/appliance ./appliance -run '^Test(SQLiteFileDSN|OpenPingsSQLiteOnNativeTempDir|SyncDirectorySucceedsOnNativeTempDir|DurableRestartAndIdempotency|LabelSetPartitionSurvivesRestart|EmbeddedRuntimeRememberRecall|OwnerLockRejectsSecondProcessOwner|ManagementCredentialRotationRevokesOldBearerAcrossRestart)$'
 

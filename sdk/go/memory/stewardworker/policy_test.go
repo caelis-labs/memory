@@ -66,9 +66,34 @@ func TestParseProposalDoesNotDependOnNativeSchemaOutput(t *testing.T) {
 	if _, err := ParseProposal(`{"operation":"IGNORE","extra":true}`, ParseModeText); err == nil {
 		t.Fatal("parser accepted an unknown field")
 	}
-	if _, err := ParseProposal(strings.Repeat("x", stewardv1alpha1.MaxRecordTextBytes+maxEnvelopeOverhead+1), ParseModeText); err == nil ||
+	if _, err := ParseProposal(strings.Repeat("x", maxEnvelopeBytes()+1), ParseModeText); err == nil ||
 		!strings.Contains(err.Error(), "parse limit") {
 		t.Fatalf("oversized envelope error = %v", err)
+	}
+}
+
+func TestParseBoundedBatchProposal(t *testing.T) {
+	value := `{"policy":"bounded_batch","ops":[{"operation":"ADD","kind":"fact","text":"a","evidence_refs":["receipt-1"]},{"operation":"IGNORE"}]}`
+	proposal, err := ParseProposal(value, ParseModeStrict)
+	if err != nil || !proposal.IsBatch() || len(proposal.Ops) != 2 {
+		t.Fatalf("ParseProposal(batch) = %+v, %v", proposal, err)
+	}
+	prepared, err := PrepareGeneration(testWorkRequest(BuiltInProfile()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(prepared.Instructions, `"policy":"bounded_batch"`) {
+		t.Fatalf("prepared instructions omitted the bounded batch shape: %s", prepared.Instructions)
+	}
+	properties := prepared.JSONSchema["properties"].(map[string]any)
+	if properties["policy"] == nil || properties["ops"] == nil {
+		t.Fatal("prepared schema omitted bounded batch fields")
+	}
+	if _, err := ParseProposal(`{"ops":[{"operation":"IGNORE"}]}`, ParseModeStrict); err == nil {
+		t.Fatal("parser accepted a batch without the explicit policy marker")
+	}
+	if _, err := ParseProposal(`{"policy":"bounded_batch","ops":[{"operation":"IGNORE","extra":1}]}`, ParseModeStrict); err == nil {
+		t.Fatal("parser accepted an unknown field inside a batch op")
 	}
 }
 

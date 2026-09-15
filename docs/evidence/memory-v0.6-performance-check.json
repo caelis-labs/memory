@@ -1,0 +1,297 @@
+{
+  "format": "memory.v0.6.local-performance-check.v1",
+  "qualification": "single-machine repaired candidate qualification; not GA or a hardware-independent SLO",
+  "report": "memory-v0.6-perf-final.json",
+  "report_sha256": "e18e0610f3d5bb7349b47a6b62a05dd70ea801e9ed352cb87037798c230362bd",
+  "limits": "memory-v0.6-performance-limits.json",
+  "limits_sha256": "813486e534ca2c94c81dd5356fd0870faccebc09b5684ca9b6fd665327f2338d",
+  "performance_run_source_sha256": "99037fb24c0f1fc64a5380a91ddcefac6287659cd85066fe9c66dcace0f4e8b1",
+  "final_source_sha256": "99037fb24c0f1fc64a5380a91ddcefac6287659cd85066fe9c66dcace0f4e8b1",
+  "comparison": "every measured value <= its original frozen upper bound; limits file byte-identical",
+  "runs": [
+    {
+      "receipts": 1000,
+      "fixture_checks": {
+        "seed_samples_match_receipts": true,
+        "warm_read_samples_200": true,
+        "warm_changes_samples_200": true,
+        "eight_readers": true,
+        "writer_ops_200": true,
+        "reader_samples_match_ops": true,
+        "cleanup_eight_completed": true,
+        "single_rebuild_sample": true,
+        "fts_measured": true,
+        "rss_measured": true,
+        "hot_partition": true
+      },
+      "fixture_checks_passed": true,
+      "passed": true,
+      "checks": [
+        {
+          "metric": "cleanup_p95_ms",
+          "measured": 4.337,
+          "upper_bound": 500,
+          "passed": true
+        },
+        {
+          "metric": "contention_errors",
+          "measured": 0,
+          "upper_bound": 0,
+          "passed": true
+        },
+        {
+          "metric": "contention_reader_p95_ms",
+          "measured": 0.994,
+          "upper_bound": 20,
+          "passed": true
+        },
+        {
+          "metric": "database_after_rebuild_bytes",
+          "measured": 5971968,
+          "upper_bound": 629145600,
+          "passed": true
+        },
+        {
+          "metric": "fts_bytes",
+          "measured": 720896,
+          "upper_bound": 104857600,
+          "passed": true
+        },
+        {
+          "metric": "peak_rss_bytes",
+          "measured": 332906496,
+          "upper_bound": 536870912,
+          "passed": true
+        },
+        {
+          "metric": "reopen_first_read_ms",
+          "measured": 0.3,
+          "upper_bound": 50,
+          "passed": true
+        },
+        {
+          "metric": "seed_p95_ms",
+          "measured": 1.14,
+          "upper_bound": 5,
+          "passed": true
+        },
+        {
+          "metric": "single_rebuild_ms",
+          "measured": 74.416,
+          "upper_bound": 15000,
+          "passed": true
+        },
+        {
+          "metric": "warm_changes_p95_ms",
+          "measured": 0.298,
+          "upper_bound": 10,
+          "passed": true
+        },
+        {
+          "metric": "warm_read_p95_ms",
+          "measured": 0.197,
+          "upper_bound": 10,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "receipts": 10000,
+      "fixture_checks": {
+        "seed_samples_match_receipts": true,
+        "warm_read_samples_200": true,
+        "warm_changes_samples_200": true,
+        "eight_readers": true,
+        "writer_ops_200": true,
+        "reader_samples_match_ops": true,
+        "cleanup_eight_completed": true,
+        "single_rebuild_sample": true,
+        "fts_measured": true,
+        "rss_measured": true,
+        "hot_partition": true
+      },
+      "fixture_checks_passed": true,
+      "passed": true,
+      "checks": [
+        {
+          "metric": "cleanup_p95_ms",
+          "measured": 34.225,
+          "upper_bound": 500,
+          "passed": true
+        },
+        {
+          "metric": "contention_errors",
+          "measured": 0,
+          "upper_bound": 0,
+          "passed": true
+        },
+        {
+          "metric": "contention_reader_p95_ms",
+          "measured": 0.955,
+          "upper_bound": 20,
+          "passed": true
+        },
+        {
+          "metric": "database_after_rebuild_bytes",
+          "measured": 45899776,
+          "upper_bound": 629145600,
+          "passed": true
+        },
+        {
+          "metric": "fts_bytes",
+          "measured": 5058560,
+          "upper_bound": 104857600,
+          "passed": true
+        },
+        {
+          "metric": "peak_rss_bytes",
+          "measured": 359219200,
+          "upper_bound": 536870912,
+          "passed": true
+        },
+        {
+          "metric": "reopen_first_read_ms",
+          "measured": 0.3,
+          "upper_bound": 50,
+          "passed": true
+        },
+        {
+          "metric": "seed_p95_ms",
+          "measured": 3.607,
+          "upper_bound": 15,
+          "passed": true
+        },
+        {
+          "metric": "single_rebuild_ms",
+          "measured": 615.892,
+          "upper_bound": 15000,
+          "passed": true
+        },
+        {
+          "metric": "warm_changes_p95_ms",
+          "measured": 0.823,
+          "upper_bound": 10,
+          "passed": true
+        },
+        {
+          "metric": "warm_read_p95_ms",
+          "measured": 0.191,
+          "upper_bound": 10,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "receipts": 100000,
+      "fixture_checks": {
+        "seed_samples_match_receipts": true,
+        "warm_read_samples_200": true,
+        "warm_changes_samples_200": true,
+        "eight_readers": true,
+        "writer_ops_200": true,
+        "reader_samples_match_ops": true,
+        "cleanup_eight_completed": true,
+        "single_rebuild_sample": true,
+        "fts_measured": true,
+        "rss_measured": true,
+        "hot_partition": true
+      },
+      "fixture_checks_passed": true,
+      "passed": true,
+      "checks": [
+        {
+          "metric": "cleanup_p95_ms",
+          "measured": 348.909,
+          "upper_bound": 500,
+          "passed": true
+        },
+        {
+          "metric": "contention_errors",
+          "measured": 0,
+          "upper_bound": 0,
+          "passed": true
+        },
+        {
+          "metric": "contention_reader_p95_ms",
+          "measured": 0.858,
+          "upper_bound": 20,
+          "passed": true
+        },
+        {
+          "metric": "database_after_rebuild_bytes",
+          "measured": 450904064,
+          "upper_bound": 629145600,
+          "passed": true
+        },
+        {
+          "metric": "fts_bytes",
+          "measured": 65126400,
+          "upper_bound": 104857600,
+          "passed": true
+        },
+        {
+          "metric": "peak_rss_bytes",
+          "measured": 424574976,
+          "upper_bound": 536870912,
+          "passed": true
+        },
+        {
+          "metric": "reopen_first_read_ms",
+          "measured": 0.579,
+          "upper_bound": 50,
+          "passed": true
+        },
+        {
+          "metric": "seed_p95_ms",
+          "measured": 27.392,
+          "upper_bound": 50,
+          "passed": true
+        },
+        {
+          "metric": "single_rebuild_ms",
+          "measured": 6069.356,
+          "upper_bound": 15000,
+          "passed": true
+        },
+        {
+          "metric": "warm_changes_p95_ms",
+          "measured": 0.293,
+          "upper_bound": 10,
+          "passed": true
+        },
+        {
+          "metric": "warm_read_p95_ms",
+          "measured": 0.447,
+          "upper_bound": 10,
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "passed": true,
+  "checks_passed": 33,
+  "checks_total": 33,
+  "limitations": [
+    "The limit file retains original freeze-time provenance fields; the current source/report hashes are recorded here.",
+    "Distinct-subject point reads, not one subject with 100k facts.",
+    "Soak, full test gates and M5 finished before this performance run; this is still an observational sample on a shared desktop.",
+    "Cold is first read after SQLite reopen; OS cache is not flushed.",
+    "Single rebuild sample and eight cleanup samples do not establish statistical tail confidence.",
+    "RSS is process peak residency across sequential size runs.",
+    "No model-driven performance or answer quality qualification."
+  ],
+  "earlier_complete_run": {
+    "report": "memory-v0.6-perf-review-full-attempt-1.json",
+    "check": "memory-v0.6-performance-review-full-attempt-1-check.json",
+    "checks_passed": 32,
+    "checks_total": 33,
+    "failed_metric": "1k seed p95 8.270 ms > 5 ms"
+  },
+  "diagnostic_1k_seed_p95_ms": [
+    1.149,
+    1.206,
+    1.144
+  ],
+  "repeatability_qualified": false,
+  "variability_note": "The initial overrun did not recur in three fixed diagnostic runs. Its cause is not established. Current-run pass does not qualify statistical repeatability."
+}

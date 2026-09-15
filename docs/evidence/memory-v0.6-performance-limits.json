@@ -1,0 +1,41 @@
+{
+  "version": "v0.6.0-candidate-1",
+  "status": "frozen after baseline, before optimization; local hardware qualification only",
+  "hardware": {
+    "cpu": "Apple M4",
+    "logical_cpus": 10,
+    "ram_bytes": 25769803776,
+    "os": "Darwin 25.6.0 arm64",
+    "go": "go1.26.8"
+  },
+  "fixture": "TestFactsPerformanceHarness: single Space and LabelSet; one explicit fact per receipt; distinct subjects; 200 warm queries; 8 readers and 200 competing writes; no model",
+  "baseline_100k_report_sha256": "8753d2e27440cece8d8201647947fbd340ba59795b9788f61ca7261e4b188ec7",
+  "baseline_1k_10k_evidence": "memory-v0.6-facts-evaluation-2026-09-15.md",
+  "final_source_sha256": "13e9e08428c10f6e30d258ca9a0e1771a9be34b2eb29306002ebcca9a5f34515",
+  "seed_p95_ms_by_size": {
+    "1000": 5,
+    "10000": 15,
+    "100000": 50
+  },
+  "limits": {
+    "reopen_first_read_ms": 50,
+    "warm_read_p95_ms": 10,
+    "warm_changes_p95_ms": 10,
+    "contention_reader_p95_ms": 20,
+    "contention_errors": 0,
+    "cleanup_p95_ms": 500,
+    "single_rebuild_ms": 15000,
+    "peak_rss_bytes": 536870912,
+    "database_after_rebuild_bytes": 629145600,
+    "fts_bytes": 104857600
+  },
+  "limitations": [
+    "This is not arbitrary per-user 100k-fact background scanning or model-driven organization qualification.",
+    "Cold denotes first read after SQLite reopen; OS cache and the process dictionary are not flushed.",
+    "Rebuild is one sample and cleanup eight samples; their percentile fields are not tail-confidence estimates.",
+    "Production model calls, tokens, model backlog and invalid organization rate remain unmeasured.",
+    "Final-code rerun follows the baseline because governance closure and input-error handling changed after the baseline process started."
+  ],
+  "performance_run_source_sha256": "eefea4171f425e7f85d385f4c343d208632f0c02a2df22e1172d6c50ae9a4e3a",
+  "post_run_source_changes": "Public facade adapters and comparison-script arm labels only; internal appliance/API/SDK/performance binary inputs unchanged."
+}

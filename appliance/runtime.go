@@ -37,6 +37,23 @@ type Management interface {
 	BindStewardProfile(context.Context, managementv1alpha1.BindStewardProfileRequest) (managementv1alpha1.BindStewardProfileResponse, error)
 	DisableSteward(context.Context, managementv1alpha1.DisableStewardRequest) (managementv1alpha1.DisableStewardResponse, error)
 	GetStewardConfiguration(context.Context) (managementv1alpha1.StewardConfiguration, error)
+	// SearchReceipts, TraceReceipt, CorrectReceipt, and DeleteReceipt are the
+	// owner governance surface over immutable evidence. DeleteReceipt is the
+	// public forget verb: it commits a logical forgetting barrier and then
+	// completes managed history cleansing, which CleanupStatus reports.
+	SearchReceipts(context.Context, managementv1alpha1.SearchReceiptsRequest) (managementv1alpha1.SearchReceiptsResponse, error)
+	TraceReceipt(context.Context, managementv1alpha1.TraceReceiptRequest) (managementv1alpha1.TraceReceiptResponse, error)
+	CorrectReceipt(context.Context, managementv1alpha1.CorrectReceiptRequest) (managementv1alpha1.CorrectReceiptResponse, error)
+	DeleteReceipt(context.Context, managementv1alpha1.DeleteReceiptRequest) (managementv1alpha1.DeleteReceiptResponse, error)
+	CleanupStatus(context.Context, managementv1alpha1.CleanupStatusRequest) (managementv1alpha1.CleanupStatusResponse, error)
+	// ListRecords and TraceRecord are the owner audit surface over derived
+	// semantic Records. Forgotten Records return only content-free skeletons.
+	ListRecords(context.Context, managementv1alpha1.ListRecordsRequest) (managementv1alpha1.ListRecordsResponse, error)
+	TraceRecord(context.Context, managementv1alpha1.TraceRecordRequest) (managementv1alpha1.TraceRecordResponse, error)
+	// RebuildFTS reconstructs every disposable lexical projection from durable
+	// evidence. RevokeGrant invalidates all capabilities derived from a Grant.
+	RebuildFTS(context.Context) error
+	RevokeGrant(context.Context, memoryv1alpha1.GrantID) error
 	// Backup writes one consistent owner-created SQLite image. The caller
 	// owns the destination and must protect it as sensitive data.
 	Backup(context.Context, io.Writer) error
@@ -67,12 +84,14 @@ func Open(ctx context.Context, options Options) (*Runtime, error) {
 	return &Runtime{store: store}, nil
 }
 
-// DataPlane returns the stable Remember/Recall service boundary.
+// DataPlane returns the stable Remember/Recall service boundary. The returned
+// value is a narrow adapter, not the internal Store, so a data-plane holder
+// cannot assert it into an owner plane.
 func (r *Runtime) DataPlane() memoryv1alpha1.DataPlane {
 	if r == nil || r.closed.Load() {
 		return nil
 	}
-	return r.store
+	return dataPlanePlane{store: r.store}
 }
 
 // Management returns the appliance-owned management plane.

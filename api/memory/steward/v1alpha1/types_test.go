@@ -40,6 +40,64 @@ func TestProposalShapeVocabularyAndBounds(t *testing.T) {
 	}
 }
 
+func TestBoundedBatchProposalShape(t *testing.T) {
+	receipt := memoryv1alpha1.ReceiptID("receipt-a")
+	valid := Proposal{
+		Policy: PolicyBoundedBatch,
+		Ops: []ProposalOp{
+			{Operation: OperationAdd, Kind: "claim", Text: "the service uses Go", EvidenceRefs: []memoryv1alpha1.ReceiptID{receipt}},
+			{Operation: OperationIgnore},
+		},
+	}
+	if err := valid.ValidateShape(); err != nil {
+		t.Fatalf("batch ValidateShape = %v", err)
+	}
+	if !valid.IsBatch() || len(valid.BatchOps()) != 2 {
+		t.Fatalf("batch helpers = %v %d", valid.IsBatch(), len(valid.BatchOps()))
+	}
+	single := Proposal{Operation: OperationAdd, Kind: "claim", Text: "the service uses Go", EvidenceRefs: []memoryv1alpha1.ReceiptID{receipt}}
+	if single.IsBatch() || len(single.BatchOps()) != 1 {
+		t.Fatalf("single BatchOps = %d", len(single.BatchOps()))
+	}
+	invalid := []Proposal{
+		{Policy: PolicyBoundedBatch},
+		{Ops: []ProposalOp{{Operation: OperationIgnore}}},
+		{Operation: OperationIgnore, Policy: PolicyBoundedBatch, Ops: []ProposalOp{{Operation: OperationIgnore}}},
+		{Policy: PolicyBoundedBatch, Ops: []ProposalOp{{Operation: OperationAdd, Kind: "claim", Text: "x"}}},
+		{Policy: PolicyBoundedBatch, Ops: []ProposalOp{
+			{Operation: OperationMerge, TargetRecordID: "record-a", ExpectedRevision: 1, Kind: "k", Text: "a", EvidenceRefs: []memoryv1alpha1.ReceiptID{receipt}},
+			{Operation: OperationMerge, TargetRecordID: "record-a", ExpectedRevision: 2, Kind: "k", Text: "b", EvidenceRefs: []memoryv1alpha1.ReceiptID{receipt}},
+		}},
+		{Policy: PolicyBoundedBatch, Ops: make([]ProposalOp, MaxProposalOps+1)},
+	}
+	for _, proposal := range invalid {
+		if err := proposal.ValidateShape(); err == nil {
+			t.Fatalf("ValidateShape(%+v) succeeded", proposal)
+		}
+	}
+}
+
+func TestWorkRequestCarriesOnlyHostSources(t *testing.T) {
+	request := WorkRequest{
+		Protocol: ProtocolVersion,
+		Receipt: ReceiptInput{
+			ReceiptID: "receipt-a", Text: "fact",
+			Subject: "service", FactKey: "language",
+			Sources: []SourceRef{{Producer: "host", EventID: "e-1", Role: SourceRoleUserQuote, Subject: "service", FactKey: "language"}},
+		},
+		Records: []RecordContext{{RecordID: "record-a", Revision: 1, Kind: "claim", Text: "head", Subject: "service", FactKey: "language"}},
+	}
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"\"sources\"", "\"role\":\"user_quote\"", "\"fact_key\":\"language\"", "\"subject\":\"service\""} {
+		if !strings.Contains(string(encoded), want) {
+			t.Fatalf("WorkRequest JSON missing %s: %s", want, encoded)
+		}
+	}
+}
+
 func TestProfileAndWorkRequestBounds(t *testing.T) {
 	profile := ProfileSpec{
 		ProfileID: "profile-a", Version: 1,

@@ -1,0 +1,53 @@
+{
+  "format": "memory.ga-soak.v1",
+  "passed": true,
+  "goos": "darwin",
+  "goarch": "arm64",
+  "go_version": "go1.26.8",
+  "spaces": 100,
+  "receipts": 100000,
+  "records": 10000,
+  "receipt_status_reads": 100000,
+  "recall_samples": 200,
+  "provenance_checks": 100,
+  "private_leak_checks": 100,
+  "private_leaks": 0,
+  "restored_receipt_status_reads": 100000,
+  "restored_recall_samples": 200,
+  "restored_provenance_checks": 100,
+  "restored_private_leak_checks": 100,
+  "restored_private_leaks": 0,
+  "durations_ms": {
+    "backup": 2577,
+    "bootstrap": 160,
+    "organize_records": 238519,
+    "reindex": 3278,
+    "remember_baseline": 38667,
+    "remember_semantic": 6453,
+    "restart": 23,
+    "restart_data_plane": 7613,
+    "restore_rebuild": 20498
+  },
+  "source": {
+    "schema_version": 2,
+    "stored_receipts": 100000,
+    "active_records": 10000,
+    "completed_jobs": 10000,
+    "pending_jobs": 0,
+    "projection_healthy": true,
+    "semantic_index_healthy": true,
+    "database_bytes": 184569856,
+    "wal_bytes": 27657592
+  },
+  "restored": {
+    "schema_version": 2,
+    "stored_receipts": 100000,
+    "active_records": 10000,
+    "completed_jobs": 10000,
+    "pending_jobs": 0,
+    "projection_healthy": true,
+    "semantic_index_healthy": true,
+    "database_bytes": 176517120,
+    "wal_bytes": 30512752
+  }
+}

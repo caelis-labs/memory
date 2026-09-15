@@ -1,0 +1,65 @@
+{
+  "format_version": 1,
+  "corpus": "memory-v0.6-facts-longitudinal",
+  "generated_for": "M06 facts/evidence longitudinal evaluation and performance harness",
+  "review_status": "not_human_reviewed",
+  "human_reviewed_cases": 0,
+  "release_blocker": "Production-representative extraction, natural paraphrase, background and consumer-answer quality remain unqualified. The user authorized independent AI-agent trajectory review in place of manual review; its per-case evidence is recorded separately under docs/evidence/memory-v0.6-agent-*-review. Human-reviewed cases remain zero, and the 26-template candidate matrix is not human gold or a production-quality holdout.",
+  "thresholds": {
+    "explicit_preference_min": 0.95,
+    "recall_at8_alias_min": 0.9,
+    "max_recall_p95_ms": 750
+  },
+  "threshold_note": "Thresholds are frozen before measurement. The gate refuses to run if the manifest lowers them below the frozen floor, so a result can never be produced by tuning the bar afterward.",
+  "controlled_aliases": {
+    "preference.drink": [
+      "coffee",
+      "tea",
+      "\u5496\u5561",
+      "\u8336",
+      "\u996e\u54c1",
+      "\u996e\u6599",
+      "beverage",
+      "drink"
+    ],
+    "diet": [
+      "diet",
+      "vegetarian",
+      "\u7d20\u98df",
+      "\u996e\u98df"
+    ],
+    "language": [
+      "language",
+      "\u8bed\u8a00",
+      "\u4e2d\u6587",
+      "english"
+    ],
+    "timezone": [
+      "timezone",
+      "time zone",
+      "\u65f6\u533a"
+    ]
+  },
+  "fixtures": [
+    {
+      "file": "trajectories.json",
+      "sha256": "d5f2c3e811aaa726f1b6b49113d41bcaeb53cf2e589da8556cd4755696d3dff4",
+      "expected_trajectories": 14
+    },
+    {
+      "file": "candidates.json",
+      "sha256": "c6c7649fefdca6bc917d5528ed7a28624413fb8360e72a649f7564ee08959715"
+    }
+  ],
+  "candidate_expansion": {
+    "generator": "facts_eval_candidate_matrix_v1",
+    "subjects": 8,
+    "templates": 26,
+    "expected_candidates": 208,
+    "review_status": "not_human_reviewed",
+    "tiers": [
+      "C1",
+      "C3"
+    ]
+  }
+}

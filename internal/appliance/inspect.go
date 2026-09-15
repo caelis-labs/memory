@@ -36,6 +36,7 @@ func (s *Store) Inspect(ctx context.Context) (Inspection, error) {
 		"receipts", "receipt_corrections", "receipt_tombstones",
 		"steward_profiles", "space_steward_bindings", "steward_jobs", "semantic_records",
 		"space_lexicons", "lexicon_terms", "lexicon_term_evidence",
+		forgettingBarrierTable,
 	} {
 		var count int64
 		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+table).Scan(&count); err != nil {
@@ -119,6 +120,9 @@ func (s *Store) Inspect(ctx context.Context) (Inspection, error) {
 		return Inspection{}, err
 	}
 	if err := s.inspectLexiconDiagnostics(ctx, &result); err != nil {
+		return Inspection{}, err
+	}
+	if err := s.inspectGovernanceDiagnostics(ctx, &result); err != nil {
 		return Inspection{}, err
 	}
 	storage, err := inspectStorage(s.dataDir)

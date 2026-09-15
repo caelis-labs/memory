@@ -1,0 +1,130 @@
+package appliance
+
+import (
+    "bytes"
+    "os"
+    "path/filepath"
+    "testing"
+    "time"
+
+    management "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
+    steward "github.com/caelis-labs/memory/api/memory/steward/v1alpha1"
+    memory "github.com/caelis-labs/memory/api/memory/v1alpha1"
+)
+
+// migrationFixtureBytes gives the fixture a deliberately deterministic random
+// stream. It is only used while producing this checked-in test fixture.
+var migrationFixtureBytes = bytes.Repeat([]byte{'B'}, 32)
+
+type migrationFixtureReader struct{}
+
+func (migrationFixtureReader) Read(p []byte) (int, error) {
+    for i := range p {
+        p[i] = migrationFixtureBytes[i%len(migrationFixtureBytes)]
+    }
+    return len(p), nil
+}
+
+func TestGenerateMigrationFixture(t *testing.T) {
+    output := os.Getenv("MIGRATION_FIXTURE_OUT")
+    if output == "" {
+        t.Fatal("MIGRATION_FIXTURE_OUT is required")
+    }
+    if err := os.MkdirAll(output, 0o700); err != nil {
+        t.Fatal(err)
+    }
+    now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+    store, err := Open(t.Context(), Options{
+        DataDir: output,
+        Clock:   func() time.Time { return now },
+        Random:  migrationFixtureReader{},
+    })
+    if err != nil {
+        t.Fatal(err)
+    }
+    closeStore := func() {
+        _, _ = store.db.ExecContext(t.Context(), `PRAGMA wal_checkpoint(TRUNCATE)`)
+        _ = store.Close()
+    }
+    defer closeStore()
+
+    expires := now.Add(12 * time.Hour)
+    bootstrap, err := store.Bootstrap(t.Context(), BootstrapRequest{
+        Realms: []Realm{{ID: "realm:migration"}},
+        Identities: []Identity{{ID: "identity:migration", RealmID: "realm:migration"}},
+        Spaces: []Space{
+            {ID: "space:migration", RealmID: "realm:migration", IdentityID: "identity:migration", Class: memory.SpaceClassPrivate},
+            {ID: "space:shared", RealmID: "realm:migration", Class: memory.SpaceClassShared},
+        },
+        Views: []ViewDefinition{
+            {ID: "view:migration", RealmID: "realm:migration", ReadSpaceIDs: []memory.SpaceID{"space:migration"}, WriteSpaceID: "space:migration", MaxDisclosureClass: memory.SpaceClassPrivate, RecallPolicyRef: "policy:migration", Version: 1},
+            {ID: "view:shared", RealmID: "realm:migration", ReadSpaceIDs: []memory.SpaceID{"space:shared"}, WriteSpaceID: "space:shared", MaxDisclosureClass: memory.SpaceClassShared, RecallPolicyRef: "policy:shared", Version: 1},
+        },
+        Grants: []Grant{
+            {ID: "grant:migration", PrincipalRef: "principal:migration", ActorRef: "actor:migration", ViewRef: "view:migration", AllowedOperations: []memory.Operation{memory.OperationRemember, memory.OperationRecall, memory.OperationReceiptStatus}, AllowedAudiences: []memory.Audience{memory.AudiencePrivate}, ExpiresAt: expires, Version: 1},
+            {ID: "grant:shared-reader", PrincipalRef: "principal:reader", ActorRef: "actor:reader", ViewRef: "view:shared", AllowedOperations: []memory.Operation{memory.OperationRecall}, AllowedAudiences: []memory.Audience{memory.AudienceShared}, ExpiresAt: expires, Version: 1},
+        },
+        IssuerPrincipals: []string{"principal:migration", "principal:reader"},
+    })
+    if err != nil {
+        t.Fatal(err)
+    }
+
+    profile := steward.ProfileSpec{
+        ProfileID: "profile:migration", Version: 1, SystemPrompt: "organize migration evidence",
+        MaxContextRecords: 8, MaxInputBytes: 128 << 10, MaxOutputBytes: 16 << 10,
+    }
+    if _, err := store.PutStewardProfile(t.Context(), management.PutStewardProfileRequest{Profile: profile}); err != nil {
+        t.Fatal(err)
+    }
+    if _, err := store.BindStewardProfile(t.Context(), management.BindStewardProfileRequest{ProfileID: profile.ProfileID, Version: profile.Version, SpaceIDs: []memory.SpaceID{"space:migration"}}); err != nil {
+        t.Fatal(err)
+    }
+    const token = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI"
+    capability, err := store.IssueCapability(t.Context(), IssueCapabilityRequest{
+        Authorization: IssuerAuthorization{PrincipalRef: "principal:migration", Credential: bootstrap.IssuerCredentials["principal:migration"]},
+        GrantRef: "grant:migration", ActorRef: "actor:migration", Audience: memory.AudiencePrivate,
+        Operations: []memory.Operation{memory.OperationRemember, memory.OperationRecall, memory.OperationReceiptStatus},
+        Labels: memory.LabelSet{"workspace:migration"}, TTL: time.Hour,
+    })
+    if err != nil {
+        t.Fatal(err)
+    }
+    if string(capability.Token) != token {
+        t.Fatalf("deterministic capability token = %q, want %q", capability.Token, token)
+    }
+    occurred := now.Add(-2 * time.Hour)
+    request := memory.RememberRequest{
+        Text: "v0.5.2 source receipt survives schema migration",
+        SourceContext: memory.SourceContext{
+            ActorRef: "actor:migration", SessionRef: "session:v052", WorkspaceRef: "workspace:migration",
+            TaskRef: "task:migration-fixture", ToolCallRef: "tool:v052", SourceType: "fixture-source",
+            ExtensionLabels: map[string]string{"fixture": "v0.5.2", "origin": "baseline"},
+        },
+        OccurredAt: &occurred, IdempotencyKey: "fixture-v052-receipt",
+    }
+    receipt, err := store.Remember(t.Context(), callAuth(capability, "actor:migration", memory.AudiencePrivate), request)
+    if err != nil {
+        t.Fatal(err)
+    }
+    if !receipt.Accepted {
+        t.Fatalf("Remember response = %+v", receipt)
+    }
+    work, found, err := store.ClaimStewardJob(t.Context(), 5*time.Minute)
+    if err != nil || !found {
+        t.Fatalf("Claim found=%v err=%v", found, err)
+    }
+    result, err := store.ApplyStewardProposal(t.Context(), work.Lease, steward.Proposal{
+        Operation: steward.OperationAdd, Kind: "claim", Text: "The migration source receipt is retained.",
+        EvidenceRefs: []memory.ReceiptID{receipt.ReceiptID},
+    })
+    if err != nil {
+        t.Fatal(err)
+    }
+    if result.RecordID == "" || result.Revision != 1 {
+        t.Fatalf("Apply result = %+v", result)
+    }
+    if err := os.WriteFile(filepath.Join(output, "fixture-generated.txt"), []byte("temporary"), 0o600); err != nil {
+        t.Fatal(err)
+    }
+}
