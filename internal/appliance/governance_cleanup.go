@@ -882,15 +882,22 @@ func (s *Store) ListRecords(
 	if err := request.Validate(); err != nil {
 		return managementv1alpha1.ListRecordsResponse{}, s.serviceError(v1alpha1.ErrorCodeInvalidArgument, err.Error(), false)
 	}
+	// One snapshot and one checked-out connection for the head, governance
+	// fences and revision evidence, even when the pool is otherwise occupied.
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return managementv1alpha1.ListRecordsResponse{}, s.databaseError("begin governance read", err)
+	}
+	defer tx.Rollback()
 	var exists bool
-	if err := s.db.QueryRowContext(ctx,
+	if err := tx.QueryRowContext(ctx,
 		`SELECT EXISTS(SELECT 1 FROM spaces WHERE id = ?)`, request.SpaceID).Scan(&exists); err != nil {
 		return managementv1alpha1.ListRecordsResponse{}, s.databaseError("validate record listing Space", err)
 	}
 	if !exists {
 		return managementv1alpha1.ListRecordsResponse{}, s.serviceError(v1alpha1.ErrorCodeNotFound, "Space not found", false)
 	}
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := tx.QueryContext(ctx,
 		`SELECT record_id, space_id, label_set, label_set_digest, kind, status,
 		 current_revision, invalidated_reason, created_at, updated_at
 		 FROM semantic_records
@@ -926,12 +933,12 @@ func (s *Store) ListRecords(
 			_ = rows.Close()
 			return managementv1alpha1.ListRecordsResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "stored semantic Record time is invalid", false)
 		}
-		state, err := readRecordGovernanceState(ctx, s.db, record.RecordID)
+		state, err := readRecordGovernanceState(ctx, tx, record.RecordID)
 		if err != nil {
 			_ = rows.Close()
 			return managementv1alpha1.ListRecordsResponse{}, s.databaseError("read semantic Record governance state", err)
 		}
-		if err := s.blankForgottenRecordHead(ctx, s.db, &record); err != nil {
+		if err := s.blankForgottenRecordHead(ctx, tx, &record); err != nil {
 			_ = rows.Close()
 			return managementv1alpha1.ListRecordsResponse{}, s.databaseError("apply forgetting fence", err)
 		}
@@ -956,6 +963,9 @@ func (s *Store) ListRecords(
 			response.NextCursor = ""
 		}
 	}
+	if err := tx.Commit(); err != nil {
+		return managementv1alpha1.ListRecordsResponse{}, s.databaseError("finish governance read", err)
+	}
 	return response, nil
 }
 
@@ -969,9 +979,16 @@ func (s *Store) TraceRecord(
 	if err := request.Validate(); err != nil {
 		return managementv1alpha1.TraceRecordResponse{}, s.serviceError(v1alpha1.ErrorCodeInvalidArgument, err.Error(), false)
 	}
+	// One snapshot and one checked-out connection for the head, governance
+	// fences and revision evidence, even when the pool is otherwise occupied.
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return managementv1alpha1.TraceRecordResponse{}, s.databaseError("begin governance read", err)
+	}
+	defer tx.Rollback()
 	var record stewardv1alpha1.Record
 	var labelSetEncoded, labelSetDigest, createdAt, updatedAt string
-	err := s.db.QueryRowContext(ctx,
+	err = tx.QueryRowContext(ctx,
 		`SELECT record_id, space_id, label_set, label_set_digest, kind, status,
 		 current_revision, invalidated_reason, created_at, updated_at
 		 FROM semantic_records WHERE record_id = ?`, request.RecordID).Scan(
@@ -995,14 +1012,14 @@ func (s *Store) TraceRecord(
 	if record.UpdatedAt, err = parseTime(updatedAt); err != nil {
 		return managementv1alpha1.TraceRecordResponse{}, s.serviceError(v1alpha1.ErrorCodeInternal, "stored semantic Record time is invalid", false)
 	}
-	governance, err := readRecordGovernanceState(ctx, s.db, record.RecordID)
+	governance, err := readRecordGovernanceState(ctx, tx, record.RecordID)
 	if err != nil {
 		return managementv1alpha1.TraceRecordResponse{}, s.databaseError("read semantic Record governance state", err)
 	}
-	if err := s.blankForgottenRecordHead(ctx, s.db, &record); err != nil {
+	if err := s.blankForgottenRecordHead(ctx, tx, &record); err != nil {
 		return managementv1alpha1.TraceRecordResponse{}, s.databaseError("apply forgetting fence", err)
 	}
-	revisions, err := s.readGovernedRevisions(ctx, s.db, record)
+	revisions, err := s.readGovernedRevisions(ctx, tx, record)
 	if err != nil {
 		return managementv1alpha1.TraceRecordResponse{}, err
 	}
@@ -1019,12 +1036,15 @@ func (s *Store) TraceRecord(
 	if governance.version == 0 {
 		response.Cleanup = managementv1alpha1.CleanupStateNone
 	}
+	if err := tx.Commit(); err != nil {
+		return managementv1alpha1.TraceRecordResponse{}, s.databaseError("finish governance read", err)
+	}
 	return response, nil
 }
 
 func (s *Store) readGovernedRevisions(
 	ctx context.Context,
-	db databaseExecutor,
+	db *sql.Tx,
 	record stewardv1alpha1.Record,
 ) ([]stewardv1alpha1.Revision, error) {
 	rows, err := db.QueryContext(ctx,

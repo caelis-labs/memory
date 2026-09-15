@@ -14,10 +14,10 @@ the current integration or release critical path.
 
 ## v0.6.0: long-term facts and governance
 
-The next implementation milestone is **v0.6.0**, ahead of Corpus/Leaf and
+The current package milestone is **v0.6.0**, ahead of Corpus/Leaf and
 projection work. It extends existing flat Record/Revision continuity, not a
 second profile ledger. See the [facts contract](memory-v0.6-facts.md) and
-[candidate status/checklist](memory-v0.6-release.md).
+[release scope and verification](memory-v0.6-release.md).
 
 | Milestone | Owning delivered surface | Qualification |
 | --- | --- | --- |

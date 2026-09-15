@@ -17,9 +17,11 @@ published or consumed by Caelis in the current release line.
 `make standalone-preview` retains the historical native packaging checks
 without adding them to the package candidate gate.
 
-The local v0.6.0 candidate is tracked in the
-[v0.6 release notes and checklist](memory-v0.6-release.md). Its production longitudinal quality, exact-candidate native CI and publication authorization are
-separate gates; a version-file edit does not mean the release exists.
+The v0.6.0 source-package release is tracked in the
+[v0.6 release notes and checklist](memory-v0.6-release.md). The user authorized formal package publication after PR review repairs. Exact-revision
+native CI remains required before tagging. Production longitudinal quality and
+Caelis Facts product integration are separately unqualified; a version-file edit
+does not mean the release exists.
 
 ## Package candidate gate
 
@@ -38,7 +40,8 @@ The facts gate has its own frozen longitudinal fixtures and admission/lifecycle/
 governance assertions. Candidate-generated cases are labeled unreviewed and do
 not themselves satisfy review. This candidate has completed the user-authorized
 independent AI-agent substitute review, with human count 0 and per-case evidence.
-Production model/holdout quality remains a gate. Follow the
+Production model/holdout quality remains required for end-to-end Bot acceptance,
+not claimed by this scoped package release. Follow the
 [longitudinal evaluation procedure](memory-v0.6-evaluation.md) for controlled
 comparison arms and 1k/10k/100k hot-partition baseline measurements.
 
@@ -90,7 +93,7 @@ release. A local commit, local tag, earlier RC result, or tag on another SHA is
 not release authority. The Memory package publishes no standalone binaries in
 this release line.
 
-The candidate package version is `0.6.0` (last released baseline: `0.5.2`).
+The package version is `0.6.0` (previous released baseline: `0.5.2`).
 `memory-v0.5.0` remains the first supported source schema floor. v0.6 writes
 schema **2**, marker `memory-v0.6.0`, through an explicit atomic migration from
 schema 1, including the final byte-identical prerelease baseline. Old binaries

@@ -6,6 +6,12 @@ that produced it.
 
 ## v0.6 additional acceptance
 
+The v0.6.0 publication is scoped to the embedded Go package, following the
+user's explicit release authorization and PR review repairs. The full product
+acceptance goals below remain tracked: `FACT-009` production model/answer quality
+and Caelis product/platform integration are not asserted by this source release.
+See the [release scope and evidence](memory-v0.6-release.md).
+
 The [facts contract](memory-v0.6-facts.md),
 [governance contract](memory-v0.6-governance.md),
 [migration](memory-v0.6-migration.md) and

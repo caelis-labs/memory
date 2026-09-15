@@ -10,11 +10,11 @@ recall(query)
 
 The package owns identity continuity, Spaces, Views, durable receipts,
 authorization, retrieval, and every derived-memory mutation. The current
-v0.6.0 candidate adds trusted evidence, explicit long-term fact lifecycle,
-current/historical reads and bounded background, plus governed transitive
-forgetting. The durable model-free lexical path and optional provider-neutral
-Steward remain. Independent trajectory review, production model qualification and native platform
-CI have separate evidence; this worktree is not a GA release.
+v0.6.0 adds trusted evidence, explicit long-term fact lifecycle, bounded current
+facts and public owner governance. Models propose; only admitted host authority
+confirms facts. This is an embedded Go package release. Production model quality
+and Caelis's new Facts integration require separate qualification; see the
+[v0.6 release notes](docs/memory-v0.6-release.md).
 
 Caelis imports Memory and runs it as part of the Caelis Host. There is no
 separate Memory download, installation, process, endpoint, readiness state, or
@@ -68,8 +68,8 @@ The new [facts contract](docs/memory-v0.6-facts.md) does **not** silently turn
 legacy `recall(query)` evidence hits into current user preferences. Existing
 Receipts and unknown legacy metadata survive an explicit schema 1 → 2
 [migration](docs/memory-v0.6-migration.md). See the
-[v0.6 candidate checklist](docs/memory-v0.6-release.md) for measured evidence and
-remaining GA gates.
+[v0.6 release notes](docs/memory-v0.6-release.md) for measured evidence and
+remaining product qualification.
 
 Adaptive local lexicon learning is retained only as an internal experiment.
 The public embedded runtime does not enable it, learn terms, consult learned

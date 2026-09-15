@@ -56,7 +56,7 @@ scripted deterministic proposal bytes on both sides. See
 `L0-legacy` control isolates the legacy receipt retrieval path in the current
 tree; it is never a v0.5.2 result.
 
-`C2-steward` model/extraction quality remains unrun and GA-blocked. The
+`C2-steward` model/extraction quality remains unrun and blocks end-to-end Bot quality acceptance. The
 structural comparison measures **context selection only**: whether the relevant
 older Record is offered to the worker. A deterministic scripted generator is
 acceptable and needs no model tokens, but it cannot show that a model uses the
@@ -189,7 +189,7 @@ the discovery and minimal baseline reproduction are in
 [`docs/evidence/memory-v0.6-facts-structural-comparison-2026-09-15.md`](evidence/memory-v0.6-facts-structural-comparison-2026-09-15.md).
 
 Real extraction, model and consumer-answer quality comparisons remain
-GA-blocked.
+unqualified for end-to-end Bot quality acceptance.
 
 ## Performance harness
 

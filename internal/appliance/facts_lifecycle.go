@@ -58,24 +58,29 @@ func (s *Store) applyFactMutation(ctx context.Context, tx *sql.Tx, view authoriz
 			}
 			meta.ValidFrom = prior.Metadata.ValidFrom
 			meta.ValidUntil = prior.Metadata.ValidUntil
-			if m.Key != "" {
-				var conflict bool
-				conditions, _ := json.Marshal(m.Conditions)
-				err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM semantic_records r JOIN semantic_revisions v ON v.record_id=r.record_id AND v.revision=r.current_revision WHERE r.space_id=? AND r.label_set_digest=? AND r.subject=? AND r.fact_key=? AND r.record_id<>? AND r.status='active' AND v.fact_json!='' AND json_extract(v.fact_json,'$.adoption')='confirmed' AND COALESCE(json_extract(v.fact_json,'$.related_record_id'),'')='' AND COALESCE(json_extract(v.fact_json,'$.conditions'),'null')=?)`, view.writeSpaceID, view.labelSetDigest, m.Subject, m.Key, id, string(conditions)).Scan(&conflict)
-				if err != nil {
-					return facts.Fact{}, err
-				}
-				if conflict {
-					return fail("confirmation would fork a confirmed fact; explicitly change or correct its head")
-				}
-			}
 		}
 		if m.Transition == facts.TransitionChange || m.Transition == facts.TransitionException {
 			if prior.Metadata.Adoption != facts.AdoptionConfirmed {
 				return fail("change or exception requires confirmed fact")
 			}
-			if prior.Metadata.ValidFrom != nil && m.ValidFrom.Before(*prior.Metadata.ValidFrom) {
-				return fail("change cannot predate target onset; use correction")
+			if prior.Metadata.ValidFrom != nil && (m.ValidFrom.Before(*prior.Metadata.ValidFrom) || m.Transition == facts.TransitionChange && m.ValidFrom.Equal(*prior.Metadata.ValidFrom)) {
+				return fail("change must follow target onset; use correction to edit the same interval")
+			}
+		}
+		if m.Transition == facts.TransitionCorrect && prior.Metadata.RelatedRecordID == "" {
+			history, err := s.factTimeline(ctx, tx, id)
+			if err != nil {
+				return facts.Fact{}, err
+			}
+			for i := len(history) - 2; i >= 0; i-- {
+				previous := history[i]
+				if previous.HistoricalState != "changed" {
+					continue
+				}
+				if m.ValidFrom == nil || previous.Metadata.ValidFrom != nil && !m.ValidFrom.After(*previous.Metadata.ValidFrom) {
+					return fail("corrected change requires an onset after the preceding interval onset")
+				}
+				break
 			}
 		}
 		// An exception remains linked after any number of corrections. The
@@ -124,6 +129,18 @@ func (s *Store) applyFactMutation(ctx context.Context, tx *sql.Tx, view authoriz
 	}
 	if m.Transition == facts.TransitionException {
 		meta.RelatedRecordID = id
+	}
+	// Establish already rejects every same-condition head (including pending).
+	// All other edits that produce a confirmed base fact share the same guard;
+	// in particular, correcting a pending Steward proposal cannot bypass confirm.
+	if meta.Adoption == facts.AdoptionConfirmed && meta.RelatedRecordID == "" && m.Key != "" && m.Transition != facts.TransitionEstablish {
+		conflict, err := confirmedFactConflict(ctx, tx, view, meta, id)
+		if err != nil {
+			return facts.Fact{}, err
+		}
+		if conflict {
+			return fail("edit would fork a confirmed fact; explicitly change or correct its head")
+		}
 	}
 	if meta.RelatedRecordID != "" && meta.Adoption == facts.AdoptionConfirmed {
 		// Both a new exception and a corrected interval must remain unambiguous.
@@ -253,4 +270,16 @@ func readFactRevision(ctx context.Context, db databaseExecutor, id string, revis
 		f.Evidence = append(f.Evidence, e)
 	}
 	return f, rows.Err()
+}
+
+// confirmedFactConflict is independent of the proposal's text and transition:
+// identical values in distinct authoritative heads still create ambiguity.
+func confirmedFactConflict(ctx context.Context, tx *sql.Tx, view authorizedView, meta facts.Metadata, id string) (bool, error) {
+	var conflict bool
+	conditions, err := json.Marshal(meta.Conditions)
+	if err != nil {
+		return false, err
+	}
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM semantic_records r JOIN semantic_revisions v ON v.record_id=r.record_id AND v.revision=r.current_revision WHERE r.space_id=? AND r.label_set_digest=? AND r.subject=? AND r.fact_key=? AND r.record_id<>? AND r.status='active' AND v.fact_json!='' AND json_extract(v.fact_json,'$.adoption')='confirmed' AND COALESCE(json_extract(v.fact_json,'$.related_record_id'),'')='' AND COALESCE(json_extract(v.fact_json,'$.conditions'),'null')=?)`, view.writeSpaceID, view.labelSetDigest, meta.Subject, meta.Key, id, string(conditions)).Scan(&conflict)
+	return conflict, err
 }

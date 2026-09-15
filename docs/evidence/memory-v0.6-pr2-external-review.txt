@@ -1,0 +1,98 @@
+# External review as retrieved from Memory项目调研评审
+
+Conversation: 6aa90822-f8f0-83e8-b33e-32bfb44afdf2
+Reviewed SHA: c5652ec4dd2164265e2d457061e00dab4cae3af1
+The linked test attachment was unavailable; local regression tests were authored from these findings.
+
+**审查结论：建议 Request changes，先修复下面 3 个问题再合并。**
+
+本次固定审查的是 `c5652ec4dd2164265e2d457061e00dab4cae3af1`，基线为 `51693ff135be8c4149c15117980290aaad6d90da`；结束前复查，PR head 未变化。下面是沿代码路径推导出的缺陷，**本轮没有实际编译或运行仓库测试**。
+
+## 1. [P2] 纠正变化的生效日期后，前一事实的失效日期没有同步修正
+
+**位置：`internal/appliance/facts_read.go:310–317`，`factTimeline()`。**
+
+当前逻辑遇到 `change`，会用该版本的 `ValidFrom` 截断前一个版本；随后遇到 `correct`，只把直接前序版本标记为 `corrected`，没有重新计算更早那个有效版本的结束时间。
+
+下面这组操作可以暴露问题，日期均为 2026 年：
+
+| 操作 | 内容 | 生效时间 |
+|---|---|---|
+| revision 1：establish | 平时喝咖啡 | 9 月 1 日起 |
+| revision 2：change | 改喝茶 | 9 月 10 日起 |
+| revision 3：correct | 日期记错了，改喝茶应从 9 月 20 日开始 | 纠正 revision 2 |
+
+`correct` 路径允许修改生效时间，因此这组请求能够通过当前校验。
+
+但重建时间线后，revision 1 仍然截止于 **9 月 10 日**，revision 2 被排除，revision 3 到 **9 月 20 日**才生效。于是查询 **9 月 15 日**时，会得到空结果，而不是仍然有效的“喝咖啡”。同一问题会影响当前读取与 `AsOf` 历史读取；`FactHistory` 也会保留错误的前序结束日期。
+
+**建议修复：** 先解析纠正链，确定每次真实变化最终有效的内容与生效日期，再推导相邻事实的有效区间。错误版本可以保留用于审计，但不应继续决定有效事实的时间边界。
+
+回归测试应覆盖：把生效日期向后纠正、向前纠正、连续纠正，以及重启后的当前／历史读取。现有生命周期测试纠正了文本，但沿用了原来的生效日期，没有覆盖这个分支。
+
+## 2. [P2] `correct` 可以绕过 `confirm` 的同键冲突检查，导致已确认偏好无法读取
+
+**位置：`internal/appliance/facts_lifecycle.go:55–71`，`applyFactMutation()`。**
+
+当前代码根据来源角色设置采用状态：`structured_confirmation` 会生成 `confirmed` 版本。但“是否与另一个已确认的同主体、同键、同条件事实冲突”的检查，只放在 `TransitionConfirm` 分支中，`TransitionCorrect` 不经过这项检查。
+
+触发路径是：
+
+```text
+已有 Record A：preference.drink = coffee，confirmed
+    ↓
+Steward 根据新证据 ADD Record B：preference.drink = cola，pending
+    ↓
+用户纠正 B：“不是 cola，是 coffee”
+    ↓
+correct 成功，B 也变为 confirmed；A 仍然存在
+```
+
+这里 B 的产生是合法路径：Steward 的 `ADD` 会从可信来源继承 subject／fact key，并创建 pending 事实，因此能够与已有 confirmed 事实共存。
+
+问题在下一次 `ReadFacts`：它把同一 Space／key 的事实分组；当最高条件具体度下的候选数不等于 1 时，直接跳过整个分组。因此，**即使 A、B 最后都写着 coffee，系统也会从原本能读到 coffee，退化成空结果**。
+
+这不是合理的“冲突时拒答”本身有错，而是写入端允许绕过已有防重约束，制造了原本应拒绝或显式合并的多个已确认事实。
+
+**建议修复：** 将 confirmed 事实的唯一性／冲突检查提取为统一约束，覆盖所有从 pending 晋升为 confirmed 的路径，包括 `correct`。发生冲突时，要么整笔事务返回 `conflict`，让宿主选择已有的权威 Record；要么通过明确的合并操作处理，不能只在读取时随意挑一条掩盖问题。
+
+应补“已有 confirmed＋新增 pending＋用户 correct”的回归测试，分别测试纠正后值相同和值不同两种情况。
+
+## 3. [P2] 治理查询持有结果集时再次申请数据库连接，存在连接池耗尽死锁
+
+**位置：`internal/appliance/governance_cleanup.go` 的 `ListRecords()`，尤其 `929–936` 行；`readGovernedRevisions()` 也存在相同模式。**
+
+`ListRecords` 先通过 `s.db.QueryContext` 打开结果集，在 `rows.Next()` 循环中，又通过同一个 `*sql.DB` 调用：
+
+```go
+readRecordGovernanceState(ctx, s.db, record.RecordID)
+s.blankForgottenRecordHead(ctx, s.db, &record)
+```
+
+此时外层 `rows` 尚未关闭，嵌套查询需要再次从连接池获取连接。
+
+`TraceRecord → readGovernedRevisions` 同样持有外层 Revision 结果集，再调用治理状态和证据查询；传入的是 `s.db`，不是复用同一连接的事务。
+
+而 `Store.Open()` 将最大连接数固定为 **8**。如果 8 个并发治理读取都持有外层结果集，并进入嵌套查询，就会形成“每个调用都占着一个连接，同时等待另一个连接”的循环等待。没有 deadline 时可能持续阻塞；有 deadline 时则等待超时，并在此期间占满连接池，影响其他 Memory 操作。
+
+一个确定性的回归测试场景是：保持生产配置的 8 个连接，预先占用其中 7 个，留下 1 个连接，分别调用 `ListRecords` 和 `TraceRecord`。当前实现会在获取嵌套查询连接时等待，直到测试 deadline。
+
+**建议修复：** 优先使用同一个只读事务完成读取，或通过 SQL JOIN 避免嵌套取连接；也可以先收集有界结果、关闭外层 rows，再执行后续查询，但需要处理快照一致性。单纯提高 `MaxOpenConns` 只会推迟触发条件，不会消除问题。
+
+## 验证情况与回归测试
+
+该提交的 GitHub `quality` workflow 已经完成，结果为 **success**。这能证明现有 CI 通过，但不能替代上述新增场景的验证。
+
+我把这 3 个问题对应的测试写成了一个文件，复用了该提交现有的测试辅助函数：
+
+:chatgpt-content-reference{index="13"}
+
+放到 `internal/appliance/pr2_review_regression_test.go` 后运行：
+
+```bash
+go test ./internal/appliance -run '^TestPR2Review' -count=1
+```
+
+**测试草案已格式化，但尚未在仓库中编译或执行，不能把它当作已取得的失败日志。** 本次重点检查了事实摄入／生命周期／读取、Steward 依赖校验、治理清理、迁移及相关测试，没有逐项复跑附带的全部评测材料。
+
+总体不需要推翻这版设计；当前最值得修的是两处状态转换不变量，以及治理读取的连接占用方式。**先让这几个多步、并发场景过关，再合并，比继续增加同类成功样例更有价值。**

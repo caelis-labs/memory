@@ -303,24 +303,43 @@ func (s *Store) factTimeline(ctx context.Context, db databaseExecutor, id string
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
-	for i := 1; i < len(history); i++ {
-		next := history[i].Metadata
-		prev := &history[i-1]
-		switch next.Transition {
-		case facts.TransitionChange:
-			if next.ValidFrom != nil && (prev.Metadata.ValidUntil == nil || next.ValidFrom.Before(*prev.Metadata.ValidUntil)) {
-				v := *next.ValidFrom
-				prev.Metadata.ValidUntil = &v
-			}
-			prev.HistoricalState = "changed"
+	// Resolve each correction chain before deriving adjacent effective intervals.
+	// A corrected change retains its place in the lifecycle, but only its final
+	// revision may determine when the preceding fact stops applying.
+	var effective []int
+	for i := range history {
+		switch history[i].Metadata.Transition {
 		case facts.TransitionCorrect:
-			prev.HistoricalState = "corrected"
+			if i > 0 {
+				history[i-1].HistoricalState = "corrected"
+			}
+			if len(effective) > 0 {
+				effective[len(effective)-1] = i
+				continue
+			}
+		case facts.TransitionConfirm:
+			// Confirmation adopts the same assertion, not a new preference.
+			if len(effective) > 0 {
+				effective[len(effective)-1] = i
+				continue
+			}
 		case facts.TransitionDeny:
 			for j := 0; j <= i; j++ {
 				history[j].Metadata.Adoption = facts.AdoptionDenied
 				history[j].HistoricalState = "denied"
 			}
+			return history, nil
 		}
+		effective = append(effective, i)
+	}
+	for i := 1; i < len(effective); i++ {
+		prev := &history[effective[i-1]]
+		next := history[effective[i]].Metadata
+		if next.ValidFrom != nil && (prev.Metadata.ValidUntil == nil || next.ValidFrom.Before(*prev.Metadata.ValidUntil)) {
+			v := *next.ValidFrom
+			prev.Metadata.ValidUntil = &v
+		}
+		prev.HistoricalState = "changed"
 	}
 	return history, nil
 }

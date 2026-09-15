@@ -5,8 +5,8 @@ For the v0.6 long-term facts milestone, the owning additional procedure is
 is separate from `corpus-gate`: neither keyword hits nor the old multilingual
 corpus establish temporal adoption, correction/denial semantics or complete
 managed cleansing. Machine-expanded candidates are not human-reviewed gold.
-See the [candidate evidence/checklist](memory-v0.6-release.md) for actual runs,
-unrun comparisons, performance baselines and outstanding GA gates.
+See the [release evidence and scope](memory-v0.6-release.md) for actual runs,
+unrun comparisons, performance baselines and outstanding product qualification.
 
 Status: current privacy-preserving multi-round receipt evaluation plus an
 opt-in local Ollama Steward sample. The default measures the model-free durable

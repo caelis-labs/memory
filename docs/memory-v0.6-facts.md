@@ -1,6 +1,6 @@
 # v0.6 current facts and trusted evidence
 
-Status: implemented candidate contract, **not GA qualification**. Public wire
+Status: implemented v0.6 contract. Model and host-product quality require separate qualification. Public wire
 owner: `api/memory/facts/v1alpha1` (`memory.facts.v1alpha1`). The existing
 `memory.v1alpha1` Remember/Recall contract remains evidence retrieval. In
 particular, a superseded Record's original Receipt may still be recalled as
@@ -97,7 +97,13 @@ parsing/policy and actual-read dependency validation.
 Time intervals are `[valid_from, valid_until)`. Neither `updated_at` nor receipt
 arrival is automatically used as fact onset. Nil onset means a current assertion
 with unknown historical onset: usable now, not proof at an arbitrary past time.
-`change` requires explicit onset; `exception` requires both endpoints. Conditions
+`change` requires explicit onset strictly after a known target onset;
+`exception` requires both endpoints. Correcting a change retains an explicit
+onset after the preceding effective interval's onset. Resolve the full correction
+chain before deriving prior interval ends; erroneous revisions remain audit-only.
+Corrections cannot erase a change boundary, reverse interval order, or create a
+second confirmed same-subject/key/condition base fact. Conflicting edits roll
+back the complete evidence transaction. Conditions
 are at most eight exact `{key,value}` host-context equalities. Missing context
 never matches. No natural-language condition or arbitrary expression is
 interpreted. More-specific matching conditions refine unconditional facts;

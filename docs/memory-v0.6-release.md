@@ -1,23 +1,25 @@
-# Memory v0.6.0 — candidate release notes and checklist
+# Memory v0.6.0 — release notes
 
-Status: **implementation candidate; not a published/GA release**. The user
-authorized a candidate commit, push and PR submission after local acceptance.
-Tagging and publication still require separate authorization.
-`VERSION=0.6.0` is candidate metadata, not evidence of release.
+## Release scope
 
-Base: `51693ff135be8c4149c15117980290aaad6d90da` (v0.5.2), originally clean.
-The initial preparation found no remote v0.6.0 tags. This repair did not refresh
-remote release state; check it again before an authorized release.
-Caelis was initially audited read-only at
-`ef6c4697bdf5af18db141b7d4b1eff4f28c3bbc7`. A later read-only status check
-found a clean worktree at `f6514aa09cd26e8853e4a6d2420125ac7cb77acd`; the
-final read-only check found it clean at
-`40a79a68fd85f32dafd82419289f2c8593734a01`. This Memory repair did not modify Caelis; the initial integration audit is not
-a requalification of its newer revision.
-The reviewed working-tree snapshot and gate evidence are recorded below.
-The PR head commit identifies the submitted candidate for remote CI.
+This release delivers the independently consumable embedded Go package
+`github.com/caelis-labs/memory` at `v0.6.0`, with versioned
+`memory.facts.v1alpha1` APIs. The user explicitly authorized formal release
+after fixing the latest PR #2 review. The publication record is the
+[GitHub Release](https://github.com/caelis-labs/memory/releases/tag/v0.6.0);
+the annotated tag must identify a commit with successful exact-revision `quality` CI.
 
-## Draft release notes
+The package release qualifies deterministic admission, fact lifecycle,
+authorization, governance, migration, durability and public API consumption.
+Production model extraction, arbitrary paraphrase retrieval, final Bot answer
+quality and Caelis's new Facts product integration remain **unqualified**.
+Those earlier end-to-end GA goals are tracked separately below; publishing this
+package does not assert their completion. No standalone binaries are published.
+
+Base: `51693ff135be8c4149c15117980290aaad6d90da` (v0.5.2).
+[PR #2](https://github.com/caelis-labs/memory/pull/2) contains the implementation
+and review repairs. Earlier candidate results are retained in the
+[historical local evidence](evidence/memory-v0.6-local-candidate.md).
 
 ### Added
 
@@ -58,125 +60,68 @@ The PR head commit identifies the submitted candidate for remote CI.
   download, Corpus/Leaf importer, Bot or Caelis Session format in the protocol.
   New management read types are embedded-only, not new standalone CLI endpoints.
 
-## M01–M07 delivery status
+## External review fixes
 
-| Task | Local implementation | Qualification / remaining work |
-| --- | --- | --- |
-| M01 | facts protocol, schema migration, fixed v0.5.2 fixture | owning migration/unknown-time tests and external module gate |
-| M02 | owner facade, barrier, transitive cleansing, recovery | deterministic stale/in-flight, batch, >64-hop and restart tests; external copies remain host-owned |
-| M03 | trusted sources, suppression, future policy, structured edits | source conflicts, retries, wrong subject, read-only and deny-policy tests |
-| M04 | relevant context, full read set, atomic batch, pending inference | deterministic structural comparison; real-model extraction quality not qualified |
-| M05 | current/history/background/cursors and fixed aliases | lifecycle, isolation, budget, history pagination and restart tests; arbitrary paraphrase quality not qualified |
-| M06 | 14 blocking and 208 expanded trajectories independently reviewed under the user's AI substitution authorization; structural comparison and frozen performance limits | human-reviewed count remains 0; production model/consumer answers and natural paraphrase holdout unqualified |
-| M07 | public-only consumer harness, local review repairs and release preparation | native Windows/exact-candidate remote CI, Caelis integration and separate release authorization remain |
+The [latest external review](evidence/memory-v0.6-pr2-external-review.txt)
+identified three reproducible problems at `c5652ec`:
 
-## Review repairs and substitute adjudication
+1. Correcting a change's onset left its predecessor's end at the erroneous date.
+   Timeline reads now resolve correction chains before deriving adjacent ends.
+   Corrected changes retain explicit onsets and cannot cross the preceding
+   interval's start; finite changes cannot make an old preference reappear.
+2. Correcting a pending Steward fact could bypass confirmation's same-key guard.
+   Every edit producing a confirmed base head now enforces the same uniqueness
+   constraint. Equal and different conflicting values both reject atomically.
+3. Owner Record listing/tracing held a result set while requesting another pool
+   connection. Both operations now use one read-only transaction for the head,
+   governance fence, revisions and evidence. Their snapshot is consistent and
+   they complete with only one of the production pool's eight connections free.
 
-The local acceptance review found five reproducible defects, now repaired:
+Six executable regression tests cover these defects, onset corrections in both
+directions, repeated corrections, restart, exact boundaries, confirmation
+chains, rollback and deterministic pool exhaustion. Independent follow-up review
+identified two additional onset cases, now fixed and covered. See the
+[release verification record](evidence/memory-v0.6-release-verification.md).
 
-1. Trusted-source retry excludes a fact covered by a durable forget barrier,
-   including while cleanup is pending and after recovery; unaffected facts from
-   the same retained source remain available.
-2. Applicable conditions and equal-specificity ambiguity are resolved before
-   query matching or budget selection. A query cannot revive a suppressed
-   default or choose between conflicting current facts.
-3. Repeated exception corrections preserve the related base Record and retain
-   finite-interval, non-overlap and allowed-transition constraints.
-4. A trusted subject without an optional fact key leaves room for lexical
-   context before the subject's recent-record fallback.
-5. Cleared-revision diagnostics require a completed deletion barrier and cleared
-   payloads; an ordinary unstructured revision's empty fact JSON is insufficient.
+The earlier five acceptance findings and their original red/green evidence
+remain in the historical candidate record. Independent agents also adjudicated
+208 candidate trajectories and 14 authored blocking trajectories under the
+user's explicit substitution authorization. **Human-reviewed count is 0.**
+The 208 candidates contain 26 templates over eight subjects; they are not a
+production holdout. Their 448 controlled alias checks measure fixed vocabulary.
 
-The [five original counterexamples](evidence/memory-v0.6-review-reproduction_test.go.txt)
-failed before repair and now pass. Owning regressions additionally cover pending
-cleanup, reopen, unaffected facts, ambiguity, repeated corrections and denial.
-See [local evidence](evidence/memory-v0.6-local-candidate.md).
+## Verification and source identity
 
-The user explicitly authorized assistant/independent-agent adjudication in place
-of manual review. Two independent agents reviewed
-[208 expanded candidates](evidence/memory-v0.6-agent-candidate-review.md) and
-[14 authored blocking trajectories](evidence/memory-v0.6-agent-blocking-review.md),
-with per-case decisions, rationales, input hashes and follow-up findings. This
-substitute-review requirement is complete. **Human-reviewed cases remain 0.**
-The 208 candidates are 26 semantic templates across eight subjects; they are
-not 208 distinct real-user situations or a production-quality holdout.
+The final runtime/test source is frozen by the
+[178-file release source manifest](evidence/memory-v0.6-release-source.json):
+`a8001fb40d556b9608b1d028ef3bb6a78e9b9c02beb49a5160920b8b168e6463`.
+The earlier 177-file candidate manifest remains historical and is not the final
+release source. Commands, exact input attribution, results and remaining
+qualification limits are recorded in the
+[release verification record](evidence/memory-v0.6-release-verification.md).
 
-Review also strengthened the evaluation runner: it consumes frozen expected
-current values, checks absence of adoption before confirmation, checks exact
-Record/Revision and complete source attribution, and tests exception denial
-inside its effective interval. All 14 blocking, 208 candidate and 448 controlled
-alias executions pass after these changes.
+The candidate gate is `make release-candidate`, minimum Go 1.25.8 / CGO=0 full
+tests, the fixed 100-Space / 100,000-Receipt / 10,000-Record soak, frozen
+1k/10k/100k performance checks and a temporary exact Caelis consumer snapshot.
+Remote `quality` includes native Linux, Darwin arm64 and Windows amd64 embedded
+Open. The final tag is created only after the merged commit's own `push` run
+passes; a PR merge-ref run alone is insufficient.
 
-## Reproduction and evidence
+## Separate product qualification
 
-Local reproduction commands (actual execution status and source attribution
-are in the evidence page below):
-
-```sh
-make check
-make race
-make durable
-make corpus-gate
-make facts-gate
-make facts-consumer-gate
-GOWORK=off CGO_ENABLED=0 go test ./...
-GOWORK=off CGO_ENABLED=0 GOTOOLCHAIN=go1.25.8 go test ./...
-FACTS_PERF_SIZES=1000,10000,100000 make facts-perf
-make ga-soak GA_SOAK_REPORT=/absolute/path/to/ga-soak.json
-make m5-benchmark
-```
-
-- [Longitudinal evaluation procedure](memory-v0.6-evaluation.md)
-- [Final local candidate evidence](evidence/memory-v0.6-local-candidate.md)
-- [Raw candidate evaluation](evidence/memory-v0.6-facts-final.json) and
-  [corrected structural comparison](evidence/memory-v0.6-comparison-final.json)
-- [Caelis integration tasks and public consumer harness](memory-v0.6-caelis-integration.md)
-- [Facts contract](memory-v0.6-facts.md), [governance](memory-v0.6-governance.md),
-  [Steward](memory-v0.6-steward.md)
-
-Final source snapshot (177 files, excluding docs and root README):
-`99037fb24c0f1fc64a5380a91ddcefac6287659cd85066fe9c66dcace0f4e8b1`.
-See the [source manifest](evidence/memory-v0.6-candidate-source.json) and
-[whole delivery snapshot](evidence/memory-v0.6-delivery-snapshot.json).
-
-Post-repair `make check`, race, durable, corpus, facts, independent-module
-consumer, Go 1.25.8 and Go 1.26.8 / CGO=0 full tests, M5 benchmarks and
-100k-receipt soak passed. Windows amd64 / CGO=0 cross-compilation passed;
-native Windows execution remains unrun. The repaired 1k/10k/100k performance
-confirmation run passed all **33/33 unchanged limits**. The earlier complete
-run had a 1k seed-latency overrun (32/33); it and all fixed diagnostic reruns
-remain recorded, and repeatability is unqualified. See the
-[local evidence](evidence/memory-v0.6-local-candidate.md). Earlier reports and
-source/delivery manifests are retained separately with `before-review` names.
-Local execution is not exact-candidate remote CI or publication evidence.
-
-## GA blockers and authorization checklist
-
-- [x] Complete the local review, repair its five findings, and retain original
-  failing reproductions and passing regressions.
-- [x] Complete ≥200 trajectory adjudications under the user's explicit
-  independent-AI substitution authorization: 208 expanded plus 14 authored
-  cases. Preserve reviewer identity and keep the human-reviewed count at zero.
-- [x] Obtain authorization for a candidate commit, push and PR submission.
-  Use the PR head commit as the exact candidate SHA for remote checks. Local
-  validation was recorded before Git delivery; its source manifest is unchanged.
-- [ ] Freeze and run production-representative model/profile/output budgets on
-  the reviewed holdout. Separately score extraction, retrieval, background and
-  consumer answers; report errors, stale adoption, omissions and abstention.
-  Candidate-tier structured adoption/alias counts do not establish ≥95%/≥90%
-  real-user quality targets.
-- [x] Freeze [hardware-bound performance limits](evidence/memory-v0.6-performance-limits.json)
-  after the measured baseline and before optimization/tuning; preserve their
-  original bytes and provenance. This is local hardware qualification.
-- [x] Verify the repaired 1k/10k/100k candidate against all 33 unchanged limits.
-  See the [current comparison](evidence/memory-v0.6-performance-check.json).
-- [ ] Wait for exact-candidate native Linux/Darwin and **native Windows embedded
-  Open** CI. Cross-compilation and Darwin success are not Windows evidence.
-- [ ] Integrate the released API into Caelis through separate scoped tasks and
-  qualify its history/replay/cache/context invalidation and backup reconciliation.
-  Passing Memory deletion is not passing Caelis product deletion.
-- [ ] Obtain separate authority to tag and publish after candidate qualification.
-  Only then follow the owning [release procedure](memory-appliance-release.md).
+- Production model/profile/output budgets, reviewed natural-language holdout,
+  extraction/omission/stale-adoption scoring, arbitrary paraphrase Recall@8,
+  background usefulness and final answers have not been measured. The proposed
+  95% preference / 90% paraphrase targets are not measured release results.
+- Caelis's existing embedded consumer can be tested in an isolated source
+  snapshot; its shared checkout and dependency pin are not changed by Memory's
+  release. New Facts admission, context/cache invalidation, Session history,
+  replay, backup and external-copy reconciliation require the separate
+  [Caelis integration work](memory-v0.6-caelis-integration.md).
+- Frozen performance limits are local Apple M4 observations for distinct-subject
+  reads within one Space/LabelSet. They do not qualify 100k facts for one subject,
+  production models or portable latency promises. Earlier recorded overruns
+  remain visible; no passing rerun establishes statistical repeatability.
 
 ## Material boundaries
 
