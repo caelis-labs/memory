@@ -4,10 +4,10 @@
 
 This release delivers the independently consumable embedded Go package
 `github.com/caelis-labs/memory` at `v0.6.0`, with versioned
-`memory.facts.v1alpha1` APIs. The user explicitly authorized formal release
-after fixing the latest PR #2 review. The publication record is the
+`memory.facts.v1alpha1` APIs. The publication record is the
 [GitHub Release](https://github.com/caelis-labs/memory/releases/tag/v0.6.0);
-the annotated tag must identify a commit with successful exact-revision `quality` CI.
+release-please publishes the reviewed release PR after protected-PR checks.
+See the [release procedure](memory-appliance-release.md#automated-source-releases).
 
 The package release qualifies deterministic admission, fact lifecycle,
 authorization, governance, migration, durability and public API consumption.
@@ -92,11 +92,13 @@ production holdout. Their 448 controlled alias checks measure fixed vocabulary.
 
 ## Verification and source identity
 
-The final runtime/test source is frozen by the
+The repaired implementation checkpoint is frozen by the
 [178-file release source manifest](evidence/memory-v0.6-release-source.json):
 `a8001fb40d556b9608b1d028ef3bb6a78e9b9c02beb49a5160920b8b168e6463`.
-The earlier 177-file candidate manifest remains historical and is not the final
-release source. Commands, exact input attribution, results and remaining
+This manifest predates the release-please, CI and security-policy additions;
+those changes leave its Go runtime, tests, fixtures and module dependencies
+unchanged. The earlier 177-file candidate manifest also remains historical.
+Commands, exact input attribution, results and remaining
 qualification limits are recorded in the
 [release verification record](evidence/memory-v0.6-release-verification.md).
 
@@ -107,8 +109,9 @@ The user explicitly stopped the final full performance rerun after engineering
 feasibility acceptance. It produced no aggregate report; the final source does
 not claim a new 33/33 performance pass. Prior-source results remain historical.
 Remote `quality` includes native Linux, Darwin arm64 and Windows amd64 embedded
-Open. The final tag is created only after the merged commit's own `push` run
-passes; a PR merge-ref run alone is insufficient.
+Open on implementation PRs. Release metadata PRs validate version consistency
+and retain the tested implementation tree. Merging an approved release PR
+triggers publication without repeating the full suite on `main`.
 
 ## Separate product qualification
 

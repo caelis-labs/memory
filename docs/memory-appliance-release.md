@@ -18,8 +18,8 @@ published or consumed by Caelis in the current release line.
 without adding them to the package candidate gate.
 
 The v0.6.0 source-package release is tracked in the
-[v0.6 release notes and checklist](memory-v0.6-release.md). The user authorized formal package publication after PR review repairs. Exact-revision
-native CI remains required before tagging. Production longitudinal quality and
+[v0.6 release notes and checklist](memory-v0.6-release.md). Formal package publication was authorized after PR review repairs. Protected-PR
+native CI qualifies implementation changes before publication. Production longitudinal quality and
 Caelis Facts product integration are separately unqualified; a version-file edit
 does not mean the release exists.
 
@@ -80,18 +80,64 @@ than a Memory protocol or release artifact. Future hierarchy, summary, dense,
 or graph projections remain independently disableable and cannot affect flat
 Recall.
 
-After a release-candidate commit is pushed, wait for the GitHub `quality`
-workflow at that exact revision. Create an annotated prerelease tag only for the
-approved revision, then create a GitHub prerelease containing source archives
-and the reviewed release notes.
+## Automated source releases
 
-For v0.6 GA, verify `VERSION` is `0.6.0` on the final reviewed commit, rerun the
-package candidate gate plus `make ga-soak`, validate the exact Caelis consumer
-revision, push the commit, and wait for remote `quality` success at that SHA.
-Only with separate release authorization create the annotated `v0.6.0` tag and a non-prerelease GitHub source
-release. A local commit, local tag, earlier RC result, or tag on another SHA is
-not release authority. The Memory package publishes no standalone binaries in
-this release line.
+`quality.yml` runs on pull requests targeting `main`. The branch rules require
+the PR to be up to date and all nine existing quality contexts to pass before
+merge, including native Windows and Darwin checks. It tests GitHub's combined
+PR merge tree. A merge does not repeat the same full suite on `main`; instead,
+the `release-please` workflow maintains a release PR from merged Conventional
+Commits. Use `feat:` for new features, `fix:` for fixes, and explicitly review
+breaking API or schema changes before accepting the proposed version.
+
+Only nonempty changes wholly within `CHANGELOG.md`, `VERSION`, and
+`.release-please-manifest.json` use the release metadata path. The classifier
+checks regular files, a single stable version, increasing manifest versions,
+nondecreasing `VERSION`, and a matching first changelog release heading. Source,
+fixtures, build inputs, workflows, scripts, docs and unknown paths run the full
+suite. Classification errors fail the required `portable-core` job. Native
+tests and cross-build steps are skipped only when metadata validation succeeds;
+the six matrix jobs still report each required context. Required job names and
+branch protections are unchanged.
+
+The bot uses the shared organization or repository `RELEASE_PLEASE_TOKEN`
+Actions secret. Its permissions must allow reading repository history, opening
+and updating release PRs, and creating tags and GitHub Releases. An empty token
+fails explicitly. The default `GITHUB_TOKEN` is read-only; PR tests never receive
+the release token. A personal access token also lets bot-generated PRs trigger
+their required Actions checks. See the
+[release-please action documentation](https://github.com/googleapis/release-please-action).
+
+The `simple` strategy updates this repository's bare `VERSION` file, manifest
+and Changelog. The manifest starts at the last published version `0.5.2`; the
+bootstrap commit is its exact tag target. The prepared candidate's `VERSION`
+is already `0.6.0`. Do not advance the manifest manually during bootstrap.
+`always-update` keeps the release PR compatible with strict up-to-date rules.
+
+To publish:
+
+1. Merge reviewed implementation changes after full protected-PR checks. Retain
+   the PR head, tested merge commit and source attribution for expensive gates.
+2. Inspect the generated release PR's version and Changelog. For this release
+   they must identify `0.6.0`. Its only changes should be the three metadata
+   files above; any additional path requires full checks.
+3. Merge the release PR only with publication authorization and successful
+   required checks. The workflow does not automatically merge it. Merging this
+   PR authorizes release-please to create `v<version>` and a formal GitHub source
+   release. Do not create a competing manual tag.
+4. Verify the tag resolves to the merged release PR commit, the release is
+   neither draft nor prerelease, and the source archives are available. Check
+   the implementation tree against its fully tested protected-PR tree; release
+   metadata checks do not constitute another native runtime test.
+5. Download the exact published module via the public Go Proxy and run the
+   standalone Facts consumer without local `replace` or `go.work`. Reconcile
+   the public module with the tagged source and publish verification links.
+
+If automation fails, inspect its logs and existing PR/tag/release state before
+using `workflow_dispatch` on `main` to retry. Do not move an existing version tag
+or treat a version-file edit as publication. Memory publishes no standalone
+binaries in this release line. Report security defects through the
+[security policy](../SECURITY.md).
 
 For this v0.6.0 publication, the user explicitly accepted engineering feasibility
 and stopped the approximately 20-minute final performance rerun. Record that run
