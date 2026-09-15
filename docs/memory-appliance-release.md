@@ -93,6 +93,12 @@ release. A local commit, local tag, earlier RC result, or tag on another SHA is
 not release authority. The Memory package publishes no standalone binaries in
 this release line.
 
+For this v0.6.0 publication, the user explicitly accepted engineering feasibility
+and stopped the approximately 20-minute final performance rerun. Record that run
+as stopped with no final aggregate result; do not transfer the previous source's
+33/33 score to this release. This disposition does not change the frozen limits
+or qualify production-model or end-to-end Bot performance.
+
 The package version is `0.6.0` (previous released baseline: `0.5.2`).
 `memory-v0.5.0` remains the first supported source schema floor. v0.6 writes
 schema **2**, marker `memory-v0.6.0`, through an explicit atomic migration from

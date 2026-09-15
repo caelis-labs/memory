@@ -44,8 +44,13 @@ their own reviewed fixtures and source; human reviewer count remains zero.
 
 ## Final-source gates
 
-Results are being collected before publication. Do not infer completion from a
-listed command. The final evidence update records each exit code and raw log.
+The final-source package candidate gate, minimum Go 1.25.8 / CGO=0 full suite,
+and focused Caelis consumer tests passed. The [100k-receipt soak](memory-v0.6-release-soak.json)
+also passed: 100 Spaces, 100,000 Receipts, 10,000 Records; zero private leaks
+before/after restoration; 10,000 completed jobs and zero pending jobs in both
+stores; both projections healthy. The full performance rerun was stopped at the user's explicit request after
+engineering feasibility was accepted; it has no final aggregate result. Each
+completed gate's exit code and raw log is retained in the JSON evidence.
 
 ```sh
 make release-candidate
@@ -75,6 +80,30 @@ verified separately after publication without local `replace`.
 The prior PR head's quality run
 [34981569898](https://github.com/caelis-labs/memory/actions/runs/34981569898)
 passed all nine jobs, including native Windows. It does not qualify the repaired
-source. The repaired PR and merged commit require fresh checks. Before tagging,
+source. The repaired source at `130b729e6a918d3ccc785f9ffadd8746d8aab5a9` then passed
+[all nine quality jobs](https://github.com/caelis-labs/memory/actions/runs/34986041895),
+including native Windows embedded Open. Final documentation and evidence updates
+still require their PR checks, and the merged commit requires its own push run. Before tagging,
 verify the `main` push workflow's exact commit, all jobs, peeled annotated tag,
 formal non-prerelease GitHub state, source archives and public Go module download.
+
+## Performance rerun disposition
+
+After asking whether the completed work demonstrates feasibility, the user
+explicitly requested that the long-running measurement no longer delay delivery.
+The primary agent terminated only this run's identified test process at about
+1,198.5 seconds (20 minutes). `make` exited 2 following `signal: terminated`.
+The termination log is preserved in the [gate record](memory-v0.6-release-gates.json).
+
+The harness reached its 100k seed phase after the 1k/10k phases, but writes its
+aggregate metrics only at the end. No aggregate report was produced, so **this
+final-source run has no 33/33 result and no reported partial latency scores**.
+This is an explicitly stopped validation, not a test assertion failure or a pass.
+
+Engineering feasibility is supported by the final-source functional/regression,
+race, durable, public-consumer, native-platform CI and complete 100k-receipt soak
+results. The previous 177-file candidate's 33/33 performance result and earlier
+32/33 overrun remain historical evidence, tied to their original source hashes.
+All frozen performance limit bytes remain unchanged. Full final-source latency
+qualification and statistical repeatability remain deferred; production model
+and end-to-end Bot quality are also not claimed.

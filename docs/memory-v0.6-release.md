@@ -102,7 +102,10 @@ qualification limits are recorded in the
 
 The candidate gate is `make release-candidate`, minimum Go 1.25.8 / CGO=0 full
 tests, the fixed 100-Space / 100,000-Receipt / 10,000-Record soak, frozen
-1k/10k/100k performance checks and a temporary exact Caelis consumer snapshot.
+1k/10k/100k performance harness and a temporary exact Caelis consumer snapshot.
+The user explicitly stopped the final full performance rerun after engineering
+feasibility acceptance. It produced no aggregate report; the final source does
+not claim a new 33/33 performance pass. Prior-source results remain historical.
 Remote `quality` includes native Linux, Darwin arm64 and Windows amd64 embedded
 Open. The final tag is created only after the merged commit's own `push` run
 passes; a PR merge-ref run alone is insufficient.

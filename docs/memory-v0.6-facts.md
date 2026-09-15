@@ -103,8 +103,7 @@ onset after the preceding effective interval's onset. Resolve the full correctio
 chain before deriving prior interval ends; erroneous revisions remain audit-only.
 Corrections cannot erase a change boundary, reverse interval order, or create a
 second confirmed same-subject/key/condition base fact. Conflicting edits roll
-back the complete evidence transaction. Conditions
-are at most eight exact `{key,value}` host-context equalities. Missing context
+back the complete evidence transaction. Conditions are at most eight exact `{key,value}` host-context equalities. Missing context
 never matches. No natural-language condition or arbitrary expression is
 interpreted. More-specific matching conditions refine unconditional facts;
 equally-specific ambiguous same-partition/key matches abstain.

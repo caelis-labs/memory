@@ -9,7 +9,7 @@ recall(query)
 ```
 
 The package owns identity continuity, Spaces, Views, durable receipts,
-authorization, retrieval, and every derived-memory mutation. The current
+authorization, retrieval, and every derived-memory mutation. Version
 v0.6.0 adds trusted evidence, explicit long-term fact lifecycle, bounded current
 facts and public owner governance. Models propose; only admitted host authority
 confirms facts. This is an embedded Go package release. Production model quality
