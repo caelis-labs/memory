@@ -113,7 +113,7 @@ jobs:
           GOWORK: "off"
           CGO_ENABLED: "0"
         shell: bash
-        run: go test -count=1 -timeout 15m ./internal/appliance ./appliance -run '^Test(SQLiteFileDSN|OpenPingsSQLiteOnNativeTempDir|SyncDirectorySucceedsOnNativeTempDir|DurableRestartAndIdempotency|LabelSetPartitionSurvivesRestart|EmbeddedRuntimeRememberRecall|OwnerLockRejectsSecondProcessOwner|ManagementCredentialRotationRevokesOldBearerAcrossRestart)$'
+        run: go test -count=1 -timeout 15m ./internal/appliance ./appliance -run '^Test(SQLiteFileDSN|OpenPingsSQLiteOnNativeTempDir|SyncDirectorySucceedsOnNativeTempDir|DurableRestartAndIdempotency|LabelSetPartitionSurvivesRestart|EmbeddedRuntimeRememberRecall|OwnerLockRejectsSecondProcessOwner|ManagementCredentialRotationRevokesOldBearerAcrossRestart|ReleasedStewardUpgrade|ReleasedGovernanceProcessingUpgrade|GovernanceSettlesDependentReceiptProcessing)$'
 
   native-darwin-arm64-package-check:
     needs: changes

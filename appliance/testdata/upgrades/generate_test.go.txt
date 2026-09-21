@@ -1,0 +1,119 @@
+package appliance
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	management "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
+	steward "github.com/caelis-labs/memory/api/memory/steward/v1alpha1"
+	memory "github.com/caelis-labs/memory/api/memory/v1alpha1"
+	"github.com/caelis-labs/memory/sdk/go/memory/stewardworker"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+// Copy only this test into the exact released source and run it there. No
+// current implementation or synthetic schema is used to produce old stores.
+func TestGenerateReleasedStewardUpgradeFixture(t *testing.T) {
+	output, release, commit := os.Getenv("RELEASE_FIXTURE_OUTPUT"), os.Getenv("RELEASE_FIXTURE_TAG"), os.Getenv("RELEASE_FIXTURE_COMMIT")
+	if output == "" || release == "" || commit == "" {
+		t.Fatal("fixture provenance/output missing")
+	}
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	dir := t.TempDir()
+	s, err := Open(t.Context(), Options{DataDir: dir, Clock: func() time.Time { return now }, Random: rand.New(rand.NewSource(601))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	operations := []memory.Operation{memory.OperationRemember, memory.OperationRecall, memory.OperationReceiptStatus}
+	bootstrap, err := s.Bootstrap(t.Context(), management.BootstrapRequest{
+		Realms:           []management.Realm{{ID: "realm:upgrade"}},
+		Identities:       []management.Identity{{ID: "identity:upgrade", RealmID: "realm:upgrade"}},
+		Spaces:           []management.Space{{ID: "space:upgrade", RealmID: "realm:upgrade", IdentityID: "identity:upgrade", Class: memory.SpaceClassPrivate}},
+		Views:            []management.ViewDefinition{{ID: "view:upgrade", RealmID: "realm:upgrade", ReadSpaceIDs: []memory.SpaceID{"space:upgrade"}, WriteSpaceID: "space:upgrade", MaxDisclosureClass: memory.SpaceClassPrivate, Version: 1}},
+		Grants:           []management.Grant{{ID: "grant:upgrade", PrincipalRef: "principal:upgrade", ActorRef: "actor:upgrade", ViewRef: "view:upgrade", AllowedOperations: operations, AllowedAudiences: []memory.Audience{memory.AudiencePrivate}, ExpiresAt: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC), Version: 1}},
+		IssuerPrincipals: []string{"principal:upgrade"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := memory.LabelSet{"workspace:upgrade"}
+	cap, err := s.IssueCapability(t.Context(), IssueCapabilityRequest{Authorization: IssuerAuthorization{PrincipalRef: "principal:upgrade", Credential: bootstrap.IssuerCredentials["principal:upgrade"]}, GrantRef: "grant:upgrade", ActorRef: "actor:upgrade", Audience: memory.AudiencePrivate, Operations: operations, Labels: labels, TTLSeconds: 3600})
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := memory.CallAuthorization{Capability: cap.Token, ActorRef: "actor:upgrade", Audience: memory.AudiencePrivate}
+	profile := stewardworker.BuiltInProfile()
+	custom := profile
+	custom.ProfileID = "consumer-custom"
+	custom.Version = 7
+	custom.SystemPrompt = "Keep this independently owned policy unchanged."
+	for _, p := range []steward.ProfileSpec{profile, custom} {
+		if _, err := s.PutStewardProfile(t.Context(), management.PutStewardProfileRequest{Profile: p}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.BindStewardProfile(t.Context(), management.BindStewardProfileRequest{ProfileID: profile.ProfileID, Version: profile.Version, SpaceIDs: []memory.SpaceID{"space:upgrade"}}); err != nil {
+		t.Fatal(err)
+	}
+	type receiptFixture struct {
+		Request  memory.RememberRequest  `json:"request"`
+		Response memory.RememberResponse `json:"response"`
+	}
+	var receipts []receiptFixture
+	var leased StewardWork
+	for i, text := range []string{"old leased evidence", "old pending evidence"} {
+		request := memory.RememberRequest{Text: text, IdempotencyKey: text, SourceContext: memory.SourceContext{SourceType: "release_fixture"}}
+		response, err := s.Remember(t.Context(), auth, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		receipts = append(receipts, receiptFixture{request, response})
+		if i == 0 {
+			var found bool
+			leased, found, err = s.ClaimStewardJob(t.Context(), time.Minute)
+			if err != nil || !found {
+				t.Fatalf("claim %v %v", found, err)
+			}
+		}
+		now = now.Add(time.Second)
+	}
+	var schema int
+	if err := s.db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&schema); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(output, 0700); err != nil {
+		t.Fatal(err)
+	}
+	hashes := map[string]string{}
+	for _, name := range []string{DatabaseFilename, ManagementCredentialFile, StewardWorkerCredentialFile} {
+		raw, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		target := name
+		if name != DatabaseFilename {
+			target += ".txt"
+		}
+		if err := os.WriteFile(filepath.Join(output, target), raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(raw)
+		hashes[target] = hex.EncodeToString(sum[:])
+	}
+	manifest := map[string]any{"source_tag": release, "source_commit": commit, "schema_version": schema, "generated_at": now, "files_sha256": hashes, "profile": profile, "custom_profile": custom, "labels": labels, "test_only_issuer_credential": bootstrap.IssuerCredentials["principal:upgrade"], "receipts": receipts, "leased_work": leased}
+	raw, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(output, "manifest.json"), append(raw, '\n'), 0600); err != nil {
+		t.Fatal(err)
+	}
+}

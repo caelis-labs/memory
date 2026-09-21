@@ -5,10 +5,12 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -16,13 +18,15 @@ import (
 const memoryModule = "github.com/caelis-labs/memory"
 
 func main() {
-	if err := run(context.Background()); err != nil {
+	version := flag.String("version", "", "published module version to test without a local replace")
+	flag.Parse()
+	if err := run(context.Background(), *version); err != nil {
 		fmt.Fprintf(os.Stderr, "facts_consumer_gate: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context) error {
+func run(ctx context.Context, version string) error {
 	root, err := memoryRoot()
 	if err != nil {
 		return err
@@ -33,7 +37,7 @@ func run(ctx context.Context) error {
 	}
 	defer os.RemoveAll(temporary)
 
-	goMod, err := temporaryGoMod(root)
+	goMod, err := temporaryGoMod(root, version)
 	if err != nil {
 		return err
 	}
@@ -48,9 +52,20 @@ func run(ctx context.Context) error {
 	if err := os.WriteFile(filepath.Join(temporary, "facts_consumer_gate_test.go"), []byte(harness), 0o600); err != nil {
 		return fmt.Errorf("write temporary harness: %w", err)
 	}
+	upgrade, err := os.ReadFile(filepath.Join(root, "appliance", "upgrade_public_test.go"))
+	if err != nil {
+		return fmt.Errorf("read public upgrade harness: %w", err)
+	}
+	upgrade = []byte(strings.Replace(string(upgrade), "package appliance_test", "package factsconsumer_test", 1))
+	if err := os.WriteFile(filepath.Join(temporary, "upgrade_public_test.go"), upgrade, 0o600); err != nil {
+		return err
+	}
+	if err := os.CopyFS(filepath.Join(temporary, "testdata", "upgrades"), os.DirFS(filepath.Join(root, "appliance", "testdata", "upgrades"))); err != nil {
+		return fmt.Errorf("copy released upgrade fixtures: %w", err)
+	}
 
-	fmt.Fprintf(os.Stdout, "facts_consumer_gate: GOWORK=off go test ./... (temporary module %s)\n", temporary)
-	command := exec.CommandContext(ctx, "go", "test", "./...")
+	fmt.Fprintf(os.Stdout, "facts_consumer_gate: GOWORK=off go test -mod=mod ./... (temporary module %s, published version %q)\n", temporary, version)
+	command := exec.CommandContext(ctx, "go", "test", "-mod=mod", "./...")
 	command.Dir = temporary
 	command.Env = setEnv(os.Environ(), "GOWORK", "off")
 	command.Stdout = os.Stdout
@@ -91,7 +106,13 @@ func memoryRoot() (string, error) {
 	return "", fmt.Errorf("could not locate the %s module root", memoryModule)
 }
 
-func temporaryGoMod(root string) ([]byte, error) {
+func temporaryGoMod(root, version string) ([]byte, error) {
+	if version != "" {
+		if !regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(version) {
+			return nil, fmt.Errorf("expected a published stable version, got %q", version)
+		}
+		return []byte(fmt.Sprintf("module example.com/memory-facts-consumer-gate\n\ngo 1.25.0\n\nrequire %s %s\n", memoryModule, version)), nil
+	}
 	contents, err := os.ReadFile(filepath.Join(root, "go.mod"))
 	if err != nil {
 		return nil, fmt.Errorf("read source go.mod: %w", err)
