@@ -1,0 +1,38 @@
+package appliance
+
+import (
+	"encoding/json"
+	management "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
+	memory "github.com/caelis-labs/memory/api/memory/v1alpha1"
+	"github.com/caelis-labs/memory/sdk/go/memory/stewardworker"
+	"os"
+	"testing"
+	"time"
+)
+
+func TestReviewSeedReleasedBuiltin(t *testing.T) {
+	dir := os.Getenv("REVIEW_DB")
+	if dir == "" {
+		t.Fatal("REVIEW_DB missing")
+	}
+	s, auth := newGoldenStore(t, dir, time.Now)
+	defer s.Close()
+	p := stewardworker.BuiltInProfile()
+	for i := 0; i < 2; i++ {
+		if _, err := s.PutStewardProfile(t.Context(), management.PutStewardProfileRequest{Profile: p}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.BindStewardProfile(t.Context(), management.BindStewardProfileRequest{ProfileID: p.ProfileID, Version: p.Version, SpaceIDs: []memory.SpaceID{"space-bot-a"}}); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := s.Remember(t.Context(), auth, memory.RememberRequest{Text: "old release pending evidence", IdempotencyKey: "old-pending"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(auth)
+	if err := os.WriteFile(dir+"/review-auth.json", data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("released v0.5.2 seeded %s@%d and pending receipt %s", p.ProfileID, p.Version, receipt.ReceiptID)
+}

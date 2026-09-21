@@ -1,0 +1,5 @@
+go: downloading github.com/caelis-labs/acp-go-sdk v1.4.0
+=== RUN   TestMemoryReleasedStoreUpgrade
+--- PASS: TestMemoryReleasedStoreUpgrade (1.70s)
+PASS
+ok  	github.com/caelis-labs/caelis/app/gatewayapp	3.280s

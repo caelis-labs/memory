@@ -1,0 +1,99 @@
+package appliance
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	facts "github.com/caelis-labs/memory/api/memory/facts/v1alpha1"
+	management "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
+	memory "github.com/caelis-labs/memory/api/memory/v1alpha1"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func TestGenerateReleasedGovernanceProcessingFixture(t *testing.T) {
+	output := os.Getenv("RELEASE_FIXTURE_OUTPUT")
+	if output == "" {
+		t.Fatal("missing fixture output")
+	}
+	now := time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC)
+	dir := t.TempDir()
+	s, auth := newGoldenStoreWithOptions(t, Options{DataDir: dir, Clock: func() time.Time { return now }, Random: rand.New(rand.NewSource(602))})
+	defer s.Close()
+	putAndBindSteward(t, s, 1)
+	type cancelled struct {
+		Action    string                      `json:"action"`
+		Request   facts.SubmitEvidenceRequest `json:"request"`
+		ReceiptID memory.ReceiptID            `json:"receipt_id"`
+	}
+	var cancelledReceipts []cancelled
+	for _, action := range []string{"delete", "correct"} {
+		baseReq := factRequest("base-"+action, "coffee is preferred", nil)
+		baseReq.Mutations[0].Key = action
+		baseReq.Source.FactKey = action
+		base := submitFact(t, s, auth, baseReq)
+		req := factRequest("dependent-"+action, "coffee remains preferred", nil)
+		req.Source.Role = facts.RoleUserQuote
+		req.Source.FactKey = action
+		req.Mutations = nil
+		dependent, err := s.SubmitEvidence(t.Context(), auth, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		work, found, err := s.ClaimStewardJob(t.Context(), time.Minute)
+		if err != nil || !found || len(work.Request.Records) == 0 {
+			t.Fatalf("claim %v %v", found, err)
+		}
+		if action == "delete" {
+			_, err = s.DeleteReceipt(t.Context(), management.DeleteReceiptRequest{ReceiptID: base.ReceiptID, Reason: "forget", IdempotencyKey: action})
+		} else {
+			_, err = s.CorrectReceipt(t.Context(), management.CorrectReceiptRequest{ReceiptID: base.ReceiptID, ReplacementText: "water instead", Reason: "correct", IdempotencyKey: action})
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, err := s.GetReceiptStatus(t.Context(), auth, memory.GetReceiptStatusRequest{ReceiptID: dependent.ReceiptID})
+		if err != nil || status.State != memory.ProcessingStateProcessing {
+			t.Fatalf("not the released bug: %+v %v", status, err)
+		}
+		replay, err := s.SubmitEvidence(t.Context(), auth, req)
+		if err != nil || replay.Organization != facts.OrganizationFailed {
+			t.Fatalf("job not failed: %+v %v", replay, err)
+		}
+		cancelledReceipts = append(cancelledReceipts, cancelled{action, req, dependent.ReceiptID})
+		now = now.Add(time.Second)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(output, 0700); err != nil {
+		t.Fatal(err)
+	}
+	hashes := map[string]string{}
+	for _, name := range []string{DatabaseFilename, ManagementCredentialFile, StewardWorkerCredentialFile} {
+		raw, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		target := name
+		if name != DatabaseFilename {
+			target += ".txt"
+		}
+		if err := os.WriteFile(filepath.Join(output, target), raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(raw)
+		hashes[target] = hex.EncodeToString(sum[:])
+	}
+	manifest := map[string]any{"source_tag": "v0.6.0", "source_commit": "f17b0293597dcdf9fad4fcba9ea19e20d1d91674", "schema_version": 2, "clock": now, "test_only_authorization": auth, "cancelled_receipts": cancelledReceipts, "files_sha256": hashes}
+	raw, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(output, "manifest.json"), append(raw, '\n'), 0600); err != nil {
+		t.Fatal(err)
+	}
+}

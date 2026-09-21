@@ -17,7 +17,7 @@ FACTS_PERF_SIZES ?= 1000,10000,100000
 FACTS_PERF_REPORT ?= $(CURDIR)/dist/facts-perf-report.json
 
 WINDOWS_REGRESSION_PACKAGES = ./internal/appliance ./appliance
-WINDOWS_REGRESSION_RUN = ^Test(SQLiteFileDSN|OpenPingsSQLiteOnNativeTempDir|SyncDirectorySucceedsOnNativeTempDir|DurableRestartAndIdempotency|LabelSetPartitionSurvivesRestart|EmbeddedRuntimeRememberRecall|OwnerLockRejectsSecondProcessOwner|ManagementCredentialRotationRevokesOldBearerAcrossRestart)$$
+WINDOWS_REGRESSION_RUN = ^Test(SQLiteFileDSN|OpenPingsSQLiteOnNativeTempDir|SyncDirectorySucceedsOnNativeTempDir|DurableRestartAndIdempotency|LabelSetPartitionSurvivesRestart|EmbeddedRuntimeRememberRecall|OwnerLockRejectsSecondProcessOwner|ManagementCredentialRotationRevokesOldBearerAcrossRestart|ReleasedStewardUpgrade|ReleasedGovernanceProcessingUpgrade|GovernanceSettlesDependentReceiptProcessing)$$
 
 .PHONY: docs-links fmt-check whitespace-check test durable race vet build sidecar sidecar-supported cross-build check corpus-gate m5-benchmark ga-soak release-candidate standalone-preview windows-regression facts-gate facts-perf
 

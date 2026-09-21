@@ -232,7 +232,7 @@ func (s *Store) CorrectReceipt(
 	if err := s.persistForgettingClosure(ctx, tx, correctionVersion, forgetting); err != nil {
 		return rollback(s.databaseError("record corrected derived history", err))
 	}
-	if err := s.invalidateForgettingClosure(ctx, tx, forgetting, request.ReceiptID, "receipt_corrected"); err != nil {
+	if err := s.invalidateForgettingClosure(ctx, tx, forgetting, "receipt_corrected"); err != nil {
 		return rollback(s.databaseError("invalidate corrected derived history", err))
 	}
 	if err := s.recordReceiptChange(
@@ -439,7 +439,7 @@ func (s *Store) DeleteReceipt(
 	if err := s.persistForgettingClosure(ctx, tx, invalidationVersion, forgetting); err != nil {
 		return rollback(s.databaseError("record forgotten derived history", err))
 	}
-	if err := s.invalidateForgettingClosure(ctx, tx, forgetting, request.ReceiptID, "receipt_deleted"); err != nil {
+	if err := s.invalidateForgettingClosure(ctx, tx, forgetting, "receipt_deleted"); err != nil {
 		return rollback(s.databaseError("invalidate forgotten derived history", err))
 	}
 	if err := s.recordReceiptChange(

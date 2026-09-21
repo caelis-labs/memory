@@ -435,7 +435,6 @@ func (s *Store) invalidateForgettingClosure(
 	ctx context.Context,
 	tx *sql.Tx,
 	closure forgettingClosure,
-	receiptID v1alpha1.ReceiptID,
 	reason string,
 ) error {
 	now := formatTime(s.now().UTC())
@@ -454,28 +453,9 @@ func (s *Store) invalidateForgettingClosure(
 		}
 	}
 	for jobID := range closure.jobs {
-		if _, err := tx.ExecContext(ctx,
-			`UPDATE steward_jobs
-			 SET state = 'failed', lease_expires_at = NULL, lease_token_digest = '', terminal_error_code = ?, updated_at = ?
-			 WHERE job_id = ? AND state IN ('pending', 'leased')`, reason, now, jobID); err != nil {
-			return fmt.Errorf("cancel attributable Steward job: %w", err)
+		if err := cancelGovernedStewardJob(ctx, tx, jobID, reason, now); err != nil {
+			return err
 		}
-	}
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE steward_jobs
-		 SET state = 'failed', lease_expires_at = NULL, lease_token_digest = '', terminal_error_code = ?, updated_at = ?
-		 WHERE receipt_id = ? AND state IN ('pending', 'leased')`, reason, now, receiptID); err != nil {
-		return fmt.Errorf("cancel receipt Steward job: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE receipt_processing
-		 SET state = 'failed', last_attempt_at = ?, terminal_error_code = ?
-		 WHERE receipt_id = ? AND state IN ('accepted', 'processing')
-		   AND EXISTS (
-			SELECT 1 FROM steward_jobs j
-			WHERE j.receipt_id = ? AND j.state = 'failed' AND j.terminal_error_code = ?
-		   )`, now, reason, receiptID, receiptID, reason); err != nil {
-		return fmt.Errorf("fail governed receipt semantic processing: %w", err)
 	}
 	return nil
 }
@@ -748,18 +728,21 @@ func (s *Store) cleanseDerivedHistory(
 		   )`, barrier.receiptID); err != nil {
 		return fmt.Errorf("remove forgotten Steward jobs: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE steward_jobs
-		 SET state = 'failed', lease_expires_at = NULL, lease_token_digest = '', terminal_error_code = ?,
-		     updated_at = ?
-		 WHERE state IN ('pending', 'leased')
+	jobs, err := collectJobs(ctx, tx,
+		`SELECT job_id FROM steward_jobs
+		 WHERE state IN ('pending', 'leased') AND space_id = ? AND label_set_digest = ?
 		   AND (receipt_id = ? OR EXISTS (
 			SELECT 1 FROM steward_read_set rs
 			JOIN forgetting_barrier_records br ON br.record_id = rs.record_id
 			WHERE rs.job_id = steward_jobs.job_id AND br.barrier_sequence = ?
-		   ))`,
-		"receipt_forgotten", formatTime(now), barrier.receiptID, barrier.sequence); err != nil {
-		return fmt.Errorf("settle forgotten Steward jobs: %w", err)
+		   ))`, barrier.spaceID, barrier.labelDigest, barrier.receiptID, barrier.sequence)
+	if err != nil {
+		return err
+	}
+	for _, jobID := range jobs {
+		if err := cancelGovernedStewardJob(ctx, tx, jobID, "receipt_forgotten", formatTime(now)); err != nil {
+			return err
+		}
 	}
 	return nil
 }

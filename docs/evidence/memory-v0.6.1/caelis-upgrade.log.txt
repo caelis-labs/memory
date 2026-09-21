@@ -1,0 +1,8 @@
+=== RUN   TestMemoryEmbeddedGoldenPath
+--- PASS: TestMemoryEmbeddedGoldenPath (3.71s)
+=== RUN   TestMemoryStewardBindingControlsEmbeddedWorker
+--- PASS: TestMemoryStewardBindingControlsEmbeddedWorker (2.11s)
+=== RUN   TestMemoryReleasedStoreUpgrade
+--- PASS: TestMemoryReleasedStoreUpgrade (1.25s)
+PASS
+ok  	github.com/caelis-labs/caelis/app/gatewayapp	8.641s

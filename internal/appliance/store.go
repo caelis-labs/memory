@@ -151,6 +151,9 @@ func (s *Store) initialize(ctx context.Context) error {
 	if err := s.RecoverGovernanceCleanup(ctx); err != nil {
 		return fmt.Errorf("recover governance cleanup: %w", err)
 	}
+	if err := s.migrateGovernanceReceiptProcessing(ctx); err != nil {
+		return fmt.Errorf("migrate governed receipt processing: %w", err)
+	}
 	generation, err := s.metadata(ctx, "storage_generation")
 	if errors.Is(err, sql.ErrNoRows) {
 		generation, err = s.randomHex(16)

@@ -111,3 +111,11 @@ fixture generator. They are not real credentials. The checked-in
 synthetic provenance inputs; migration tests copy them to the expected owner
 paths only inside `t.TempDir`. No credential file from a real appliance is
 included.
+
+## v0.6.1 data repair
+
+The patch keeps schema 2 and adds an atomic, once-only repair for receipt
+processing rows left inconsistent by governance cancellation in v0.6.0. It also
+versions the built-in Steward profile independently of the schema. See the
+[patch recovery instructions](memory-v0.6.1-release.md) before upgrading or
+resuming affected work.

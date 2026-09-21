@@ -11,7 +11,7 @@ import (
 
 const (
 	builtInProfileID      stewardv1alpha1.ProfileID = "memory-default"
-	builtInProfileVersion uint64                    = 1
+	builtInProfileVersion uint64                    = 2
 	maxEnvelopeOverhead                             = 4 << 10
 )
 

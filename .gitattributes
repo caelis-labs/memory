@@ -1,0 +1,6 @@
+# Released upgrade manifests hash these files byte-for-byte. Windows checkout
+# must not rewrite synthetic credential newlines or SQLite images.
+/appliance/testdata/upgrades/**/memory.db -text
+/appliance/testdata/upgrades/**/*.token.txt text eol=lf
+/internal/appliance/testdata/v0.6.0-governance/memory.db -text
+/internal/appliance/testdata/v0.6.0-governance/*.token.txt text eol=lf
