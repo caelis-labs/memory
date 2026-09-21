@@ -27,6 +27,11 @@ consumer upgrades, and existing M5 benchmarks. The full aggregate output is
 retained in `release-candidate.log.txt`. Pure-Go embedded tests and the expanded
 Windows test selection also passed locally.
 
+The initial native Windows CI run caught CRLF conversion of synthetic token
+files. `.gitattributes` now fixes LF for the hashed text inputs and disables
+text conversion for the SQLite images. A local `core.autocrlf=true` checkout
+preserves all nine manifest hashes; final native CI remains mandatory.
+
 Commands for this patch:
 
 ```sh
