@@ -17,8 +17,9 @@ published or consumed by Caelis in the current release line.
 `make standalone-preview` retains the historical native packaging checks
 without adding them to the package candidate gate.
 
-The v0.6.0 source-package release is tracked in the
-[v0.6 release notes and checklist](memory-v0.6-release.md). Formal package publication was authorized after PR review repairs. Protected-PR
+The v0.6.1 patch is tracked in the
+[patch release notes](memory-v0.6.1-release.md); the original feature release is
+tracked in the [v0.6 release notes and checklist](memory-v0.6-release.md). Formal package publication was authorized after PR review repairs. Protected-PR
 native CI qualifies implementation changes before publication. Production longitudinal quality and
 Caelis Facts product integration are separately unqualified; a version-file edit
 does not mean the release exists.
@@ -109,9 +110,9 @@ their required Actions checks. See the
 [release-please action documentation](https://github.com/googleapis/release-please-action).
 
 The `simple` strategy updates this repository's bare `VERSION` file, manifest
-and Changelog. The manifest starts at the last published version `0.5.2`; the
-bootstrap commit is its exact tag target. The prepared candidate's `VERSION`
-is already `0.6.0`. Do not advance the manifest manually during bootstrap.
+and Changelog. The manifest tracks the last published version; the bootstrap commit is the
+historical v0.5.2 tag target. Let release-please advance the manifest and
+`VERSION` together in the release PR.
 `always-update` keeps the release PR compatible with strict up-to-date rules.
 
 To publish:
@@ -119,7 +120,7 @@ To publish:
 1. Merge reviewed implementation changes after full protected-PR checks. Retain
    the PR head, tested merge commit and source attribution for expensive gates.
 2. Inspect the generated release PR's version and Changelog. For this release
-   they must identify `0.6.0`. Its only changes should be the three metadata
+   they must identify `0.6.1`. Its only changes should be the three metadata
    files above; any additional path requires full checks.
 3. Merge the release PR only with publication authorization and successful
    required checks. The workflow does not automatically merge it. Merging this
@@ -145,7 +146,7 @@ as stopped with no final aggregate result; do not transfer the previous source's
 33/33 score to this release. This disposition does not change the frozen limits
 or qualify production-model or end-to-end Bot performance.
 
-The package version is `0.6.0` (previous released baseline: `0.5.2`).
+The patch target is `0.6.1` (previous released baseline: `0.6.0`).
 `memory-v0.5.0` remains the first supported source schema floor. v0.6 writes
 schema **2**, marker `memory-v0.6.0`, through an explicit atomic migration from
 schema 1, including the final byte-identical prerelease baseline. Old binaries

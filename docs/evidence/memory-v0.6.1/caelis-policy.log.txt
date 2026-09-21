@@ -1,0 +1,4 @@
+=== RUN   TestMemoryStewardSemanticEvaluationFixtureAndPolicy
+--- PASS: TestMemoryStewardSemanticEvaluationFixtureAndPolicy (0.00s)
+PASS
+ok  	github.com/caelis-labs/caelis/app/gatewayapp	0.871s

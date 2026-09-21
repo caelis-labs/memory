@@ -1,0 +1,102 @@
+GOWORK=off go run ./scripts/markdown_links
+documentation links passed (32 files checked)
+GOWORK=off go test ./...
+ok  	github.com/caelis-labs/memory/api/memory/facts/v1alpha1	(cached)
+ok  	github.com/caelis-labs/memory/api/memory/management/v1alpha1	(cached)
+ok  	github.com/caelis-labs/memory/api/memory/steward/v1alpha1	(cached)
+ok  	github.com/caelis-labs/memory/api/memory/v1alpha1	(cached)
+ok  	github.com/caelis-labs/memory/appliance	2.530s
+ok  	github.com/caelis-labs/memory/cmd/memoryctl	(cached)
+?   	github.com/caelis-labs/memory/cmd/memoryd	[no test files]
+?   	github.com/caelis-labs/memory/cmd/memorymanifest	[no test files]
+?   	github.com/caelis-labs/memory/conformance	[no test files]
+ok  	github.com/caelis-labs/memory/internal/appliance	7.584s
+ok  	github.com/caelis-labs/memory/internal/backupfile	(cached)
+?   	github.com/caelis-labs/memory/internal/buildinfo	[no test files]
+ok  	github.com/caelis-labs/memory/internal/localtransport	1.595s
+ok  	github.com/caelis-labs/memory/internal/reference	(cached)
+ok  	github.com/caelis-labs/memory/internal/systemtest	(cached)
+ok  	github.com/caelis-labs/memory/scripts/artifact_checksum	(cached)
+ok  	github.com/caelis-labs/memory/scripts/corpus_eval	2.631s
+ok  	github.com/caelis-labs/memory/scripts/facts_compare	(cached)
+ok  	github.com/caelis-labs/memory/scripts/facts_consumer_gate	2.281s
+ok  	github.com/caelis-labs/memory/scripts/facts_eval	(cached)
+ok  	github.com/caelis-labs/memory/scripts/ga_soak	1.750s
+?   	github.com/caelis-labs/memory/scripts/markdown_links	[no test files]
+ok  	github.com/caelis-labs/memory/sdk/go/memory	(cached)
+?   	github.com/caelis-labs/memory/sdk/go/memory/internal/localhttp	[no test files]
+ok  	github.com/caelis-labs/memory/sdk/go/memory/local	(cached)
+?   	github.com/caelis-labs/memory/sdk/go/memory/management	[no test files]
+ok  	github.com/caelis-labs/memory/sdk/go/memory/sidecar	(cached)
+ok  	github.com/caelis-labs/memory/sdk/go/memory/stewardworker	1.029s
+GOWORK=off go vet ./...
+GOWORK=off go build ./cmd/...
+git diff --check
+GOWORK=off go test -count=1 ./internal/systemtest
+ok  	github.com/caelis-labs/memory/internal/systemtest	17.603s
+GOWORK=off go test -race ./...
+ok  	github.com/caelis-labs/memory/api/memory/facts/v1alpha1	(cached)
+ok  	github.com/caelis-labs/memory/api/memory/management/v1alpha1	(cached)
+ok  	github.com/caelis-labs/memory/api/memory/steward/v1alpha1	(cached)
+ok  	github.com/caelis-labs/memory/api/memory/v1alpha1	(cached)
+ok  	github.com/caelis-labs/memory/appliance	8.730s
+ok  	github.com/caelis-labs/memory/cmd/memoryctl	(cached)
+?   	github.com/caelis-labs/memory/cmd/memoryd	[no test files]
+?   	github.com/caelis-labs/memory/cmd/memorymanifest	[no test files]
+?   	github.com/caelis-labs/memory/conformance	[no test files]
+ok  	github.com/caelis-labs/memory/internal/appliance	62.777s
+ok  	github.com/caelis-labs/memory/internal/backupfile	(cached)
+?   	github.com/caelis-labs/memory/internal/buildinfo	[no test files]
+ok  	github.com/caelis-labs/memory/internal/localtransport	2.193s
+ok  	github.com/caelis-labs/memory/internal/reference	(cached)
+ok  	github.com/caelis-labs/memory/internal/systemtest	(cached)
+ok  	github.com/caelis-labs/memory/scripts/artifact_checksum	(cached)
+ok  	github.com/caelis-labs/memory/scripts/corpus_eval	13.098s
+ok  	github.com/caelis-labs/memory/scripts/facts_compare	(cached)
+ok  	github.com/caelis-labs/memory/scripts/facts_consumer_gate	1.269s
+ok  	github.com/caelis-labs/memory/scripts/facts_eval	(cached)
+ok  	github.com/caelis-labs/memory/scripts/ga_soak	6.454s
+?   	github.com/caelis-labs/memory/scripts/markdown_links	[no test files]
+ok  	github.com/caelis-labs/memory/sdk/go/memory	(cached)
+?   	github.com/caelis-labs/memory/sdk/go/memory/internal/localhttp	[no test files]
+ok  	github.com/caelis-labs/memory/sdk/go/memory/local	(cached)
+?   	github.com/caelis-labs/memory/sdk/go/memory/management	[no test files]
+ok  	github.com/caelis-labs/memory/sdk/go/memory/sidecar	(cached)
+ok  	github.com/caelis-labs/memory/sdk/go/memory/stewardworker	1.331s
+GOWORK=off go test -count=1 -v ./internal/appliance -run '^TestReleaseMultilingualCorpusGate$'
+=== RUN   TestReleaseMultilingualCorpusGate
+    release_corpus_test.go:157: release corpus zh: cases=64 recall@1=1.0000 recall@5=1.0000 zero=0 provenance=64 p95=1.464209ms
+    release_corpus_test.go:157: release corpus en: cases=64 recall@1=1.0000 recall@5=1.0000 zero=0 provenance=64 p95=1.406917ms
+    release_corpus_test.go:157: release corpus other: cases=96 recall@1=1.0000 recall@5=1.0000 zero=0 provenance=96 p95=2.081834ms
+--- PASS: TestReleaseMultilingualCorpusGate (1.02s)
+PASS
+ok  	github.com/caelis-labs/memory/internal/appliance	2.780s
+GOWORK=off MEMORY_FACTS_EVAL_CANDIDATES=1 MEMORY_FACTS_EVAL_REPORT="/Users/xueyongzhi/WorkDir/caelis-labs/memory/dist/facts-eval-report.json" go test -count=1 -timeout 10m -v ./internal/appliance -run '^TestFactsLongitudinalEvaluationGate$'
+=== RUN   TestFactsLongitudinalEvaluationGate
+    facts_evaluation_test.go:949: facts evaluation: authored C1=14/14 clean, candidates=208 (not_human_reviewed), in-tree legacy receipt Recall control=2/2
+    facts_evaluation_test.go:994: facts evaluation report written to /Users/xueyongzhi/WorkDir/caelis-labs/memory/dist/facts-eval-report.json
+--- PASS: TestFactsLongitudinalEvaluationGate (6.85s)
+PASS
+ok  	github.com/caelis-labs/memory/internal/appliance	7.786s
+GOWORK=off go run ./scripts/facts_eval -fixtures internal/appliance/testdata/facts_eval -report "/Users/xueyongzhi/WorkDir/caelis-labs/memory/dist/facts-eval-report.json"
+facts_eval: report /Users/xueyongzhi/WorkDir/caelis-labs/memory/dist/facts-eval-report.json conforms
+facts_eval: fixtures conform (trajectories file d5f2c3e811aaa726f1b6b49113d41bcaeb53cf2e589da8556cd4755696d3dff4, 8 subjects, 26 templates, 208 candidates)
+GOWORK=off go run ./scripts/facts_consumer_gate
+facts_consumer_gate: GOWORK=off go test -mod=mod ./... (temporary module /var/folders/hn/r4ffst5510s89657cwrcjj6w0000gn/T/memory-facts-consumer-gate-3436717446, published version "")
+ok  	example.com/memory-facts-consumer-gate	0.965s
+facts_consumer_gate: passed
+GOWORK=off go test ./internal/appliance -run '^$' -bench '^BenchmarkM5' -benchtime=200x -benchmem
+goos: darwin
+goarch: arm64
+pkg: github.com/caelis-labs/memory/internal/appliance
+cpu: Apple M4
+BenchmarkM5Remember-10           	     200	    261939 ns/op	       242.0 remember_p50_us	       364.0 remember_p95_us	       580.0 remember_p99_us	   71871 B/op	     735 allocs/op
+BenchmarkM5ColdRemember-10       	     200	    409823 ns/op	       387.0 cold_remember_p50_us	       514.0 cold_remember_p95_us	       696.0 cold_remember_p99_us	   73110 B/op	     755 allocs/op
+BenchmarkM5Recall-10             	     200	    360333 ns/op	       359.0 recall_p50_us	       418.0 recall_p95_us	       491.0 recall_p99_us	  230336 B/op	    1260 allocs/op
+BenchmarkM5Open-10               	     200	  23043937 ns/op	     21811 open_p50_us	     23697 open_p95_us	     25821 open_p99_us	   58553 B/op	    1336 allocs/op
+BenchmarkM5Reindex-10            	     200	   8412845 ns/op	     59433 entries/s	23579111 B/op	   64919 allocs/op
+BenchmarkM5Backup-10             	     200	   7962992 ns/op	      7827 backup_p50_us	      8524 backup_p95_us	      9302 backup_p99_us	   17440 B/op	     173 allocs/op
+BenchmarkM5Restore-10            	     200	  28545593 ns/op	     28163 restore_p50_us	     33170 restore_p95_us	     44321 restore_p99_us	   51362 B/op	     590 allocs/op
+BenchmarkM5BacklogRecovery-10    	     200	    738203 ns/op	      1355 jobs/s	   83582 B/op	     867 allocs/op
+PASS
+ok  	github.com/caelis-labs/memory/internal/appliance	21.239s

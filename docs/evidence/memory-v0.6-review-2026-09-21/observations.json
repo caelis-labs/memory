@@ -1,0 +1,119 @@
+{
+  "reviewed_release": "v0.6.0",
+  "reviewed_sha": "f17b0293597dcdf9fad4fcba9ea19e20d1d91674",
+  "baseline_release": "v0.5.2",
+  "baseline_sha": "51693ff135be8c4149c15117980290aaad6d90da",
+  "environment": {
+    "go": "go1.26.8",
+    "goos": "darwin",
+    "goarch": "arm64",
+    "cgo_enabled": "1",
+    "gowork": "off"
+  },
+  "validation": [
+    {
+      "command": "GOWORK=off go test -race ./...",
+      "exit_code": 0
+    },
+    {
+      "command": "GOWORK=off make check facts-gate facts-consumer-gate FACTS_EVAL_REPORT=/tmp/memory-v060-review-facts-eval.json",
+      "exit_code": 0
+    },
+    {
+      "command": "GOWORK=off REVIEW_DB=<fresh temporary database> go test ./internal/appliance -run ^TestReviewSeedReleasedBuiltin$ -count=1 -v",
+      "source": "v0.5.2 archive with seed test only",
+      "exit_code": 0
+    },
+    {
+      "command": "GOWORK=off REVIEW_DB=<same seeded database> go test ./internal/appliance -run ^TestReviewBuiltinUpgradeCollision$ -count=1 -v",
+      "source": "v0.6.0 archive with reproduction test only",
+      "exit_code": 0,
+      "meaning": "observational reproduction expected immutable conflict; not an upgrade acceptance pass",
+      "observed": [
+        "new builtin registration returned immutable profile conflict three times",
+        "old profile re-registration succeeded",
+        "diagnostic new profile version registration and binding succeeded",
+        "old and new queued jobs completed with captured versions 1 and 2"
+      ]
+    },
+    {
+      "command": "GOWORK=off go test ./internal/appliance -run ^TestReviewTransitiveGovernanceStatus$ -count=1 -v",
+      "source": "v0.6.0 archive with reproduction test only",
+      "exit_code": 1,
+      "observed": [
+        {
+          "action": "delete",
+          "stage": "after governance",
+          "receipt_status": "processing",
+          "terminal_error_code": "",
+          "submit_evidence_organization": "failed"
+        },
+        {
+          "action": "delete",
+          "stage": "after reopen",
+          "receipt_status": "processing",
+          "terminal_error_code": "",
+          "submit_evidence_organization": "failed"
+        },
+        {
+          "action": "correct",
+          "stage": "after governance",
+          "receipt_status": "processing",
+          "terminal_error_code": "",
+          "submit_evidence_organization": "failed"
+        },
+        {
+          "action": "correct",
+          "stage": "after reopen",
+          "receipt_status": "processing",
+          "terminal_error_code": "",
+          "submit_evidence_organization": "failed"
+        }
+      ]
+    },
+    {
+      "command": "GOWORK=off go test ./internal/appliance -run ^TestReviewSameSubjectReadCost$ -count=1 -v",
+      "source": "v0.6.0 archive with reproduction test only",
+      "exit_code": 0,
+      "qualification": "single machine diagnostic, 10 samples each, no production SLO claim",
+      "samples": [
+        {
+          "facts": 100,
+          "point_key": true,
+          "median_ms": 0.127,
+          "max_ms": 0.219
+        },
+        {
+          "facts": 100,
+          "point_key": false,
+          "median_ms": 5.802,
+          "max_ms": 6.06
+        },
+        {
+          "facts": 1000,
+          "point_key": true,
+          "median_ms": 0.129,
+          "max_ms": 0.222
+        },
+        {
+          "facts": 1000,
+          "point_key": false,
+          "median_ms": 56.539,
+          "max_ms": 57.663
+        }
+      ]
+    }
+  ],
+  "not_run": [
+    "native Linux/Windows",
+    "minimum Go toolchain CGO=0",
+    "full 100k performance/soak",
+    "real model/provider",
+    "current Caelis integration"
+  ],
+  "files_sha256": {
+    "facts-eval.json": "c18e9e4950a44a9918f853f188929318076d27fa05c91e20b93d5d7043c98c4e",
+    "reproduction-current_test.go.txt": "b8540dbb257f166b68a8d829ecdd3b96a29a5ba1f31d2c523e1dd0deb92490c0",
+    "reproduction-v052_test.go.txt": "abffa09bca6c6fd60eb078050b99425988db6e56a128f07e16b46ba4b191d750"
+  }
+}

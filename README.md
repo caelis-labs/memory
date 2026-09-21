@@ -14,7 +14,9 @@ v0.6.0 adds trusted evidence, explicit long-term fact lifecycle, bounded current
 facts and public owner governance. Models propose; only admitted host authority
 confirms facts. This is an embedded Go package release. Production model quality
 and Caelis's new Facts integration require separate qualification; see the
-[v0.6 release notes](docs/memory-v0.6-release.md).
+[v0.6 release notes](docs/memory-v0.6-release.md). The
+[v0.6.1 patch](docs/memory-v0.6.1-release.md) repairs existing-store Steward
+upgrades and governance processing status.
 
 Caelis imports Memory and runs it as part of the Caelis Host. There is no
 separate Memory download, installation, process, endpoint, readiness state, or

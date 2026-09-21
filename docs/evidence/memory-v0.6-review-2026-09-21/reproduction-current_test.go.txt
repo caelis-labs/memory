@@ -1,0 +1,178 @@
+package appliance
+
+import (
+	"encoding/json"
+	"fmt"
+	facts "github.com/caelis-labs/memory/api/memory/facts/v1alpha1"
+	management "github.com/caelis-labs/memory/api/memory/management/v1alpha1"
+	steward "github.com/caelis-labs/memory/api/memory/steward/v1alpha1"
+	memory "github.com/caelis-labs/memory/api/memory/v1alpha1"
+	"github.com/caelis-labs/memory/sdk/go/memory/stewardworker"
+	"os"
+	"sort"
+	"testing"
+	"time"
+)
+
+func TestReviewBuiltinUpgradeCollision(t *testing.T) {
+	dir := os.Getenv("REVIEW_DB")
+	if dir == "" {
+		t.Fatal("REVIEW_DB missing")
+	}
+	s, err := Open(t.Context(), Options{DataDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var auth memory.CallAuthorization
+	raw, err := os.ReadFile(dir + "/review-auth.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(raw, &auth); err != nil {
+		t.Fatal(err)
+	}
+	p := stewardworker.BuiltInProfile()
+	for i := 0; i < 3; i++ {
+		_, err = s.PutStewardProfile(t.Context(), management.PutStewardProfileRequest{Profile: p})
+		t.Logf("new builtin attempt %d: %v", i+1, err)
+		if !memory.IsCode(err, memory.ErrorCodeConflict) {
+			t.Fatalf("want exact reported conflict, got %v", err)
+		}
+	}
+	config, err := s.GetStewardConfiguration(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Profiles) != 1 {
+		t.Fatal("old profile lost")
+	}
+	old := config.Profiles[0].ProfileSpec
+	if old.SystemPrompt == p.SystemPrompt {
+		t.Fatal("expected prompt change")
+	}
+	if _, err = s.PutStewardProfile(t.Context(), management.PutStewardProfileRequest{Profile: old}); err != nil {
+		t.Fatal(err)
+	}
+	// Diagnostic only. This does not modify repository policy or prescribe a host override.
+	p.Version++
+	for i := 0; i < 2; i++ {
+		if _, err = s.PutStewardProfile(t.Context(), management.PutStewardProfileRequest{Profile: p}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = s.BindStewardProfile(t.Context(), management.BindStewardProfileRequest{ProfileID: p.ProfileID, Version: p.Version, SpaceIDs: []memory.SpaceID{"space-bot-a"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Remember(t.Context(), auth, memory.RememberRequest{Text: "new release pending evidence", IdempotencyKey: "new-pending"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []uint64{1, 2} {
+		work, found, err := s.ClaimStewardJob(t.Context(), time.Minute)
+		if err != nil || !found {
+			t.Fatalf("claim: %v %v", found, err)
+		}
+		if work.Request.Profile.Version != version {
+			t.Fatalf("want version %d got %d", version, work.Request.Profile.Version)
+		}
+		if version == 1 && work.Request.Profile.SystemPrompt != old.SystemPrompt {
+			t.Fatal("old snapshot changed")
+		}
+		if _, err = s.ApplyStewardProposal(t.Context(), work.Lease, steward.Proposal{Operation: steward.OperationAdd, Kind: "fact", Text: "deterministic output", EvidenceRefs: []memory.ReceiptID{work.Request.Receipt.ReceiptID}}); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("diagnostic new version control processes captured profile version %d", version)
+	}
+}
+func TestReviewTransitiveGovernanceStatus(t *testing.T) {
+	for _, action := range []string{"delete", "correct"} {
+		t.Run(action, func(t *testing.T) {
+			dir := t.TempDir()
+			s, auth := newGoldenStore(t, dir, time.Now)
+			defer func() { s.Close() }()
+			base := submitFact(t, s, auth, factRequest("base", "coffee is preferred", nil))
+			putAndBindSteward(t, s, 1)
+			req := factRequest("dependent", "coffee remains preferred", nil)
+			req.Source.Role = facts.RoleUserQuote
+			req.Mutations = nil
+			dependent, err := s.SubmitEvidence(t.Context(), auth, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			work, found, err := s.ClaimStewardJob(t.Context(), time.Minute)
+			if err != nil || !found {
+				t.Fatalf("claim %v %v", found, err)
+			}
+			if len(work.Request.Records) == 0 || work.Request.Records[0].RecordID != steward.RecordID(base.Facts[0].RecordID) {
+				t.Fatal("did not read the root fact")
+			}
+			if action == "delete" {
+				_, err = s.DeleteReceipt(t.Context(), management.DeleteReceiptRequest{ReceiptID: base.ReceiptID, Reason: "forget", IdempotencyKey: "govern-root"})
+			} else {
+				_, err = s.CorrectReceipt(t.Context(), management.CorrectReceiptRequest{ReceiptID: base.ReceiptID, ReplacementText: "water instead", Reason: "correct", IdempotencyKey: "govern-root"})
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, stage := range []string{"after governance", "after reopen"} {
+				if stage == "after reopen" {
+					if err = s.Close(); err != nil {
+						t.Fatal(err)
+					}
+					s, err = Open(t.Context(), Options{DataDir: dir})
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				status, err := s.GetReceiptStatus(t.Context(), auth, memory.GetReceiptStatusRequest{ReceiptID: dependent.ReceiptID})
+				if err != nil {
+					t.Fatal(err)
+				}
+				replay, err := s.SubmitEvidence(t.Context(), auth, req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("%s: GetReceiptStatus=%s, terminal=%q; SubmitEvidence.Organization=%s", stage, status.State, status.TerminalErrorCode, replay.Organization)
+				if status.State != memory.ProcessingStateFailed {
+					t.Errorf("cancelled dependent job must report failed, got %s", status.State)
+				}
+			}
+		})
+	}
+}
+
+// Diagnostic scaling sample; this is not a release SLO or a full perf gate.
+func TestReviewSameSubjectReadCost(t *testing.T) {
+	for _, count := range []int{100, 1000} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			s, auth := newGoldenStore(t, t.TempDir(), time.Now)
+			defer s.Close()
+			for i := 0; i < count; i++ {
+				r := factRequest(fmt.Sprintf("event-%06d", i), "small explicit fact", nil)
+				r.Source.FactKey = fmt.Sprintf("key-%06d", i)
+				r.Mutations[0].Key = r.Source.FactKey
+				submitFact(t, s, auth, r)
+			}
+			for _, point := range []bool{true, false} {
+				r := factRead()
+				if point {
+					r.Key = "key-000000"
+				}
+				var samples []float64
+				for i := 0; i < 10; i++ {
+					start := time.Now()
+					result, err := s.ReadFacts(t.Context(), auth, r)
+					if err != nil {
+						t.Fatal(err)
+					}
+					samples = append(samples, float64(time.Since(start).Microseconds())/1000)
+					if len(result.Facts) > 8 {
+						t.Fatal("budget exceeded")
+					}
+				}
+				sort.Float64s(samples)
+				t.Logf("same subject facts=%d point_key=%v returned_at_most=8 median_ms=%.3f max_ms=%.3f", count, point, samples[len(samples)/2], samples[len(samples)-1])
+			}
+		})
+	}
+}
