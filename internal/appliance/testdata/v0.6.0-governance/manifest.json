@@ -1,0 +1,52 @@
+{
+  "cancelled_receipts": [
+    {
+      "action": "delete",
+      "request": {
+        "source": {
+          "producer": "host",
+          "event_id": "dependent-delete",
+          "revision": "1",
+          "fragment": "0:full",
+          "subject": "user:a",
+          "fact_key": "delete",
+          "role": "user_quote"
+        },
+        "text": "coffee remains preferred",
+        "idempotency_key": "dependent-delete"
+      },
+      "receipt_id": "receipt-e34ab8015f1cd450cd6141f69c9f466d"
+    },
+    {
+      "action": "correct",
+      "request": {
+        "source": {
+          "producer": "host",
+          "event_id": "dependent-correct",
+          "revision": "1",
+          "fragment": "0:full",
+          "subject": "user:a",
+          "fact_key": "correct",
+          "role": "user_quote"
+        },
+        "text": "coffee remains preferred",
+        "idempotency_key": "dependent-correct"
+      },
+      "receipt_id": "receipt-fb44859bf671afcd41f529f3e5b1f628"
+    }
+  ],
+  "clock": "2026-09-21T00:00:02Z",
+  "files_sha256": {
+    "management.token.txt": "dfe16e81764aec31e0be08b3b4d47dfbec4ca12ee96ead8495b106875d16d91e",
+    "memory.db": "6cea63bcd28f919efb1e11d1a5d21c16a0ccdc6f084efdcd9d4a9aa4ebed0351",
+    "steward-worker.token.txt": "5b64bab0b53eddac0f933c1cf0912676e2598cda042c9ebaf4a0c6ecb1cd98e7"
+  },
+  "schema_version": 2,
+  "source_commit": "f17b0293597dcdf9fad4fcba9ea19e20d1d91674",
+  "source_tag": "v0.6.0",
+  "test_only_authorization": {
+    "Capability": "tPsekKNBseoo8JioaVOhWQMvgn27V6nvJx-k2NEWnIc",
+    "ActorRef": "actor-bot-a",
+    "Audience": "private"
+  }
+}
