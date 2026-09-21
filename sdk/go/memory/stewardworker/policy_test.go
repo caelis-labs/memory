@@ -1,6 +1,9 @@
 package stewardworker
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +13,7 @@ import (
 
 func TestBuiltInProfileAndPromptOwnExactTextContract(t *testing.T) {
 	profile := BuiltInProfile()
-	if profile.ProfileID != "memory-default" || profile.Version != 1 || profile.MaxContextRecords != 16 ||
+	if profile.ProfileID != "memory-default" || profile.Version != 2 || profile.MaxContextRecords != 16 ||
 		profile.MaxInputBytes != 128<<10 || profile.MaxOutputBytes != 4<<10 {
 		t.Fatalf("BuiltInProfile() = %+v", profile)
 	}
@@ -105,5 +108,45 @@ func testWorkRequest(profile stewardv1alpha1.ProfileSpec) stewardv1alpha1.WorkRe
 			ReceiptID: "receipt-1", Text: "durable", ReceivedAt: time.Unix(1, 0).UTC(),
 		},
 		Records: []stewardv1alpha1.RecordContext{},
+	}
+}
+
+// Released specs are frozen independently of BuiltInProfile. v0.5.2 and v0.6.0
+// accidentally shipped different specs at version 1; retain both as evidence.
+// Changing any current policy field requires a new version and snapshot.
+func TestBuiltInProfileMatchesReleasedSpecification(t *testing.T) {
+	files, err := filepath.Glob("testdata/released_profiles/*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) < 3 {
+		t.Fatal("released profile snapshots are missing")
+	}
+	var latest stewardv1alpha1.ProfileSpec
+	for _, path := range files {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var snapshot struct {
+			Release      string                      `json:"release"`
+			SourceCommit string                      `json:"source_commit"`
+			Profile      stewardv1alpha1.ProfileSpec `json:"profile"`
+		}
+		if err := json.Unmarshal(raw, &snapshot); err != nil {
+			t.Fatal(err)
+		}
+		if snapshot.Release == "" {
+			t.Fatalf("missing release provenance: %s", path)
+		}
+		if err := snapshot.Profile.Validate(); err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		if snapshot.Profile.Version > latest.Version {
+			latest = snapshot.Profile
+		}
+	}
+	if got := BuiltInProfile(); got != latest {
+		t.Fatal("built-in policy differs from its frozen release specification; allocate a new immutable version")
 	}
 }
